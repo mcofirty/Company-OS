@@ -126,3 +126,8 @@ découle applique les règles de docs/04 §6. Les contributions LLM par particip
 
 ADR-027 — **Assignation automatique filtrée par autorisation** : parmi les agents du département, priorité à ceux qui
 ont le grant de l'outil requis (sinon la gateway refuserait l'appel).
+
+ADR-028 — **Interface sur Vercel, backend hors Vercel.** Vercel ne peut pas héberger Socket.IO persistant ni le
+worker Temporal. `apps/web/vercel.json` installe uniquement le cockpit et ses paquets (`--filter
+@company-os/web...`). `prisma.config.ts` tolère l'absence de `DATABASE_URL` (génération du client seulement).
+Sans API joignable, le cockpit affiche un état « backend non joignable » explicite, sans aucune donnée simulée.

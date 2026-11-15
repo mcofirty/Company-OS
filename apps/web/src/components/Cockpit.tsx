@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TaskKind } from '@company-os/contracts';
-import { ApiFailure } from '../lib/api';
+import { API_URL, ApiFailure } from '../lib/api';
 import { useHq } from '../lib/useHq';
 import type { HqScene, Selection } from '../world/HqScene';
 import { Timeline } from './cockpit/Timeline';
@@ -131,8 +131,11 @@ export function Cockpit() {
           </div>
         )}
         {error && connection === 'error' && (
-          <div className="error-banner" role="alert">
-            API indisponible : {error}. Vérifiez <code>pnpm dev</code> et la base.
+          <div className="error-banner" role="alert" data-testid="backend-offline">
+            <strong>Backend non joignable</strong> ({API_URL}) : aucune donnée n’est affichée, rien
+            n’est simulé dans le navigateur. En local : <code>docker compose up -d</code> puis{' '}
+            <code>pnpm dev</code>. En ligne : définir <code>NEXT_PUBLIC_API_BASE_URL</code> vers une
+            API joignable. Détail : {error}
           </div>
         )}
         <WorldViewport
