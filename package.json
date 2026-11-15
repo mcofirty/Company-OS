@@ -1,0 +1,35 @@
+{
+  "name": "company-os",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @company-os/api --filter @company-os/worker --filter @company-os/web dev",
+    "build": "pnpm -r build",
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "e2e": "playwright test --trace off",
+    "db:migrate": "pnpm --filter @company-os/db migrate",
+    "db:seed": "pnpm --filter @company-os/db seed",
+    "db:reset": "pnpm --filter @company-os/db reset"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "dotenv": "^18.0.10",
+    "eslint": "^10.15.0",
+    "pg": "^8.23.1",
+    "prettier": "^3.10.1",
+    "tsx": "^4.23.15",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
+  }
+}

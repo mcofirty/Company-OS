@@ -1,0 +1,263 @@
+:root {
+  --bg: #12151d;
+  --panel: #1c2130;
+  --panel-2: #232a3b;
+  --text: #e8ebf2;
+  --muted: #8b93a7;
+  --accent: #facc15;
+  --demo: #f59e0b;
+  --live: #ef4444;
+  --border: #2e3648;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: 14px;
+}
+button {
+  font: inherit;
+  color: inherit;
+}
+.hq {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  height: 48px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.topbar h1 {
+  font-size: 16px;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+.mode-badge {
+  font-weight: 700;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  letter-spacing: 0.05em;
+}
+.mode-demo {
+  background: var(--demo);
+  color: #1a1200;
+}
+.mode-live {
+  background: var(--live);
+  color: white;
+}
+.conn {
+  font-size: 12px;
+  color: var(--muted);
+}
+.conn-live {
+  color: #22c55e;
+}
+.conn-error {
+  color: var(--live);
+}
+.conn-reconnecting {
+  color: var(--demo);
+}
+.seq {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.error-banner {
+  background: #7f1d1d;
+  padding: 8px 16px;
+}
+.layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  min-height: 0;
+}
+.world-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
+.world-canvas {
+  position: absolute;
+  inset: 0;
+}
+.world-loading {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+.kpis {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  gap: 8px;
+}
+.kpi {
+  background: #1c2130e6;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  min-width: 84px;
+}
+.kpi-value {
+  font-size: 20px;
+  font-weight: 700;
+}
+.kpi-label {
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  min-height: 0;
+  overflow: hidden;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+}
+.panel h2 {
+  font-size: 13px;
+  margin: 0 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.panel h3 {
+  font-size: 12px;
+  margin: 12px 0 6px;
+  color: var(--muted);
+}
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.roster button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 12px auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  background: var(--panel-2);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.roster button:hover {
+  border-color: var(--accent);
+}
+.roster .activity {
+  grid-column: 2 / 4;
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+.muted {
+  color: var(--muted);
+}
+.mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.feed-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.feed {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+.feed li {
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.feed.small {
+  max-height: 220px;
+}
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.inspector-head h2 {
+  font-size: 16px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  margin: 0;
+}
+.inspector-head button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+}
+.inspector dl {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  gap: 4px 8px;
+  margin: 12px 0 0;
+}
+.inspector dt {
+  color: var(--muted);
+}
+.inspector dd {
+  margin: 0;
+}
