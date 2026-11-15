@@ -258,3 +258,53 @@ describe('validations (API)', () => {
     expect(boot.data.agents).toHaveLength(13);
   });
 });
+
+describe('API exposée : jeton d’accès (tunnel)', () => {
+  const TOKEN = 'test-token-0123456789-abcdefghijklmnop';
+  it('sans jeton : 401 même depuis localhost ; mauvais jeton : 401 ; bon jeton : admin', async () => {
+    const exposed = await buildApp({
+      db,
+      corsOrigin: ['http://localhost:3000'],
+      auth: { allowDevPrincipal: false, accessToken: TOKEN },
+    });
+    expect((await exposed.app.inject('/v1/me')).statusCode).toBe(401);
+    expect(
+      (await exposed.app.inject({ url: '/v1/me', headers: { authorization: 'Bearer nope' } }))
+        .statusCode,
+    ).toBe(401);
+    const ok = await exposed.app.inject({
+      url: '/v1/me',
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    expect(ok.json()).toMatchObject({ data: { role: 'admin' } });
+    await exposed.app.close();
+  });
+  it('principal de dev refusé si la requête porte un en-tête de proxy (tunnel)', async () => {
+    const res = await app.inject({ url: '/v1/me', headers: { 'cf-connecting-ip': '203.0.113.7' } });
+    expect(res.statusCode).toBe(401);
+  });
+  it('Socket.IO : connexion refusée sans jeton, acceptée avec auth.token', async () => {
+    const exposed = await buildApp({
+      db,
+      corsOrigin: ['http://localhost:3000'],
+      auth: { allowDevPrincipal: false, accessToken: TOKEN },
+    });
+    await exposed.app.listen({ port: 0, host: '127.0.0.1' });
+    const url = `http://127.0.0.1:${(exposed.app.server.address() as AddressInfo).port}`;
+    const bad = connect(url, { transports: ['websocket'], forceNew: true, reconnection: false });
+    expect((await new Promise<Error>((r) => bad.on('connect_error', r))).message).toBe(
+      'UNAUTHORIZED',
+    );
+    bad.close();
+    const good = connect(url, {
+      transports: ['websocket'],
+      forceNew: true,
+      reconnection: false,
+      auth: { token: TOKEN },
+    });
+    const ack = await good.emitWithAck('events:resume', { afterSeq: 0 });
+    expect(ack).toMatchObject({ accepted: true });
+    good.close();
+    await exposed.app.close();
+  });
+});

@@ -13,7 +13,7 @@ import {
   type WorldSnapshot,
 } from '@company-os/contracts';
 import { applyEvent } from '@company-os/world';
-import { api, SOCKET_URL } from './api';
+import { api, getBackend } from './api';
 
 export type ConnectionState = 'connecting' | 'live' | 'reconnecting' | 'resyncing' | 'error';
 export interface Toast {
@@ -113,7 +113,11 @@ export function useHq() {
       try {
         await loadSnapshot();
         if (cancelled) return;
-        socket = io(SOCKET_URL, { transports: ['websocket'] });
+        const backend = getBackend();
+        socket = io(backend.url, {
+          transports: ['websocket'],
+          ...(backend.token ? { auth: { token: backend.token } } : {}),
+        });
         if (process.env.NODE_ENV !== 'production') window.__hqSocket = socket as unknown as Socket;
         let buffering = true;
         let buffer: DomainEvent[] = [];

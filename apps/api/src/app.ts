@@ -25,7 +25,7 @@ const STATUS: Partial<Record<ErrorCode, number>> = {
 export interface AppOptions {
   db: Db;
   auth: AuthConfig;
-  corsOrigin: string;
+  corsOrigin: string | string[];
   logger?: boolean;
   signalApproval?: ApprovalSignaler;
 }

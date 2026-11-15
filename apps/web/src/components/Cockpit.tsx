@@ -3,7 +3,8 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TaskKind } from '@company-os/contracts';
-import { API_URL, ApiFailure } from '../lib/api';
+import { ApiFailure, getBackend } from '../lib/api';
+import { BackendSettings } from './cockpit/BackendSettings';
 import { useHq } from '../lib/useHq';
 import type { HqScene, Selection } from '../world/HqScene';
 import { Timeline } from './cockpit/Timeline';
@@ -51,6 +52,7 @@ export function Cockpit() {
     [decideApproval, toast],
   );
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const scene = useRef<HqScene | null>(null);
 
   const select = useCallback((s: Selection | null) => setSelection(s), []);
@@ -122,6 +124,13 @@ export function Cockpit() {
         >
           ☰
         </button>
+        <button
+          onClick={() => setSettingsOpen(true)}
+          title="Connexion au backend"
+          aria-label="Connexion au backend"
+        >
+          ⚙
+        </button>
       </nav>
       <main className="world-pane">
         {world?.system.paused && (
@@ -132,10 +141,18 @@ export function Cockpit() {
         )}
         {error && connection === 'error' && (
           <div className="error-banner" role="alert" data-testid="backend-offline">
-            <strong>Backend non joignable</strong> ({API_URL}) : aucune donnée n’est affichée, rien
-            n’est simulé dans le navigateur. En local : <code>docker compose up -d</code> puis{' '}
-            <code>pnpm dev</code>. En ligne : définir <code>NEXT_PUBLIC_API_BASE_URL</code> vers une
-            API joignable. Détail : {error}
+            <strong>Backend non joignable</strong> ({getBackend().url}) : aucune donnée n’est
+            affichée, rien n’est simulé dans le navigateur. En local :{' '}
+            <code>docker compose up -d</code> puis <code>pnpm dev</code>. À distance : indiquez
+            l’URL de votre API et son jeton.{' '}
+            <button
+              className="btn"
+              onClick={() => setSettingsOpen(true)}
+              data-testid="open-backend-settings"
+            >
+              Connexion au backend
+            </button>
+            <span className="muted"> Détail : {error}</span>
           </div>
         )}
         <WorldViewport
@@ -177,6 +194,7 @@ export function Cockpit() {
         <ToolWall world={world} now={now} onSelect={select} />
       </aside>
       <Timeline world={world} onSelect={select} />
+      {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
       <div className="toasts" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast tone-${t.tone}`}>

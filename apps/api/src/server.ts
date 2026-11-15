@@ -14,7 +14,13 @@ const Env = z.object({
   DATABASE_URL: z.string().min(1),
   API_PORT: z.coerce.number().int().default(4000),
   API_HOST: z.string().default('127.0.0.1'),
+  /** Origines autorisées (CORS), séparées par des virgules (ex. localhost + URL Vercel). */
   WEB_ORIGIN: z.string().default('http://localhost:3000'),
+  /** Jeton administrateur pour exposer l'API (tunnel). Absent => accès dev localhost seulement. */
+  API_ACCESS_TOKEN: z.preprocess(
+    (v) => (v === '' ? undefined : v),
+    z.string().min(32, 'API_ACCESS_TOKEN doit faire au moins 32 caractères').optional(),
+  ),
   TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
 });
 const env = Env.parse(process.env);
@@ -35,8 +41,14 @@ const signalApproval: ApprovalSignaler = async (workflowId, approvalId, decision
 const { app, relayOnce } = await buildApp({
   db,
   signalApproval,
-  corsOrigin: env.WEB_ORIGIN,
-  auth: { allowDevPrincipal: env.NODE_ENV !== 'production' && env.APP_MODE === 'demo' },
+  corsOrigin: env.WEB_ORIGIN.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean),
+  auth: {
+    allowDevPrincipal:
+      !env.API_ACCESS_TOKEN && env.NODE_ENV !== 'production' && env.APP_MODE === 'demo',
+    ...(env.API_ACCESS_TOKEN ? { accessToken: env.API_ACCESS_TOKEN } : {}),
+  },
   logger: true,
 });
 

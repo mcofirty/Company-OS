@@ -8,7 +8,7 @@ import {
   type ServerToClientEvents,
 } from '@company-os/contracts';
 import { listEventsAfter, type Db } from '@company-os/db';
-import { resolvePrincipal, type AuthConfig, type Principal } from './auth';
+import { principalOfHandshake, type AuthConfig, type Principal } from './auth';
 
 export type Io = IoServer<
   ClientToServerEvents,
@@ -27,17 +27,17 @@ export function attachRealtime(
   server: HttpServer,
   db: Db,
   auth: AuthConfig,
-  corsOrigin: string,
+  corsOrigin: string | string[],
 ): Io {
   const io: Io = new IoServer(server, { cors: { origin: corsOrigin } });
 
   io.use((socket, next) => {
     try {
-      socket.data.principal = resolvePrincipal(
-        auth,
-        socket.handshake.address,
-        socket.handshake.headers['x-dev-role'],
-      );
+      socket.data.principal = principalOfHandshake(auth, {
+        address: socket.handshake.address,
+        headers: socket.handshake.headers,
+        auth: socket.handshake.auth as Record<string, unknown>,
+      });
       next();
     } catch {
       next(new Error('UNAUTHORIZED'));

@@ -131,3 +131,10 @@ ADR-028 — **Interface sur Vercel, backend hors Vercel.** Vercel ne peut pas h�
 worker Temporal. `apps/web/vercel.json` installe uniquement le cockpit et ses paquets (`--filter
 @company-os/web...`). `prisma.config.ts` tolère l'absence de `DATABASE_URL` (génération du client seulement).
 Sans API joignable, le cockpit affiche un état « backend non joignable » explicite, sans aucune donnée simulée.
+
+ADR-029 — **Exposition par Cloudflare Tunnel avec jeton d'accès.** Derrière un tunnel, toutes les requêtes semblent
+venir de 127.0.0.1 : dès que `API_ACCESS_TOKEN` (≥ 32 caractères) est défini, le principal de développement est
+désactivé et seules les requêtes portant ce jeton (HTTP `Authorization: Bearer`, Socket.IO `auth.token`) passent,
+comparées en temps constant ; un en-tête de proxy (`cf-connecting-ip`, `x-forwarded-for`…) refuse aussi le
+principal dev. Le cockpit permet de choisir l'API et le jeton par navigateur (localStorage), sans redéploiement
+Vercel. Auth locale simple en attendant OIDC (M5).

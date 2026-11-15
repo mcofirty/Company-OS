@@ -20,7 +20,8 @@
     "test:contracts": "vitest run packages/contracts packages/world",
     "test:integration": "vitest run packages/db apps",
     "db:generate": "pnpm --filter @company-os/db generate",
-    "agent:live-smoke": "pnpm --filter @company-os/worker live-smoke"
+    "agent:live-smoke": "pnpm --filter @company-os/worker live-smoke",
+    "backend:start": "pnpm --parallel --filter @company-os/api --filter @company-os/worker start"
   },
   "devDependencies": {
     "@company-os/agents": "workspace:*",

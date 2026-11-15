@@ -1,7 +1,59 @@
 import { ApiErrorSchema } from '@company-os/contracts';
 
-export const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
-export const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL ?? API_URL;
+const DEFAULT_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
+const STORAGE_KEY = 'companyos.backend';
+
+/**
+ * Backend ciblé par ce navigateur. Par défaut : variable de build. L'opérateur peut choisir
+ * une autre API (ex. son PC exposé par un tunnel) et y joindre un jeton d'accès ; ce choix
+ * reste dans CE navigateur (localStorage), jamais dans le bundle ni dans un dépôt.
+ */
+export interface BackendConfig {
+  url: string;
+  token: string | null;
+  custom: boolean;
+}
+
+export function getBackend(): BackendConfig {
+  try {
+    const raw = typeof window !== 'undefined' ? window.localStorage.getItem(STORAGE_KEY) : null;
+    if (raw) {
+      const v = JSON.parse(raw) as { url?: unknown; token?: unknown };
+      if (typeof v.url === 'string' && v.url) {
+        return {
+          url: v.url.replace(/\/+$/, ''),
+          token: typeof v.token === 'string' && v.token ? v.token : null,
+          custom: true,
+        };
+      }
+    }
+  } catch {
+    /* stockage indisponible : valeur par défaut */
+  }
+  return { url: DEFAULT_URL, token: null, custom: false };
+}
+
+export function setBackend(cfg: { url: string; token: string | null } | null): void {
+  try {
+    if (cfg) window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+    else window.localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignoré */
+  }
+}
+
+/** Valide l'URL saisie : HTTPS obligatoire hors localhost. */
+export function checkBackendUrl(input: string): string | null {
+  try {
+    const u = new URL(input.trim());
+    const local = ['localhost', '127.0.0.1'].includes(u.hostname);
+    if (u.protocol !== 'https:' && !(local && u.protocol === 'http:'))
+      return 'HTTPS requis (sauf localhost).';
+    return null;
+  } catch {
+    return 'URL invalide.';
+  }
+}
 
 export class ApiFailure extends Error {
   constructor(
@@ -19,9 +71,14 @@ export async function api<T>(
   path: string,
   init?: RequestInit,
 ): Promise<{ data: T; meta: Record<string, unknown> }> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const backend = getBackend();
+  const res = await fetch(`${backend.url}${path}`, {
     ...init,
-    headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'content-type': 'application/json',
+      ...(backend.token ? { authorization: `Bearer ${backend.token}` } : {}),
+      ...(init?.headers ?? {}),
+    },
   });
   const body: unknown = await res.json().catch(() => null);
   if (!res.ok) {
