@@ -2,7 +2,7 @@
 
 **Statut :** application en construction par jalons (voir `docs/PROGRESS.md`). Le pack de spécifications d'origine est dans `docs/`, `specs/` et `examples/`.
 
-**Référence visuelle privée :** `references/REFERENCE-UI-ISOMETRIQUE.jpeg`, à utiliser comme inspiration uniquement et à retirer avant tout dépôt public si droits de redistribution absents.
+**Référence visuelle :** décrite textuellement dans `references/README.md`. La capture d'origine (tierce, droits non vérifiés) a été retirée du dépôt et ne doit pas y être ajoutée.
 
 ## Vision
 Un centre de commande desktop unique : bureau isométrique pixel-art avec avatars d'agents IA et interactions réelles, outils utilisés en direct, flux de tâches, réunions, gouvernance, coûts, validation humaine et audit.

@@ -3,7 +3,7 @@
 > Instructions persistantes pour Claude Code (dont Claude Fable 5.2). Ce fichier est volontairement court : la spécification détaillée se trouve dans `docs/` et `specs/`.
 
 ## Référence visuelle
-Lire `references/README.md` et observer `references/REFERENCE-UI-ISOMETRIQUE.jpeg` avant de dessiner le monde. **Inspiration uniquement ; pas de copie d’assets ni de redistribution.**
+Lire `references/README.md` (description textuelle de la référence) avant de dessiner le monde. La capture d'origine n'est **pas versionnée** (droits non vérifiés) : si elle est fournie, la garder hors du dépôt (`references/*.jpeg` est ignoré par git). **Inspiration uniquement ; pas de copie d’assets ni de redistribution.**
 
 ## Mission
 Construire **une application web réellement fonctionnelle** permettant de superviser une entreprise exploitée par des agents IA autonomes. Son écran principal est un **quartier général isométrique en pixel art, type Habbo / jeu de gestion**, avec avatars qui marchent, travaillent, se réunissent, apparaissent à leur création, et outils logiciels visibles en temps réel, **sur un seul écran PC**. Cliquer sur un agent, outil, réunion, tâche ou alerte ouvre son inspecteur. Les comportements affichés sont causés par des événements persistés du backend, pas par des animations mensongères.

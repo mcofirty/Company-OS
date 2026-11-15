@@ -16,3 +16,9 @@ node_modules/
 packages/db/src/generated/
 playwright-report/
 test-results/
+
+# Références visuelles privées : jamais versionnées (droits non vérifiés)
+references/*.jpg
+references/*.jpeg
+references/*.png
+references/*.webp
