@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "mode": "demo",
+  "mapId": "hq-v1",
+  "projection": {"type": "isometric", "tileWidth": 64, "tileHeight": 32, "cols": 36, "rows": 26},
+  "rooms": [
+    {"id": "direction", "label": "Direction générale", "color": "#E7C16A", "capacity": 3, "anchor": [18, 3]},
+    {"id": "sales", "label": "Sales", "color": "#EA966C", "capacity": 4, "anchor": [7, 10]},
+    {"id": "marketing", "label": "Studio / Marketing", "color": "#9C84DE", "capacity": 4, "anchor": [23, 13]},
+    {"id": "finance", "label": "Finance", "color": "#76C69A", "capacity": 4, "anchor": [29, 6]},
+    {"id": "rh", "label": "Ressources humaines", "color": "#E8A5C0", "capacity": 3, "anchor": [11, 17]},
+    {"id": "operations", "label": "Operations", "color": "#88BADC", "capacity": 4, "anchor": [29, 19]},
+    {"id": "meeting", "label": "Salle de réunion", "color": "#D8D2C9", "capacity": 8, "anchor": [18, 12]},
+    {"id": "cafe", "label": "Café", "color": "#83C6C1", "capacity": 5, "anchor": [5, 3]},
+    {"id": "entry", "label": "Accueil", "color": "#D8C0A8", "capacity": 8, "anchor": [3, 23]}
+  ],
+  "requiredAnchorKinds": ["entry_spawn", "desk", "meeting_seat", "door", "cafe", "waypoint"],
+  "note": "Coordinates and colors are conceptual seed guidance, not a complete Tiled tilemap. Claude Code must author real collision layers, connected corridors, furniture and a renderable tilemap."
+}
