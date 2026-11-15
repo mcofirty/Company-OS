@@ -32,6 +32,8 @@ function emptyFrom(base: WorldSnapshot): WorldSnapshot {
 export interface ReplayState {
   active: boolean;
   loading: boolean;
+  /** Échec du chargement du journal (affiché, jamais remplacé par des données inventées). */
+  loadError: string | null;
   events: DomainEvent[];
   index: number; // nombre d'événements appliqués
   world: WorldSnapshot | null;
@@ -48,6 +50,7 @@ export interface ReplayState {
 export function useReplay(): ReplayState {
   const [active, setActive] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [events, setEvents] = useState<DomainEvent[]>([]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
@@ -58,13 +61,20 @@ export function useReplay(): ReplayState {
   const start = useCallback(async (snapshot: WorldSnapshot) => {
     setLoading(true);
     setActive(true);
+    setLoadError(null);
     const all: DomainEvent[] = [];
     let after = 0;
-    for (let guard = 0; guard < 200; guard++) {
-      const { data, meta } = await api<unknown[]>(`/v1/events?afterSeq=${after}&limit=500`);
-      for (const raw of data) all.push(DomainEventSchema.parse(raw));
-      after = all.at(-1)?.seq ?? after;
-      if (!meta['hasMore']) break;
+    try {
+      for (let guard = 0; guard < 200; guard++) {
+        const { data, meta } = await api<unknown[]>(`/v1/events?afterSeq=${after}&limit=500`);
+        for (const raw of data) all.push(DomainEventSchema.parse(raw));
+        after = all.at(-1)?.seq ?? after;
+        if (!meta['hasMore']) break;
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'journal indisponible');
+      setLoading(false);
+      return;
     }
     // Points de reprise réguliers : déplacement instantané dans la frise.
     const empty = emptyFrom(snapshot);
@@ -123,6 +133,7 @@ export function useReplay(): ReplayState {
   return {
     active,
     loading,
+    loadError,
     events,
     index,
     world,

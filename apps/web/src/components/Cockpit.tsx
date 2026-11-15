@@ -11,6 +11,7 @@ import { useReplay } from '../lib/useReplay';
 import type { HqScene, Selection } from '../world/HqScene';
 import { AlertCenter } from './cockpit/AlertCenter';
 import { BackendSettings } from './cockpit/BackendSettings';
+import { LoginPanel } from './cockpit/LoginPanel';
 import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
 import { Timeline } from './cockpit/Timeline';
@@ -217,7 +218,14 @@ export function Cockpit() {
               restent consultables.
             </div>
           )}
-          {error && connection === 'error' && (
+          {hq.authNeeded && (
+            <LoginPanel
+              config={hq.authNeeded.config}
+              reason={hq.authNeeded.reason}
+              onSettings={() => setSettingsOpen(true)}
+            />
+          )}
+          {error && connection === 'error' && !hq.authNeeded && (
             <div className="error-banner" role="alert" data-testid="backend-offline">
               <strong>Backend non joignable</strong> ({getBackend().url}) : aucune donnée n’est
               affichée, rien n’est simulé dans le navigateur. En local :{' '}

@@ -12,3 +12,4 @@ export * from './services/runs';
 export * from './services/approvals';
 export * from './services/meetings';
 export * from './services/governance';
+export * from './services/users';

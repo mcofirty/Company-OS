@@ -1,4 +1,5 @@
 import { ApiErrorSchema } from '@company-os/contracts';
+import { sessionToken } from './oidc';
 
 const DEFAULT_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
 const STORAGE_KEY = 'companyos.backend';
@@ -55,6 +56,12 @@ export function checkBackendUrl(input: string): string | null {
   }
 }
 
+/** Jeton à présenter à l'API : jeton d'accès saisi (tunnel) ou session OIDC de cet onglet. */
+export function authToken(backend: BackendConfig = getBackend()): string | null {
+  if (backend.token) return backend.token;
+  return typeof window !== 'undefined' ? sessionToken(backend.url) : null;
+}
+
 export class ApiFailure extends Error {
   constructor(
     readonly status: number,
@@ -72,11 +79,12 @@ export async function api<T>(
   init?: RequestInit,
 ): Promise<{ data: T; meta: Record<string, unknown> }> {
   const backend = getBackend();
+  const token = authToken(backend);
   const res = await fetch(`${backend.url}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
-      ...(backend.token ? { authorization: `Bearer ${backend.token}` } : {}),
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {}),
     },
   });

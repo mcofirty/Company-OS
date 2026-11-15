@@ -14,7 +14,8 @@ import {
   type AlertView,
 } from '@company-os/contracts';
 import { applyEvent } from '@company-os/world';
-import { api, getBackend } from './api';
+import { api, ApiFailure, authToken, getBackend } from './api';
+import { completeLogin, fetchAuthConfig, type AuthPublicConfig } from './oidc';
 
 export type ConnectionState = 'connecting' | 'live' | 'reconnecting' | 'resyncing' | 'error';
 export interface Toast {
@@ -58,6 +59,11 @@ export function useHq() {
   };
 
   const [me, setMe] = useState<Me | null>(null);
+  /** Renseigné quand l'API exige une connexion (401) ou refuse ce compte (403). */
+  const [authNeeded, setAuthNeeded] = useState<{
+    config: AuthPublicConfig;
+    reason: 'login' | 'forbidden';
+  } | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     const { data } = await api<unknown>('/v1/bootstrap');
@@ -117,12 +123,34 @@ export function useHq() {
 
     (async () => {
       try {
-        await loadSnapshot();
+        await completeLogin().catch((err: unknown) => {
+          // Retour OIDC invalide (état, PKCE) : on repart d'une page sans session.
+          setError(`Connexion refusée : ${err instanceof Error ? err.message : 'erreur'}`);
+        });
+        try {
+          await loadSnapshot();
+        } catch (err) {
+          if (err instanceof ApiFailure && (err.status === 401 || err.status === 403)) {
+            const config = await fetchAuthConfig(getBackend().url).catch((): AuthPublicConfig => ({
+              mode: 'token',
+            }));
+            if (!cancelled) {
+              setAuthNeeded({ config, reason: err.status === 401 ? 'login' : 'forbidden' });
+              setConnection('error');
+            }
+            return;
+          }
+          throw err;
+        }
         if (cancelled) return;
         const backend = getBackend();
+        // Jeton relu à chaque (re)connexion : une session expirée ne se reconnecte pas.
         socket = io(backend.url, {
           transports: ['websocket'],
-          ...(backend.token ? { auth: { token: backend.token } } : {}),
+          auth: (cb) => {
+            const token = authToken(backend);
+            cb(token ? { token } : {});
+          },
         });
         if (process.env.NODE_ENV !== 'production') window.__hqSocket = socket as unknown as Socket;
         let buffering = true;
@@ -240,6 +268,7 @@ export function useHq() {
     toasts,
     now,
     me,
+    authNeeded,
     createTask,
     toast,
     setSystemPaused,

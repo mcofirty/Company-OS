@@ -32,16 +32,16 @@ export function attachRealtime(
   const io: Io = new IoServer(server, { cors: { origin: corsOrigin } });
 
   io.use((socket, next) => {
-    try {
-      socket.data.principal = principalOfHandshake(auth, {
-        address: socket.handshake.address,
-        headers: socket.handshake.headers,
-        auth: socket.handshake.auth as Record<string, unknown>,
-      });
-      next();
-    } catch {
-      next(new Error('UNAUTHORIZED'));
-    }
+    principalOfHandshake(auth, db, {
+      address: socket.handshake.address,
+      headers: socket.handshake.headers,
+      auth: socket.handshake.auth as Record<string, unknown>,
+    })
+      .then((principal) => {
+        socket.data.principal = principal;
+        next();
+      })
+      .catch(() => next(new Error('UNAUTHORIZED')));
   });
 
   io.on('connection', (socket) => {

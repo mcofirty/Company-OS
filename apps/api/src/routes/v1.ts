@@ -29,7 +29,7 @@ import {
   approvalView,
   meetingView,
 } from '@company-os/db';
-import { principalOf, requireRole, type AuthConfig } from '../auth';
+import { principalOf, requireRole } from '../auth';
 
 const Id = z.object({ id: z.uuid() });
 const SlugParam = z.object({ id: SlugIdSchema });
@@ -45,16 +45,11 @@ const DecideBody = z
   .object({ decision: z.enum(['approve', 'reject']), reason: z.string().min(3).max(280) })
   .strict();
 
-export function registerV1(
-  app: FastifyInstance,
-  db: Db,
-  auth: AuthConfig,
-  signalApproval?: ApprovalSignaler,
-): void {
+export function registerV1(app: FastifyInstance, db: Db, signalApproval?: ApprovalSignaler): void {
   const meta = { schemaVersion: 1 };
 
   app.get('/v1/me', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const operator = p.role !== 'viewer';
     const admin = p.role === 'admin';
     return {
@@ -75,14 +70,14 @@ export function registerV1(
   });
 
   app.get('/v1/bootstrap', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const snap = await loadSnapshot(db, p.orgId);
     if (!snap) throw new DomainError('NOT_FOUND', 'Organisation introuvable');
     return { data: snap, meta };
   });
 
   app.get('/v1/departments', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const rows = await db.department.findMany({
       where: { orgId: p.orgId },
       include: { agents: { where: { deletedAt: null }, select: { id: true, status: true } } },
@@ -102,7 +97,7 @@ export function registerV1(
   });
 
   app.get('/v1/agents', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z.object({ departmentId: SlugIdSchema.optional() }).parse(req.query);
     const rows = await db.agent.findMany({
       where: {
@@ -116,7 +111,7 @@ export function registerV1(
   });
 
   app.get('/v1/agents/:id', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const { id } = SlugParam.parse(req.params);
     const agent = await db.agent.findFirst({
       where: { id, orgId: p.orgId, deletedAt: null },
@@ -147,7 +142,7 @@ export function registerV1(
   });
 
   app.get('/v1/tasks', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z.object({ status: TaskStatusSchema.optional(), limit: Limit }).parse(req.query);
     const rows = await db.task.findMany({
       where: { orgId: p.orgId, ...(q.status ? { status: q.status } : {}) },
@@ -158,7 +153,7 @@ export function registerV1(
   });
 
   app.post('/v1/tasks', async (req, reply) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     requireRole(p, 'operator');
     const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
     if (!key.success)
@@ -180,7 +175,7 @@ export function registerV1(
   });
 
   app.get('/v1/tasks/:id', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const { id } = Id.parse(req.params);
     const task = await db.task.findFirst({ where: { id, orgId: p.orgId } });
     if (!task) throw new DomainError('NOT_FOUND', 'Tâche introuvable');
@@ -233,7 +228,7 @@ export function registerV1(
   });
 
   app.get('/v1/tools', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const [tools, active] = await Promise.all([
       db.tool.findMany({
         where: { OR: [{ orgId: p.orgId }, { orgId: null }] },
@@ -253,7 +248,7 @@ export function registerV1(
   });
 
   app.get('/v1/tool-invocations', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z
       .object({
         status: InvocationStatusSchema.optional(),
@@ -274,7 +269,7 @@ export function registerV1(
   });
 
   app.get('/v1/tool-invocations/:id', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const { id } = Id.parse(req.params);
     const inv = await db.toolInvocation.findFirst({ where: { id, orgId: p.orgId } });
     if (!inv) throw new DomainError('NOT_FOUND', 'Invocation introuvable');
@@ -288,7 +283,7 @@ export function registerV1(
   });
 
   app.get('/v1/events', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z
       .object({
         afterSeq: z.coerce.number().int().min(0).default(0),
@@ -309,7 +304,7 @@ export function registerV1(
     ['/v1/system/resume', false],
   ] as const) {
     app.post(path, async (req) => {
-      const p = principalOf(req, auth);
+      const p = principalOf(req);
       requireRole(p, 'admin');
       const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
       if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
@@ -325,7 +320,7 @@ export function registerV1(
   }
 
   app.get('/v1/budgets', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const rows = await db.budget.findMany({
       where: { orgId: p.orgId },
       orderBy: [{ scopeType: 'asc' }, { scopeId: 'asc' }],
@@ -348,7 +343,7 @@ export function registerV1(
 
   // ---------- Validations humaines (docs/05 §5, docs/07) ----------
   app.get('/v1/approvals', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     requireRole(p, 'operator');
     const q = z.object({ status: ApprovalStatusSchema.optional(), limit: Limit }).parse(req.query);
     const rows = await db.approvalRequest.findMany({
@@ -360,7 +355,7 @@ export function registerV1(
   });
 
   app.get('/v1/approvals/:id', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     requireRole(p, 'operator');
     const { id } = Id.parse(req.params);
     const a = await db.approvalRequest.findFirst({ where: { id, orgId: p.orgId } });
@@ -369,7 +364,7 @@ export function registerV1(
   });
 
   app.post('/v1/approvals/:id/decide', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     requireRole(p, 'admin');
     const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
     if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
@@ -401,7 +396,7 @@ export function registerV1(
 
   // ---------- Réunions ----------
   app.get('/v1/meetings', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const rows = await db.meeting.findMany({
       where: { orgId: p.orgId },
       include: { participants: true },
@@ -412,7 +407,7 @@ export function registerV1(
   });
 
   app.get('/v1/meetings/:id', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const { id } = Id.parse(req.params);
     const m = await db.meeting.findFirst({
       where: { id, orgId: p.orgId },
@@ -438,7 +433,7 @@ export function registerV1(
   const LifecycleBody = z.object({ reason: z.string().min(3).max(200) }).strict();
   for (const action of ['pause', 'resume', 'deactivate'] as const) {
     app.post(`/v1/agents/:id/${action}`, async (req) => {
-      const p = principalOf(req, auth);
+      const p = principalOf(req);
       requireRole(p, action === 'deactivate' ? 'admin' : 'operator');
       const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
       if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
@@ -457,7 +452,7 @@ export function registerV1(
 
   // ---------- Alertes ----------
   app.get('/v1/alerts', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z
       .object({ unacked: z.enum(['true', 'false']).optional(), limit: Limit })
       .parse(req.query);
@@ -470,7 +465,7 @@ export function registerV1(
   });
 
   app.post('/v1/alerts/:id/ack', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     requireRole(p, 'operator');
     const { id } = Id.parse(req.params);
     return {
@@ -481,7 +476,7 @@ export function registerV1(
 
   // ---------- KPI par fenêtre et santé des outils ----------
   app.get('/v1/metrics/summary', async (req) => {
-    const p = principalOf(req, auth);
+    const p = principalOf(req);
     const q = z.object({ window: z.enum(['1h', '24h', '7d']).default('24h') }).parse(req.query);
     return {
       data: await metricsSummary(db, p.orgId, q.window),

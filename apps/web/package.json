@@ -13,6 +13,7 @@
     "@company-os/contracts": "workspace:*",
     "@company-os/world": "workspace:*",
     "next": "16.4.6",
+    "oauth4webapi": "^3.8.8",
     "phaser": "^4.2.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

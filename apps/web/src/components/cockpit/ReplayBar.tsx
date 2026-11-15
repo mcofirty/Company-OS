@@ -41,6 +41,7 @@ export function ReplayBar({ replay }: { replay: ReplayState }) {
         max={total}
         value={replay.index}
         onChange={(e) => replay.seek(Number(e.target.value))}
+        disabled={replay.loading || total === 0}
         aria-label="Position dans l'historique"
         data-testid="replay-slider"
       />

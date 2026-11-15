@@ -1,30 +1,21 @@
 import path from 'node:path';
 import { config } from 'dotenv';
-import { z } from 'zod';
 import { createDb } from '@company-os/db';
 import { Client, Connection } from '@temporalio/client';
 import { buildApp } from './app';
+import { loadConfig, type ApiConfig } from './config';
 import type { ApprovalSignaler } from './routes/v1';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
 
-const Env = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  APP_MODE: z.enum(['demo', 'live']).default('demo'),
-  DATABASE_URL: z.string().min(1),
-  API_PORT: z.coerce.number().int().default(4000),
-  API_HOST: z.string().default('127.0.0.1'),
-  /** Origines autorisées (CORS), séparées par des virgules (ex. localhost + URL Vercel). */
-  WEB_ORIGIN: z.string().default('http://localhost:3000'),
-  /** Jeton administrateur pour exposer l'API (tunnel). Absent => accès dev localhost seulement. */
-  API_ACCESS_TOKEN: z.preprocess(
-    (v) => (v === '' ? undefined : v),
-    z.string().min(32, 'API_ACCESS_TOKEN doit faire au moins 32 caractères').optional(),
-  ),
-  TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
-});
-const env = Env.parse(process.env);
-if (env.APP_MODE === 'live') throw new Error('Mode live non implémenté (M2) : refus de démarrer.');
+let cfg: ApiConfig;
+try {
+  cfg = loadConfig(process.env);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : err);
+  process.exit(1);
+}
+const { env } = cfg;
 
 const db = createDb(env.DATABASE_URL);
 
@@ -41,14 +32,9 @@ const signalApproval: ApprovalSignaler = async (workflowId, approvalId, decision
 const { app, relayOnce } = await buildApp({
   db,
   signalApproval,
-  corsOrigin: env.WEB_ORIGIN.split(',')
-    .map((o) => o.trim())
-    .filter(Boolean),
-  auth: {
-    allowDevPrincipal:
-      !env.API_ACCESS_TOKEN && env.NODE_ENV !== 'production' && env.APP_MODE === 'demo',
-    ...(env.API_ACCESS_TOKEN ? { accessToken: env.API_ACCESS_TOKEN } : {}),
-  },
+  corsOrigin: cfg.corsOrigin,
+  auth: cfg.auth,
+  rateLimitPerMinute: env.RATE_LIMIT_PER_MIN,
   logger: true,
 });
 

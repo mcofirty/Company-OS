@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { checkBackendUrl, getBackend, setBackend } from '../../lib/api';
+import { logout, sessionToken } from '../../lib/oidc';
 
 /**
  * Choix du backend pour CE navigateur (ex. API sur votre PC exposée par Cloudflare Tunnel).
@@ -82,6 +83,11 @@ export function BackendSettings({ onClose }: { onClose: () => void }) {
           {current.custom && (
             <button type="button" className="btn" onClick={reset}>
               Revenir au défaut
+            </button>
+          )}
+          {sessionToken(current.url) && (
+            <button type="button" className="btn" onClick={logout} data-testid="logout">
+              Se déconnecter
             </button>
           )}
           <button type="button" className="btn ghost" onClick={onClose}>
