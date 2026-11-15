@@ -1,0 +1,27 @@
+# Surcouche « serveur unique » (VPS Hostinger, Hetzner…) : ajoute Caddy (HTTPS automatique)
+# devant le cockpit et l'API ; plus aucun autre port n'est publié.
+#   docker compose -f infra/docker-compose.prod.yml -f infra/docker-compose.vps.yml \
+#     --env-file .env.production up -d --build
+services:
+  api:
+    ports: !reset []
+  web:
+    ports: !reset []
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports: ['80:80', '443:443', '443:443/udp']
+    environment:
+      WEB_HOST: ${WEB_HOST:?}
+      API_HOST: ${API_HOST:?}
+      # « local_certs » pour un test local seulement ; vide = Let's Encrypt / ZeroSSL.
+      CADDY_LOCAL_CERTS: ${CADDY_LOCAL_CERTS:-}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [api, web]
+
+volumes:
+  caddydata:
+  caddyconfig:

@@ -53,7 +53,7 @@ try {
     `${r.created ? 'Organisation LIVE créée' : 'Organisation LIVE existante'} : ${values.name} (${r.orgId}).`,
   );
   console.log(
-    process.env.ANTHROPIC_API_KEY
+    process.env.ANTHROPIC_API_KEY || process.env.LIVE_PROVIDER_CONFIGURED === 'yes'
       ? 'Clé Anthropic détectée : les missions seront exécutées par Claude (budget plafonné).'
       : 'Aucune clé ANTHROPIC_API_KEY : les missions seront refusées (PROVIDER_UNAVAILABLE) jusqu’à son ajout.',
   );

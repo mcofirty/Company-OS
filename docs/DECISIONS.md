@@ -206,3 +206,8 @@ en file ou bloquée : interrompre un workflow en cours exige un signal Temporal 
 (reporté). Relancer ne réécrit pas l'histoire : une nouvelle tâche est créée et l'ancienne, annulée, pointe vers
 elle (`retriedAs`), ce qui garde le journal append-only lisible.
 
+ADR-047 — **Déploiement mono-serveur avec Caddy.** Un VPS unique (Hostinger, Hetzner…) porte toute la pile via
+`docker-compose.prod.yml` + `docker-compose.vps.yml` ; Caddy fournit HTTPS automatique et seul lui publie des
+ports. Adresses `sslip.io` par défaut (gratuites, liées à l'IP) ; un nom de domaine peut les remplacer.
+La configuration est lue clé par clé, jamais exécutée comme script.
+

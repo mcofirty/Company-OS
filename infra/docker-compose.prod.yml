@@ -73,6 +73,21 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # Commandes d'administration ponctuelles (profil explicite), ex. :
+  #   docker compose … run --rm admin src/live-cli.ts --name "Ma Société"
+  admin:
+    image: company-os-migrate:${IMAGE_TAG:-latest}
+    profiles: [tools]
+    entrypoint: ['/app/node_modules/.bin/tsx']
+    environment:
+      APP_MODE: demo
+      DATABASE_URL: postgresql://companyos:${POSTGRES_PASSWORD:?}@postgres:5432/companyos
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      # Indique seulement si une clé existe (la clé elle-même n'est pas transmise).
+      LIVE_PROVIDER_CONFIGURED: ${ANTHROPIC_API_KEY:+yes}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   api:
     <<: *server
     environment:
@@ -87,6 +102,8 @@ services:
     environment:
       <<: *server-env
       DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-false}
+      # Seul le worker appelle Claude : la clé n'est pas transmise à l'API ni au cockpit.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     healthcheck: { disable: true }
 
   web:

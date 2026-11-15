@@ -1,0 +1,17 @@
+# Reverse proxy HTTPS : certificats Let's Encrypt obtenus et renouvelés automatiquement.
+# Variables (infra/docker-compose.vps.yml) : WEB_HOST, API_HOST ;
+# CADDY_LOCAL_CERTS=local_certs uniquement pour un test local (certificats auto-signés).
+{
+	{$CADDY_LOCAL_CERTS}
+}
+
+{$WEB_HOST} {
+	encode zstd gzip
+	reverse_proxy web:3000
+}
+
+{$API_HOST} {
+	encode zstd gzip
+	# WebSocket (Socket.IO) pris en charge nativement par reverse_proxy.
+	reverse_proxy api:4000
+}

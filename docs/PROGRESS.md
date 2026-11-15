@@ -3,6 +3,38 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (9) — Kit de déploiement VPS (Hostinger)
+
+### Réalisé
+- `infra/deploy/install.sh` : installation complète sur Ubuntu 24.04 (Docker, pare-feu UFW 22/80/443,
+  mises à jour de sécurité), secrets générés (`openssl rand`), clé Anthropic saisie sans affichage,
+  `.env.production` en 600, construction et démarrage, organisations démo + LIVE, sauvegarde
+  quotidienne (cron, 14 jours). Relançable sans perte de configuration.
+- `infra/docker-compose.vps.yml` + `infra/deploy/Caddyfile` : HTTPS automatique (Let's Encrypt)
+  devant cockpit et API, aucun autre port publié ; adresses gratuites `sslip.io` par défaut.
+- `update.sh` (sauvegarde puis mise à jour), `backup.sh`, service `admin` (CLI ponctuelles) ; la clé
+  Anthropic n'est transmise qu'au worker.
+- Guide pas à pas : `docs/DEPLOIEMENT-HOSTINGER.md` (commande, terminal, questions, connexion,
+  mise à jour, restauration, sécurité).
+
+### Tests (exécutés le 2026-11-15)
+- `shellcheck` sans avertissement sur les scripts ; `docker compose config` valide.
+- Pile complète démarrée avec la surcouche VPS (certificats locaux) : santé OK, cockpit 200 en
+  HTTPS, API 401 sans jeton et rôle admin avec jeton, port interne non exposé, seed + organisation
+  LIVE, sauvegarde OK ; navigateur : connexion par jeton, temps réel via le proxy, bascule LIVE,
+  aucune erreur ; restauration après sinistre : état identique (12 agents, séquence 24).
+- Bugs trouvés et corrigés pendant ces tests : relecture du fichier de configuration qui cassait
+  avec un nom d'entreprise contenant une espace ; directive `email` vide refusée par Caddy.
+
+### Écarts connus
+- Non testés ici : la commande Hostinger, un vrai certificat Let's Encrypt (serveur joignable
+  requis), le clonage d'un dépôt privé (jeton GitHub en lecture seule demandé par git).
+- Temporal en mode serveur de développement (SQLite) sur le VPS : suffisant pour un usage
+  personnel, Temporal Cloud/cluster pour une production exigeante.
+
+### Prochaine tâche exacte
+Accompagner l'installation sur le VPS de l'utilisateur, puis vérification réelle avec Claude.
+
 ## Session 2026-11-15 (8) — Annulation et relance des missions
 
 ### Réalisé

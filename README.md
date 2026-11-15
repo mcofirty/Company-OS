@@ -80,6 +80,7 @@ pnpm db:backup && pnpm db:verify                             # sauvegarde + int�
 docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build
 ```
 
+Mise en ligne sur un VPS (Hostinger ou autre) : `docs/DEPLOIEMENT-HOSTINGER.md`.
 Procédures complètes (incidents, OIDC, restauration, déploiement, observabilité, ajout d'outil ou
 d'agent) : `docs/RUNBOOKS.md`. Banc de rendu : `http://localhost:3000/bench?agents=50`.
 
