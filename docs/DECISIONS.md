@@ -84,3 +84,27 @@ acteur `system:demo-autopilot`, provenance `demo`) pour que le QG vive sans faus
 
 ADR-015 — **Rendu procédural.** Tuiles, mobilier et avatars sont dessinés par code (Phaser Graphics) : originaux, sans
 licence tierce. Une tilemap Tiled pourra remplacer le décor sans changer `packages/world`.
+
+### 2026-11-15 — M2
+
+ADR-016 — **Boucle manuelle plutôt que le Tool Runner du SDK.** Chaque appel modèle et chaque appel d'outil doivent être
+des étapes séparées (réserve budgétaire, persistance d'événements, Activities Temporal rejouables). La boucle
+(`packages/agents/src/loop.ts`) est pure et réutilisée telle quelle par le workflow et par le mode inline.
+
+ADR-017 — **Modèle runtime par défaut `claude-opus-5-5`, effort `medium` explicite**, configurable par version d'agent
+(`agent_versions.model_policy`). Le modèle de développement (Fable 5.2) n'impose pas le modèle runtime (ADR-006).
+Repli serveur sur refus activé (`fallbacks: "default"`, bêta `server-side-fallback-2026-07-01`).
+
+ADR-018 — **Coûts en micro-dollars, « estimés ».** Les tokens viennent du fournisseur ; le prix vient de
+`config/llm-pricing.json` (versionné, daté, source citée). Un modèle non tarifé => coût `null`, jamais inventé.
+
+ADR-019 — **Démo = même chemin, fournisseur scripté.** En démo, la boucle, la gateway, les événements et Temporal sont
+identiques ; seul le fournisseur est remplacé par un script déterministe (échec fermé : jamais de fournisseur réel en démo).
+
+ADR-020 — **Live « hybride » limité.** En live, les tâches du catalogue utilisent le vrai modèle et les adaptateurs
+d'outils démo (aucun effet externe). Le cockpit live attend l'authentification (M5) ; vérification par `agent:live-smoke`.
+
+ADR-021 — **Rattachement département -> plan par `roomId`.** Les identifiants de département sont globaux ; la
+sélection d'agent et la validation de poste passent par `department.roomId` (prépare le multi-tenant).
+
+ADR-022 — **OpenTelemetry reporté à M5**, logs JSON corrélés en attendant (le jalon M2 du plan le mentionnait).

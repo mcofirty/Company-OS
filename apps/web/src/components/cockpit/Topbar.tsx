@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { DEMO_TASK_CATALOG, type TaskKind, type WorldSnapshot } from '@company-os/contracts';
 import { computeMetrics } from '@company-os/world';
 import type { ConnectionState } from '../../lib/useHq';
+import { usd } from '../../lib/format';
 
 const CONN: Record<ConnectionState, string> = {
   connecting: 'Connexion…',
@@ -17,10 +18,12 @@ export function Topbar({
   world,
   connection,
   onCreateTask,
+  onSystem,
 }: {
   world: WorldSnapshot | null;
   connection: ConnectionState;
   onCreateTask: (kind: TaskKind) => Promise<void>;
+  onSystem: (pause: boolean) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,8 +80,15 @@ export function Topbar({
         <Kpi label="Approbations" value={m?.pendingApprovals} sub="en attente" />
         <Kpi
           label="Coût IA"
-          value={m ? `$${(m.llmCostMinor / 100).toFixed(2)}` : undefined}
-          sub="mesuré · 0 appel LLM"
+          value={m ? usd(m.llmCostMicros) : undefined}
+          sub={
+            m
+              ? m.llmCalls === 0
+                ? 'aucun appel LLM'
+                : `${m.costEstimated ? 'estimé' : 'mesuré'} · ${m.llmCalls} appel(s)`
+              : ''
+          }
+          testId="kpi-cost"
         />
         <Kpi
           label="Incidents"
@@ -115,6 +125,23 @@ export function Topbar({
             </div>
           )}
         </div>
+        {world && (
+          <button
+            className={`btn ${world.system.paused ? 'primary' : 'danger'}`}
+            data-testid="kill-switch"
+            onClick={() => {
+              const pause = !world.system.paused;
+              const ok = window.confirm(
+                pause
+                  ? 'Mettre le système en pause ? Aucune nouvelle exécution ni invocation d’outil ne sera lancée. Les traces sont conservées.'
+                  : 'Reprendre l’exécution des agents ?',
+              );
+              if (ok) void onSystem(pause);
+            }}
+          >
+            {world.system.paused ? '▶ Reprendre' : '■ Pause système'}
+          </button>
+        )}
         <span className={`conn conn-${connection}`} data-testid="connection">
           <span className="dot" /> {CONN[connection]}
         </span>

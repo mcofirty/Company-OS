@@ -181,3 +181,43 @@ describe('Socket.IO', () => {
     s.close();
   });
 });
+
+describe('kill switch et budgets', () => {
+  const pause = (headers: Record<string, string>) =>
+    app.inject({
+      method: 'POST',
+      url: '/v1/system/pause',
+      payload: { reason: 'Incident test' },
+      headers,
+    });
+  it('operator -> 403 ; admin -> pause effective, événement system.paused, idempotent', async () => {
+    expect(
+      (await pause({ 'idempotency-key': 'pause-op-1', 'x-dev-role': 'operator' })).statusCode,
+    ).toBe(403);
+    const ok = await pause({ 'idempotency-key': 'pause-admin-1' });
+    expect(ok.json()).toMatchObject({ data: { paused: true, changed: true } });
+    expect((await pause({ 'idempotency-key': 'pause-admin-2' })).json()).toMatchObject({
+      data: { changed: false },
+    });
+    const boot = (await app.inject('/v1/bootstrap')).json<{
+      data: { system: { paused: boolean }; timeline: { type: string }[] };
+    }>();
+    expect(boot.data.system.paused).toBe(true);
+    expect(boot.data.timeline[0]?.type).toBe('system.paused');
+    const resume = await app.inject({
+      method: 'POST',
+      url: '/v1/system/resume',
+      payload: { reason: 'Fin incident' },
+      headers: { 'idempotency-key': 'resume-1' },
+    });
+    expect(resume.json()).toMatchObject({ data: { paused: false, changed: true } });
+  });
+  it('GET /v1/budgets : org + 12 agents, en micro-dollars', async () => {
+    const res = (await app.inject('/v1/budgets')).json<{
+      data: { scopeType: string }[];
+      meta: { unit: string };
+    }>();
+    expect(res.data).toHaveLength(13);
+    expect(res.meta.unit).toBe('micro-USD');
+  });
+});

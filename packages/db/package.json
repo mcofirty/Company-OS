@@ -21,7 +21,9 @@
     "prisma": "7.10.1"
   },
   "dependencies": {
+    "@company-os/agents": "workspace:*",
     "@company-os/contracts": "workspace:*",
+    "@company-os/policies": "workspace:*",
     "@company-os/world": "workspace:*",
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",

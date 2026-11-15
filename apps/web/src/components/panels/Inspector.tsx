@@ -21,6 +21,7 @@ import {
   INVOCATION_STATUS_LABEL,
   TASK_STATUS_LABEL,
   time,
+  usd,
 } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
@@ -99,6 +100,7 @@ function AgentInspector({
   if (!agent) return <Empty>Agent introuvable.</Empty>;
   const dept = world.departments.find((d) => d.id === agent.departmentId);
   const manager = world.agents.find((a) => a.id === agent.managerId);
+  const budget = world.budgets.find((b) => b.scopeType === 'agent' && b.scopeId === agent.id);
   const task = world.tasks.find((t) => t.id === agent.currentTaskId);
   const activeInv = world.invocations.filter(
     (i) => i.agentId === id && ACTIVE_INVOCATION_STATUSES.includes(i.status),
@@ -146,7 +148,12 @@ function AgentInspector({
           ['Rôle', agent.role],
           ['Poste', agent.deskAnchor],
           ['Identifiant', <code key="id">{agent.id}</code>],
-          ['Coût IA', '$0.00 · mesuré (aucun appel LLM en démo)'],
+          [
+            'Budget IA',
+            budget
+              ? `${usd(budget.usedMicros)} / ${usd(budget.limitMicros)} ce mois${budget.hardStop ? ' · plafond dur' : ''}`
+              : '—',
+          ],
         ]}
       />
       <Section title="Travail actuel">
@@ -253,11 +260,28 @@ interface TaskDetail {
     id: string;
     provider: string;
     model: string | null;
+    agentVersion: number;
+    workflowId: string | null;
     status: string;
     stepCount: number;
+    llmCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costMicros: number;
+    costSource: string;
     startedAt: string;
     endedAt: string | null;
     outcomeSummary: string | null;
+    failureCode: string | null;
+    llmCallsDetail: {
+      step: number;
+      model: string;
+      inputTokens: number;
+      outputTokens: number;
+      costMicros: number | null;
+      pricingVersion: string;
+      stopReason: string;
+    }[];
   }[];
   invocations: InvocationView[];
   events: DomainEvent[];
@@ -315,13 +339,47 @@ function TaskInspector({ world, id, onSelect }: Props & { id: string }) {
       />
       <Section title="Exécution (run)">
         {detail?.runs.map((r) => (
-          <p key={r.id} className="small">
-            {r.provider === 'demo' ? 'Démo déterministe (sans LLM)' : `${r.provider} · ${r.model}`}{' '}
-            · {r.status} · {r.stepCount} étape(s)
-            <br />
-            <code>{r.id}</code>
-          </p>
+          <div key={r.id} className="run-card" data-testid="run-card">
+            <Kv
+              rows={[
+                [
+                  'Fournisseur',
+                  r.provider === 'demo-scripted'
+                    ? 'Démo scripté — aucun LLM appelé'
+                    : `${r.provider} · ${r.model ?? '—'}`,
+                ],
+                ['Version agent', `v${r.agentVersion}`],
+                ['Statut', `${r.status}${r.failureCode ? ` · ${r.failureCode}` : ''}`],
+                ['Étapes outils', String(r.stepCount)],
+                ['Appels LLM', String(r.llmCalls)],
+                ['Tokens', r.llmCalls ? `${r.inputTokens} entrée · ${r.outputTokens} sortie` : '—'],
+                [
+                  'Coût',
+                  r.llmCalls
+                    ? `${usd(r.costMicros)} · ${r.costSource === 'estimated' ? 'estimé (grille versionnée)' : r.costSource}`
+                    : '$0.00 · aucun appel',
+                ],
+                ['Workflow', r.workflowId ? <code key="w">{r.workflowId}</code> : '—'],
+                ['Run ID', <code key="r">{r.id}</code>],
+              ]}
+            />
+            {r.llmCallsDetail.length > 0 && (
+              <ol className="mini-log">
+                {r.llmCallsDetail.map((c) => (
+                  <li key={c.step}>
+                    Étape {c.step + 1} · {c.model} · {c.inputTokens}/{c.outputTokens} tokens ·{' '}
+                    {c.costMicros === null ? 'non tarifé' : usd(c.costMicros)} · arrêt{' '}
+                    {c.stopReason}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         )) ?? <Empty>—</Empty>}
+        <p className="hint">
+          Seuls les actions, résultats et coûts sont exposés ; jamais le raisonnement interne du
+          modèle.
+        </p>
       </Section>
       <Section title="Outils">
         {detail?.invocations.map((i) => (

@@ -151,14 +151,38 @@ export function describe(
         tone: 'danger',
         icon: '!',
       };
+    case 'budget.threshold_reached':
+      return {
+        text: `Budget ${e.payload.scopeType === 'org' ? 'organisation' : agentName(e.payload.scopeId)} à ${e.payload.percent} % (${usd(e.payload.usedMicros)} / ${usd(e.payload.limitMicros)})`,
+        tone: 'warning',
+        icon: '$',
+      };
+    case 'system.paused':
+      return { text: `Système mis en pause : ${e.payload.reason}`, tone: 'danger', icon: '■' };
+    case 'system.resumed':
+      return { text: `Système repris : ${e.payload.reason}`, tone: 'success', icon: '▶' };
   }
+}
+
+/** Micro-dollars -> USD (4 décimales sous un cent, jamais d'arrondi trompeur à $0.00). */
+export function usd(micros: number): string {
+  const dollars = micros / 1_000_000;
+  return `$${dollars > 0 && dollars < 0.01 ? dollars.toFixed(4) : dollars.toFixed(2)}`;
 }
 
 /** Cible d'inspection associée à un événement. */
 export function eventTarget(e: DomainEvent): { kind: 'agent' | 'task' | 'invocation'; id: string } {
   if (e.type.startsWith('tool.invocation')) return { kind: 'invocation', id: e.aggregateId };
   if (e.type.startsWith('task.')) return { kind: 'task', id: e.aggregateId };
-  const p = e.payload as { taskId?: string; agentId?: string };
+  const p = e.payload as {
+    taskId?: string;
+    agentId?: string;
+    scopeId?: string;
+    scopeType?: string;
+  };
+  if (e.type === 'budget.threshold_reached' && p.scopeType === 'agent' && p.scopeId) {
+    return { kind: 'agent', id: p.scopeId };
+  }
   if (e.type.startsWith('agent.run') && p.taskId) return { kind: 'task', id: p.taskId };
   return { kind: 'agent', id: p.agentId ?? e.aggregateId };
 }

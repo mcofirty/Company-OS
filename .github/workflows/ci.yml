@@ -32,6 +32,10 @@ jobs:
       - run: cp .env.example .env
       - run: pnpm install --frozen-lockfile
       - run: PGPASSWORD=companyos psql -h localhost -U companyos -c "CREATE DATABASE companyos_test"
+      - name: Serveur Temporal (dev)
+        run: |
+          docker run -d --name temporal -p 7233:7233 temporalio/temporal:1.5.1 server start-dev --ip 0.0.0.0
+          for i in $(seq 1 40); do docker exec temporal temporal operator cluster health --address 127.0.0.1:7233 && break; sleep 2; done
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -60,5 +64,9 @@ jobs:
       - run: cp .env.example .env
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
+      - name: Serveur Temporal (dev)
+        run: |
+          docker run -d --name temporal -p 7233:7233 temporalio/temporal:1.5.1 server start-dev --ip 0.0.0.0
+          for i in $(seq 1 40); do docker exec temporal temporal operator cluster health --address 127.0.0.1:7233 && break; sleep 2; done
       - run: pnpm db:migrate && pnpm db:seed
       - run: pnpm e2e

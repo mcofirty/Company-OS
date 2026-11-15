@@ -859,3 +859,43 @@ h2 {
     animation: none !important;
   }
 }
+
+/* M2 : kill switch, coûts, runs */
+.btn.danger {
+  background: #fff1f3;
+  color: #a12a40;
+  border-color: #f2b6c0;
+  white-space: nowrap;
+}
+.btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+.pause-banner {
+  position: absolute;
+  z-index: 6;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: white;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+}
+.run-card {
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: var(--surface-muted);
+}
+.tl-item.tone-warning {
+  border-color: #efd29a;
+  background: #fffaf0;
+}
+.tl-item.tone-warning .tl-icon {
+  background: var(--warning);
+  color: white;
+}

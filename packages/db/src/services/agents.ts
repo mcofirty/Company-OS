@@ -15,6 +15,18 @@ export interface CreateAgentInput {
   avatarId: string;
   deskAnchor: string;
   grants: Record<string, string[]>;
+  /** Version 1 : instructions et politique modèle (immuable une fois créée). */
+  initialVersion: {
+    promptVersion: string;
+    instructions: string;
+    goal: string;
+    modelPolicy: {
+      model: string;
+      effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+      maxTokens: number;
+    };
+    limits: { maxSteps: number; maxDurationMs: number; maxCostMicros: number };
+  };
   createdBy: { kind: 'user' | 'system'; id: string };
   provenance: Provenance;
   activate: boolean;
@@ -28,16 +40,18 @@ export interface CreateAgentInput {
  */
 export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ created: boolean }> {
   const now = input.now ?? new Date();
-  const anchor = HQ_MAP.anchors[input.deskAnchor];
-  if (!anchor || anchor.kind !== 'desk' || anchor.roomId !== input.departmentId) {
-    throw new DomainError(
-      'VALIDATION_ERROR',
-      `Poste ${input.deskAnchor} invalide pour ${input.departmentId}`,
-    );
-  }
   const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {
     const { tx, orgId } = ctx;
     if (await tx.agent.findUnique({ where: { id: input.id } })) return { created: false };
+    // Le poste doit être une ancre « desk » de la salle du département (dans cette org).
+    const dept = await tx.department.findFirst({ where: { id: input.departmentId, orgId } });
+    const anchor = HQ_MAP.anchors[input.deskAnchor];
+    if (!dept || !anchor || anchor.kind !== 'desk' || anchor.roomId !== dept.roomId) {
+      throw new DomainError(
+        'VALIDATION_ERROR',
+        `Poste ${input.deskAnchor} invalide pour ${input.departmentId}`,
+      );
+    }
     await tx.agent.create({
       data: {
         id: input.id,
@@ -60,6 +74,19 @@ export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ cr
             grantedBy: `${input.createdBy.kind}:${input.createdBy.id}`,
           })),
         },
+      },
+    });
+    await tx.agentVersion.create({
+      data: {
+        id: crypto.randomUUID(),
+        agentId: input.id,
+        version: 1,
+        promptVersion: input.initialVersion.promptVersion,
+        instructions: input.initialVersion.instructions,
+        goal: input.initialVersion.goal,
+        modelPolicy: input.initialVersion.modelPolicy,
+        limits: input.initialVersion.limits,
+        createdBy: `${input.createdBy.kind}:${input.createdBy.id}`,
       },
     });
     const common = {

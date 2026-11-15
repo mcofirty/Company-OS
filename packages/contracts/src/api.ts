@@ -34,3 +34,5 @@ export interface ClientToServerEvents {
 
 /** Au-delà de cet écart, le serveur demande un rechargement du snapshot plutôt qu'un rejeu. */
 export const MAX_REPLAY_EVENTS = 1000;
+
+export const SystemControlRequestSchema = z.object({ reason: z.string().min(3).max(200) }).strict();

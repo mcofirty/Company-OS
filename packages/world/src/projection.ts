@@ -85,7 +85,36 @@ export function applyEvent(
       }));
       break;
     case 'agent.run.started':
-    case 'agent.run.completed':
+      break;
+    case 'agent.run.completed': {
+      const u = e.payload.usage;
+      if (u.llmCalls > 0 || u.costMicros > 0) {
+        w = {
+          ...w,
+          costs: {
+            llmCalls: w.costs.llmCalls + u.llmCalls,
+            inputTokens: w.costs.inputTokens + u.inputTokens,
+            outputTokens: w.costs.outputTokens + u.outputTokens,
+            costMicros: w.costs.costMicros + u.costMicros,
+            estimated: w.costs.estimated || u.costSource === 'estimated',
+          },
+          // Même règle que le serveur : le coût réel est imputé au budget org et au budget agent.
+          budgets: w.budgets.map((b) =>
+            b.scopeType === 'org' || (b.scopeType === 'agent' && b.scopeId === e.payload.agentId)
+              ? { ...b, usedMicros: b.usedMicros + u.costMicros }
+              : b,
+          ),
+        };
+      }
+      break;
+    }
+    case 'budget.threshold_reached':
+      break;
+    case 'system.paused':
+      w = { ...w, system: { paused: true } };
+      break;
+    case 'system.resumed':
+      w = { ...w, system: { paused: false } };
       break;
     case 'tool.invocation.requested': {
       const p = e.payload;
@@ -272,8 +301,11 @@ export interface Metrics {
   activeInvocations: number;
   activeToolIds: string[];
   pendingApprovals: number;
-  /** Aucun appel LLM en démo : coût mesuré = 0. */
-  llmCostMinor: number;
+  /** Coût LLM cumulé (micro-dollars) et nature (estimé depuis la grille tarifaire). */
+  llmCostMicros: number;
+  llmCalls: number;
+  costEstimated: boolean;
+  systemPaused: boolean;
   incidents: number;
 }
 
@@ -288,7 +320,10 @@ export function computeMetrics(w: WorldSnapshot): Metrics {
     activeInvocations: active.length,
     activeToolIds: [...new Set(active.map((i) => i.toolId))],
     pendingApprovals: 0,
-    llmCostMinor: 0,
+    llmCostMicros: w.costs.costMicros,
+    llmCalls: w.costs.llmCalls,
+    costEstimated: w.costs.estimated,
+    systemPaused: w.system.paused,
     incidents:
       w.tasks.filter((t) => t.status === 'blocked' || t.status === 'failed').length +
       w.invocations.filter((i) => i.status === 'failed').length,

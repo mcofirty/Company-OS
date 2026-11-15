@@ -19,11 +19,14 @@
     "db:reset": "pnpm --filter @company-os/db reset",
     "test:contracts": "vitest run packages/contracts packages/world",
     "test:integration": "vitest run packages/db apps",
-    "db:generate": "pnpm --filter @company-os/db generate"
+    "db:generate": "pnpm --filter @company-os/db generate",
+    "agent:live-smoke": "pnpm --filter @company-os/worker live-smoke"
   },
   "devDependencies": {
+    "@company-os/agents": "workspace:*",
     "@company-os/contracts": "workspace:*",
     "@company-os/db": "workspace:*",
+    "@company-os/policies": "workspace:*",
     "@company-os/tools": "workspace:*",
     "@company-os/world": "workspace:*",
     "@eslint/js": "^10.0.1",

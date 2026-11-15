@@ -7,3 +7,5 @@ onlyBuiltDependencies:
   - prisma
   - esbuild
   - sharp
+  - '@swc/core'
+  - protobufjs

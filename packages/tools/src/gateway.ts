@@ -7,6 +7,7 @@ import {
   startInvocation,
   type Db,
 } from '@company-os/db';
+import { redactJson, redactText } from '@company-os/policies';
 import { findAdapter, ToolError } from './adapters';
 
 export interface GatewayOptions {
@@ -31,7 +32,13 @@ export interface InvokeRequest {
 }
 
 export type InvokeResult =
-  | { status: 'succeeded'; invocation: InvocationView; summary: string; lastEventId: string }
+  | {
+      status: 'succeeded';
+      invocation: InvocationView;
+      summary: string;
+      output: unknown;
+      lastEventId: string;
+    }
   | { status: 'failed'; invocation: InvocationView; errorCode: string; lastEventId: string }
   | { status: 'rejected'; invocation: InvocationView; reasonCode: string; lastEventId: string };
 
@@ -68,7 +75,7 @@ export class ToolGateway {
       runId: req.runId,
       toolId: req.toolId,
       action: req.action,
-      redactedInput: req.input,
+      redactedInput: redactJson(req.input),
       idempotencyKey: req.idempotencyKey,
       causationId: req.causationId,
       now: this.now(),
@@ -122,7 +129,10 @@ export class ToolGateway {
           adapter.invoke({ mode: org.mode, invocationId: invocation.id, attempt }, parsed.data),
           this.timeoutMs,
         );
-        const summary = adapter.summarize(adapter.outputSchema.parse(output));
+        const parsedOut = adapter.outputSchema.parse(output);
+        // Rédaction avant tout stockage (UI/logs) et avant renvoi au modèle.
+        const summary = redactText(adapter.summarize(parsedOut));
+        const safeOutput = redactJson(parsedOut);
         const done = await completeInvocation(this.db, {
           orgId: req.orgId,
           invocationId: invocation.id,
@@ -135,6 +145,7 @@ export class ToolGateway {
           status: 'succeeded',
           invocation: done.invocation,
           summary,
+          output: safeOutput,
           lastEventId: done.eventId,
         };
       } catch (err) {
@@ -168,7 +179,13 @@ export class ToolGateway {
 
   private fromTerminal(inv: InvocationView, lastEventId: string): InvokeResult {
     if (inv.status === 'succeeded')
-      return { status: 'succeeded', invocation: inv, summary: inv.safeSummary ?? '', lastEventId };
+      return {
+        status: 'succeeded',
+        invocation: inv,
+        summary: inv.safeSummary ?? '',
+        output: { summary: inv.safeSummary ?? '' },
+        lastEventId,
+      };
     if (inv.status === 'rejected')
       return {
         status: 'rejected',

@@ -107,6 +107,26 @@ export const WorldSnapshotSchema = z.object({
   tasks: z.array(TaskViewSchema),
   /** Invocations actives + dernières terminées (bornées). */
   invocations: z.array(InvocationViewSchema),
+  /** Totaux d'usage LLM de l'org (agrégés depuis agent.run.completed). */
+  costs: z.object({
+    llmCalls: z.number().int(),
+    inputTokens: z.number().int(),
+    outputTokens: z.number().int(),
+    costMicros: z.number().int(),
+    estimated: z.boolean(),
+  }),
+  budgets: z.array(
+    z.object({
+      id: z.string(),
+      scopeType: z.enum(['org', 'agent']),
+      scopeId: z.string(),
+      limitMicros: z.number().int(),
+      usedMicros: z.number().int(),
+      hardStop: z.boolean(),
+      alertThreshold: z.number(),
+    }),
+  ),
+  system: z.object({ paused: z.boolean() }),
   /** Derniers événements (plus récents en premier). */
   timeline: z.array(DomainEventSchema),
 });

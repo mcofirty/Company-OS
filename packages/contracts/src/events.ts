@@ -41,6 +41,21 @@ export const ALL_EVENT_TYPES = [
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
 const SafeText = z.string().max(280);
+
+/**
+ * Usage LLM d'un run. Les tokens viennent du fournisseur (mesurés) ; le coût est calculé à
+ * partir d'une grille tarifaire versionnée (`estimated`), ou `none` sans appel LLM.
+ * Unité : micro-dollars (1e-6 USD) pour ne pas perdre les fractions de centime.
+ */
+export const RunUsageSchema = z.object({
+  llmCalls: z.number().int().min(0),
+  inputTokens: z.number().int().min(0),
+  outputTokens: z.number().int().min(0),
+  costMicros: z.number().int().min(0),
+  costSource: z.enum(['none', 'estimated', 'measured']),
+  model: z.string().max(64).nullable(),
+});
+export type RunUsage = z.infer<typeof RunUsageSchema>;
 const Uuid = z.uuid();
 
 // ---------- Payloads implémentés (M1) ----------
@@ -90,6 +105,9 @@ export const Payloads = {
     agentId: SlugIdSchema,
     taskId: Uuid,
     providerClass: z.enum(['demo', 'llm']),
+    /** Modèle demandé (null pour le fournisseur démo scripté, sans LLM). */
+    model: z.string().max(64).nullable().default(null),
+    agentVersion: z.number().int().min(1).nullable().default(null),
   }),
   'agent.run.completed': z.object({
     runId: Uuid,
@@ -97,6 +115,14 @@ export const Payloads = {
     taskId: Uuid,
     status: z.enum(['succeeded', 'failed', 'blocked']),
     stepCount: z.number().int().min(0),
+    usage: RunUsageSchema.default({
+      llmCalls: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costMicros: 0,
+      costSource: 'none',
+      model: null,
+    }),
   }),
   'tool.invocation.requested': z.object({
     invocationId: Uuid,
@@ -132,6 +158,17 @@ export const Payloads = {
     errorCode: z.string().max(64),
     attempt: z.number().int().min(1),
   }),
+  'budget.threshold_reached': z.object({
+    budgetId: Uuid,
+    scopeType: z.enum(['org', 'agent']),
+    scopeId: z.string().min(1).max(64),
+    percent: z.number().int().min(0).max(1000),
+    usedMicros: z.number().int().min(0),
+    limitMicros: z.number().int().min(0),
+    hardStop: z.boolean(),
+  }),
+  'system.paused': z.object({ reason: z.string().min(1).max(200) }),
+  'system.resumed': z.object({ reason: z.string().min(1).max(200) }),
   'tool.invocation.rejected': z.object({
     invocationId: Uuid,
     toolId: SlugIdSchema,
@@ -179,6 +216,9 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('tool.invocation.succeeded'),
   variant('tool.invocation.failed'),
   variant('tool.invocation.rejected'),
+  variant('budget.threshold_reached'),
+  variant('system.paused'),
+  variant('system.resumed'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

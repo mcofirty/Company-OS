@@ -77,6 +77,8 @@ export interface ToolActionSpec {
   kind: ToolActionKind;
   risk: ToolRisk;
   label: string;
+  /** Paramètre unique (référence opaque) attendu par l'action, exposé au modèle. */
+  input: { field: string; description: string };
 }
 export interface ToolCatalogEntry {
   id: string;
@@ -95,8 +97,23 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     category: 'données',
     color: '#ea966c',
     actions: [
-      { action: 'lookup_lead', kind: 'read', risk: 'read', label: 'Lire un prospect' },
-      { action: 'add_note', kind: 'write', risk: 'internal_write', label: 'Ajouter une note' },
+      {
+        action: 'lookup_lead',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire un prospect',
+        input: {
+          field: 'leadRef',
+          description: 'Référence du prospect dans le CRM (ex. demo-lead-042)',
+        },
+      },
+      {
+        action: 'add_note',
+        kind: 'write',
+        risk: 'internal_write',
+        label: 'Ajouter une note',
+        input: { field: 'leadRef', description: 'Référence du prospect' },
+      },
     ],
   },
   {
@@ -106,8 +123,20 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     category: 'communication',
     color: '#88badc',
     actions: [
-      { action: 'draft_email', kind: 'draft', risk: 'internal_write', label: 'Brouillon' },
-      { action: 'send_email', kind: 'send', risk: 'external_write', label: 'Envoyer' },
+      {
+        action: 'draft_email',
+        kind: 'draft',
+        risk: 'internal_write',
+        label: 'Brouillon',
+        input: { field: 'ticketRef', description: 'Référence du ticket ou du fil à traiter' },
+      },
+      {
+        action: 'send_email',
+        kind: 'send',
+        risk: 'external_write',
+        label: 'Envoyer',
+        input: { field: 'ticketRef', description: 'Référence du ticket ou du fil à traiter' },
+      },
     ],
   },
   {
@@ -116,7 +145,15 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     code: 'DRV',
     category: 'documents',
     color: '#76c69a',
-    actions: [{ action: 'read_file', kind: 'read', risk: 'read', label: 'Lire un fichier' }],
+    actions: [
+      {
+        action: 'read_file',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire un fichier',
+        input: { field: 'fileRef', description: 'Référence du fichier' },
+      },
+    ],
   },
   {
     id: 'search',
@@ -124,7 +161,15 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     code: 'WEB',
     category: 'web',
     color: '#9c84de',
-    actions: [{ action: 'search', kind: 'search', risk: 'read', label: 'Rechercher' }],
+    actions: [
+      {
+        action: 'search',
+        kind: 'search',
+        risk: 'read',
+        label: 'Rechercher',
+        input: { field: 'query', description: 'Requête de recherche (fixtures locales)' },
+      },
+    ],
   },
   {
     id: 'erp',
@@ -133,8 +178,20 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     category: 'finance',
     color: '#e7c16a',
     actions: [
-      { action: 'fetch_invoice', kind: 'read', risk: 'read', label: 'Lire une facture' },
-      { action: 'issue_invoice', kind: 'execute', risk: 'high_impact', label: 'Émettre' },
+      {
+        action: 'fetch_invoice',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire une facture',
+        input: { field: 'invoiceRef', description: 'Référence de la facture' },
+      },
+      {
+        action: 'issue_invoice',
+        kind: 'execute',
+        risk: 'high_impact',
+        label: 'Émettre',
+        input: { field: 'invoiceRef', description: 'Référence de la facture' },
+      },
     ],
   },
   {
@@ -143,7 +200,15 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     code: 'ANA',
     category: 'données',
     color: '#5aa5c9',
-    actions: [{ action: 'query_metrics', kind: 'read', risk: 'read', label: 'Lire des métriques' }],
+    actions: [
+      {
+        action: 'query_metrics',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire des métriques',
+        input: { field: 'metric', description: 'Identifiant de la métrique' },
+      },
+    ],
   },
   {
     id: 'ats',
@@ -151,7 +216,15 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     code: 'ATS',
     category: 'coordination',
     color: '#e8a5c0',
-    actions: [{ action: 'list_candidates', kind: 'read', risk: 'read', label: 'Lister candidats' }],
+    actions: [
+      {
+        action: 'list_candidates',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lister candidats',
+        input: { field: 'jobRef', description: 'Référence du poste' },
+      },
+    ],
   },
   {
     id: 'docs',
@@ -159,7 +232,15 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     code: 'DOC',
     category: 'documents',
     color: '#b59cf0',
-    actions: [{ action: 'draft_doc', kind: 'draft', risk: 'internal_write', label: 'Rédiger' }],
+    actions: [
+      {
+        action: 'draft_doc',
+        kind: 'draft',
+        risk: 'internal_write',
+        label: 'Rédiger',
+        input: { field: 'topic', description: 'Sujet du document' },
+      },
+    ],
   },
 ];
 

@@ -176,3 +176,31 @@ test('S04 — erreur outil ERP : échec visible, tâche bloquée, aucun faux suc
   );
   await expect(page.getByTestId('kpi-incidents')).not.toContainText(/^0/);
 });
+
+test('M2 — inspecteur de run : fournisseur, version, coût (démo : aucun LLM)', async ({ page }) => {
+  await open(page);
+  const id = await createViaUi(page, 'forecast_cashflow');
+  await expect(page.getByTestId('inspector')).toContainText('Réussie', { timeout: 30_000 });
+  const run = page.getByTestId('run-card').first();
+  await expect(run).toContainText('Démo scripté — aucun LLM appelé');
+  await expect(run).toContainText('v1');
+  await expect(run).toContainText('agent-task-');
+  await expect(page.getByTestId('kpi-cost')).toContainText('$0.00');
+  const d = await taskDetail(page, id);
+  expect(d.task.status).toBe('succeeded');
+});
+
+test('S12 — kill switch depuis le cockpit : bannière, timeline, reprise', async ({ page }) => {
+  await open(page);
+  page.on('dialog', (d) => void d.accept());
+  await page.getByTestId('kill-switch').click();
+  await expect(page.getByTestId('pause-banner')).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId('timeline')).toContainText('Système mis en pause');
+  const boot = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
+    data: { system: { paused: boolean } };
+  };
+  expect(boot.data.system.paused).toBe(true);
+  await page.getByTestId('kill-switch').click();
+  await expect(page.getByTestId('pause-banner')).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByTestId('timeline')).toContainText('Système repris');
+});

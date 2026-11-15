@@ -174,5 +174,15 @@ export function useHq() {
     return data;
   }, []);
 
-  return { world, connection, error, toasts, now, createTask, toast };
+  const setSystemPaused = useCallback(async (pause: boolean): Promise<void> => {
+    await api(`/v1/system/${pause ? 'pause' : 'resume'}`, {
+      method: 'POST',
+      headers: { 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify({
+        reason: pause ? 'Pause manuelle depuis le cockpit' : 'Reprise manuelle depuis le cockpit',
+      }),
+    });
+  }, []);
+
+  return { world, connection, error, toasts, now, createTask, toast, setSystemPaused };
 }

@@ -54,7 +54,7 @@ cp .env.example .env
 pnpm install
 docker compose up -d --wait
 pnpm db:migrate && pnpm db:seed
-pnpm dev            # API http://localhost:4000 · worker démo · web http://localhost:3000
+pnpm dev            # API http://localhost:4000 · worker (Temporal) · web http://localhost:3000 · Temporal UI http://localhost:8233
 ```
 
 Le badge **DEMO** signale une simulation déterministe côté serveur : aucun appel LLM, e-mail ou SaaS externe.
@@ -78,9 +78,11 @@ pnpm build
 | `packages/contracts` | Zod : enveloppe d'événements v1, payloads, snapshot, API, catalogues démo   |
 | `packages/world`     | Carte hq-v1, A*, réducteur idempotent, KPI, projection visuelle             |
 | `packages/db`        | Prisma/PostgreSQL : event_log + outbox, services métier, seed               |
+| `packages/agents`    | Fournisseurs LLM (Anthropic, démo scripté, mock), prompts versionnés, boucle bornée |
+| `packages/policies`  | Rédaction, budgets, tarification versionnée                                 |
 | `packages/tools`     | ToolGateway (politique, retries, timeout) + adaptateurs démo                |
 | `apps/api`           | Fastify `/v1` + Socket.IO (`events:resume`, `domain:event`), relais outbox |
-| `apps/worker`        | Exécution des tâches hors navigateur, reprise après crash, autopilote démo  |
+| `apps/worker`        | Workflow Temporal `agentTask` + activities, dispatcher, autopilote démo     |
 | `apps/web`           | Cockpit Next.js + monde Phaser isométrique                                  |
 
 État d'avancement et prochaines étapes : `docs/PROGRESS.md`. Décisions : `docs/DECISIONS.md`.

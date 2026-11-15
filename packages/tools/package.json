@@ -13,6 +13,7 @@
   "dependencies": {
     "@company-os/contracts": "workspace:*",
     "@company-os/db": "workspace:*",
+    "@company-os/policies": "workspace:*",
     "zod": "^4.6.7"
   }
 }

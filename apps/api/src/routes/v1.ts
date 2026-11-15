@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   CreateTaskRequestSchema,
   IdempotencyKeySchema,
+  SystemControlRequestSchema,
   InvocationStatusSchema,
   SlugIdSchema,
   TaskStatusSchema,
@@ -18,6 +19,7 @@ import {
   taskView,
   toolView,
   type Db,
+  setSystemPaused,
 } from '@company-os/db';
 import { principalOf, requireRole, type AuthConfig } from '../auth';
 
@@ -144,7 +146,11 @@ export function registerV1(app: FastifyInstance, db: Db, auth: AuthConfig): void
     const task = await db.task.findFirst({ where: { id, orgId: p.orgId } });
     if (!task) throw new DomainError('NOT_FOUND', 'Tâche introuvable');
     const [runs, invocations, events] = await Promise.all([
-      db.agentRun.findMany({ where: { taskId: id }, orderBy: { startedAt: 'asc' } }),
+      db.agentRun.findMany({
+        where: { taskId: id },
+        orderBy: { startedAt: 'asc' },
+        include: { usages: { orderBy: { step: 'asc' } } },
+      }),
       db.toolInvocation.findMany({ where: { taskId: id }, orderBy: { requestedAt: 'asc' } }),
       listEventsByCorrelation(db, p.orgId, task.correlationId),
     ]);
@@ -155,11 +161,30 @@ export function registerV1(app: FastifyInstance, db: Db, auth: AuthConfig): void
           id: r.id,
           provider: r.provider,
           model: r.model,
+          agentVersion: r.agentVersion,
+          workflowId: r.workflowId,
           status: r.status,
           stepCount: r.stepCount,
+          llmCalls: r.llmCalls,
+          inputTokens: r.inputTokens,
+          outputTokens: r.outputTokens,
+          costMicros: r.costMicros,
+          costSource: r.costSource,
           startedAt: r.startedAt.toISOString(),
           endedAt: r.endedAt?.toISOString() ?? null,
           outcomeSummary: r.outcomeSummary,
+          failureCode: r.failureCode,
+          llmCallsDetail: r.usages.map((u) => ({
+            step: u.step,
+            model: u.model,
+            inputTokens: u.inputTokens,
+            outputTokens: u.outputTokens,
+            cacheReadTokens: u.cacheReadTokens,
+            costMicros: u.costMicros,
+            measuredOrEstimated: u.measuredOrEstimated,
+            pricingVersion: u.pricingVersion,
+            stopReason: u.stopReason,
+          })),
         })),
         invocations: invocations.map(invocationView),
         events,
@@ -236,6 +261,49 @@ export function registerV1(app: FastifyInstance, db: Db, auth: AuthConfig): void
     return {
       data: events,
       meta: { ...meta, lastSeq: Number(org.lastSeq), hasMore: events.length === q.limit },
+    };
+  });
+
+  // Kill switch d'organisation (docs/04 §10) : admin uniquement, audité par événement.
+  for (const [path, paused] of [
+    ['/v1/system/pause', true],
+    ['/v1/system/resume', false],
+  ] as const) {
+    app.post(path, async (req) => {
+      const p = principalOf(req, auth);
+      requireRole(p, 'admin');
+      const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+      if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+      const body = SystemControlRequestSchema.parse(req.body);
+      const r = await setSystemPaused(db, {
+        orgId: p.orgId,
+        paused,
+        reason: body.reason,
+        actor: { kind: 'user', id: p.userId },
+      });
+      return { data: { paused, changed: r.changed }, meta };
+    });
+  }
+
+  app.get('/v1/budgets', async (req) => {
+    const p = principalOf(req, auth);
+    const rows = await db.budget.findMany({
+      where: { orgId: p.orgId },
+      orderBy: [{ scopeType: 'asc' }, { scopeId: 'asc' }],
+    });
+    return {
+      data: rows.map((b) => ({
+        id: b.id,
+        scopeType: b.scopeType,
+        scopeId: b.scopeId,
+        period: b.period,
+        limitMicros: b.limitMicros,
+        usedMicros: b.usedMicros,
+        reservedMicros: b.reservedMicros,
+        hardStop: b.hardStop,
+        alertThreshold: b.alertThreshold,
+      })),
+      meta: { ...meta, unit: 'micro-USD' },
     };
   });
 }

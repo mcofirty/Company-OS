@@ -21,7 +21,7 @@ const WorldViewport = dynamic(
 
 /** Écran unique (docs/01 §3) : carte dominante, KPI, outils, inspecteur, timeline. */
 export function Cockpit() {
-  const { world, connection, error, toasts, now, createTask, toast } = useHq();
+  const { world, connection, error, toasts, now, createTask, toast, setSystemPaused } = useHq();
   const [selection, setSelection] = useState<Selection | null>(null);
   const scene = useRef<HqScene | null>(null);
 
@@ -50,7 +50,21 @@ export function Cockpit() {
 
   return (
     <div className="cockpit">
-      <Topbar world={world} connection={connection} onCreateTask={(k) => onCreateTask(k)} />
+      <Topbar
+        world={world}
+        connection={connection}
+        onCreateTask={(k) => onCreateTask(k)}
+        onSystem={async (pause) => {
+          try {
+            await setSystemPaused(pause);
+          } catch (err) {
+            toast({
+              text: `Refusé : ${err instanceof ApiFailure ? err.code : 'erreur'}`,
+              tone: 'danger',
+            });
+          }
+        }}
+      />
       <nav className="rail" aria-label="Contrôles de la carte">
         <button
           onClick={() => scene.current?.home()}
@@ -82,6 +96,12 @@ export function Cockpit() {
         </button>
       </nav>
       <main className="world-pane">
+        {world?.system.paused && (
+          <div className="pause-banner" role="alert" data-testid="pause-banner">
+            ■ SYSTÈME EN PAUSE — aucune nouvelle exécution ni invocation d’outil. Les traces restent
+            consultables.
+          </div>
+        )}
         {error && connection === 'error' && (
           <div className="error-banner" role="alert">
             API indisponible : {error}. Vérifiez <code>pnpm dev</code> et la base.

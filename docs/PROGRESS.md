@@ -3,6 +3,69 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (3) — M2 : agent LLM borné, outils sécurisés, coûts, Temporal
+
+**Milestone courant : M2 terminé (parcours LIVE réel non vérifié faute de clé). Prochain : M3.**
+
+### Réalisé
+- **Temporal** : service `temporal` dans `docker-compose.yml` (dev server 1.5.1, UI http://localhost:8233). Workflow
+  `agentTaskWorkflow` (apps/worker/src/workflows) : la boucle d'agent est déterministe, chaque appel modèle / outil /
+  préparation / clôture est une Activity avec timeout et retries. `workflowId = agent-task-<taskId>` (démarrage idempotent).
+  Mode `ORCHESTRATOR=inline` conservé pour les tests sans serveur.
+- **`packages/agents`** : interface `LLMProvider` ; `AnthropicProvider` (SDK officiel, Messages API + tool use, effort
+  explicite, repli serveur `fallbacks: "default"`, outils `strict`, erreurs classées retryable/définitive) ;
+  `ScriptedDemoProvider` (démo déterministe, même protocole, zéro appel) ; `MockProvider` (tests). Prompts runtime
+  versionnés (docs/13, `PROMPT_VERSION`), sorties d'outils encapsulées `<donnees_non_fiables>`, résultat final via
+  `submit_result` validé par Zod (`AgentResult`). Boucle bornée : `maxSteps`, durée, plafond de coût du run, relance unique
+  sans résultat, refus modèle, `needs_approval` -> tâche bloquée.
+- **`packages/policies`** : rédaction (emails, téléphones, IBAN, cartes, secrets), arithmétique de budget (réserve,
+  seuil, pas de division par zéro), tarification depuis `config/llm-pricing.json` (versionnée, datée ; coût = « estimé »).
+- **DB (migration `m2_agents_costs_budgets`)** : `agent_versions` (instructions + politique modèle + limites, immuables),
+  `llm_usage` (unique par run+étape), `budgets` (org/agent, plafond dur, alerte 80 %), usage cumulé sur `agent_runs`.
+  Kill switch (`system.paused/resumed`), `budget.threshold_reached`, usage dans `agent.run.completed`.
+- **Gateway** : sorties redigées avant stockage et avant renvoi au modèle ; tout appel d'outil (même non autorisé)
+  est audité puis refusé. Fixture d'injection de prompt dans le CRM démo.
+- **API** : `POST /v1/system/pause|resume` (admin, Idempotency-Key), `GET /v1/budgets`, détail des runs dans
+  `GET /v1/tasks/:id` (fournisseur, modèle, version, workflow, tokens, coût par appel).
+- **Web** : KPI coût IA réel (micro-dollars, « estimé » / « aucun appel LLM »), bouton Pause système avec confirmation,
+  bannière de pause, carte de run dans l'inspecteur de tâche, budget de l'agent, nouveaux événements dans la timeline.
+- `pnpm agent:live-smoke` : exécute UNE tâche avec le vrai modèle Anthropic (org live séparée, outils démo, budget $2).
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK (9 packages) · `pnpm build` OK.
+- `pnpm test` : **72 tests passés** (8 fichiers) dont : boucle bornée (maxSteps, coût, refus, résultat invalide),
+  requête Anthropic construite via fetch simulé (aucun réseau), parcours live avec MockProvider (coûts estimés, budgets
+  imputés, alerte 80 %, plafond dur avant tout appel, fournisseur absent = échec fermé), **injection de prompt** (donnée
+  encapsulée, PII rédigée, `send_email` refusé et audité), kill switch, reprise après crash, **workflow sur un vrai
+  serveur Temporal** (idempotence du démarrage, activités dans l'historique).
+- `pnpm e2e` : **7 tests passés** (stack complète avec orchestration Temporal) dont inspecteur de run et kill switch (S12).
+- Constaté manuellement : un worker tué en plein run -> le workflow reprend au redémarrage (tâches terminées sans doublon).
+- Capture : `docs/screenshots/m2-run-inspector-1440.png`.
+- **Non vérifié** : appel réel à l'API Anthropic (`ANTHROPIC_API_KEY` absente ; `pnpm agent:live-smoke` refuse proprement).
+
+### Écarts connus
+- Cockpit et worker continus en mode LIVE non ouverts : nécessitent une vraie authentification (M5). Le live se vérifie
+  via `pnpm agent:live-smoke`.
+- OpenTelemetry reporté à M5 (logs JSON corrélés en attendant). Pas d'approbations (M3) : toute écriture externe est refusée.
+- Si une activité modèle est rejouée après l'appel mais avant l'enregistrement, le second appel n'est pas compté (idempotence
+  par étape) : sous-estimation possible, documentée.
+- Budgets affichés côté client mis à jour à la fin du run (le contrôle serveur, lui, est fait avant chaque appel).
+
+### Prochaine tâche exacte
+M3 : `approval_requests` + `approval.requested/decided` (signal Temporal de reprise), réunions (`meeting.started/completed`,
+sièges réservés), proposition RH -> approbation admin -> `agent.created/activated` avec spawn à l'accueil, délégation
+bornée (profondeur 3, cycles rejetés), inspecteurs réunion/approbation.
+
+### Commandes de reprise
+```bash
+cp .env.example .env && pnpm install
+docker compose up -d --wait          # PostgreSQL + Temporal (UI :8233)
+pnpm db:migrate && pnpm db:seed
+pnpm dev                             # API :4000, worker Temporal, web :3000
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm build
+ANTHROPIC_API_KEY=... pnpm agent:live-smoke   # optionnel, appel réel payant
+```
+
 ## Session 2026-11-15 (2) — Alignement M0 sur les specs + M1 (vertical slice)
 
 **Milestone courant : M1 terminé. Prochain : M2.**

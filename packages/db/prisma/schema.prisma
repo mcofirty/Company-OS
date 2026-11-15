@@ -106,8 +106,10 @@ model Agent {
   updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt       DateTime?    @map("deleted_at") @db.Timestamptz(3)
   version         Int          @default(1)
+  activeVersion   Int          @default(1) @map("active_version")
 
   grants      AgentToolGrant[]
+  versions    AgentVersion[]
   tasks       Task[]
   runs        AgentRun[]
   invocations ToolInvocation[]
@@ -116,6 +118,26 @@ model Agent {
   @@unique([orgId, deskAnchor])
   @@index([orgId, departmentId, status])
   @@map("agents")
+}
+
+/// Instructions et politique modèle versionnées, immuables une fois activées (docs/04 §4, docs/13 §9).
+model AgentVersion {
+  id            String   @id @db.Uuid
+  agentId       String   @map("agent_id")
+  agent         Agent    @relation(fields: [agentId], references: [id])
+  version       Int
+  promptVersion String   @map("prompt_version")
+  instructions  String
+  goal          String
+  /// { model, effort, maxTokens }
+  modelPolicy   Json     @map("model_policy")
+  /// { maxSteps, maxDurationMs, maxCostMicros }
+  limits        Json
+  createdBy     String   @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([agentId, version])
+  @@map("agent_versions")
 }
 
 /// Autorisation explicite agent -> outil -> actions (jamais héritée du nom du rôle).
@@ -198,6 +220,15 @@ model AgentRun {
   provenance     Provenance
   /// Identifiant de l'événement agent.run.started (chaîne de causalité).
   startEventId   String     @map("start_event_id") @db.Uuid
+  agentVersion   Int        @default(1) @map("agent_version")
+  llmCalls       Int        @default(0) @map("llm_calls")
+  inputTokens    Int        @default(0) @map("input_tokens")
+  outputTokens   Int        @default(0) @map("output_tokens")
+  costMicros     Int        @default(0) @map("cost_micros")
+  costSource     String     @default("none") @map("cost_source")
+  workflowId     String?    @map("workflow_id")
+
+  usages LlmUsage[]
 
   invocations ToolInvocation[]
 
@@ -235,6 +266,51 @@ model ToolInvocation {
   @@unique([orgId, idempotencyKey])
   @@index([orgId, status, requestedAt])
   @@map("tool_invocations")
+}
+
+/// Usage LLM par appel (tokens mesurés par le fournisseur, coût estimé depuis la grille versionnée).
+model LlmUsage {
+  id                  String   @id @db.Uuid
+  orgId               String   @map("org_id") @db.Uuid
+  agentRunId          String   @map("agent_run_id") @db.Uuid
+  agentRun            AgentRun @relation(fields: [agentRunId], references: [id])
+  agentId             String   @map("agent_id")
+  step                Int
+  provider            String
+  model               String
+  inputTokens         Int      @map("input_tokens")
+  outputTokens        Int      @map("output_tokens")
+  cacheReadTokens     Int      @map("cache_read_tokens")
+  cacheWriteTokens    Int      @map("cache_write_tokens")
+  costMicros          Int?     @map("cost_micros")
+  currency            String   @default("USD")
+  measuredOrEstimated String   @map("measured_or_estimated")
+  pricingVersion      String   @map("pricing_version")
+  stopReason          String   @map("stop_reason")
+  createdAt           DateTime @map("created_at") @db.Timestamptz(3)
+
+  /// Un appel par (run, étape) : une activité rejouée ne compte pas deux fois.
+  @@unique([agentRunId, step])
+  @@index([orgId, createdAt])
+  @@map("llm_usage")
+}
+
+/// Budgets par scope (org, agent), en micro-dollars. hard_stop bloque les nouveaux appels.
+model Budget {
+  id             String    @id @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  scopeType      String    @map("scope_type")
+  scopeId        String    @map("scope_id")
+  period         String    @default("month")
+  limitMicros    Int       @map("limit_micros")
+  usedMicros     Int       @default(0) @map("used_micros")
+  reservedMicros Int       @default(0) @map("reserved_micros")
+  hardStop       Boolean   @default(true) @map("hard_stop")
+  alertThreshold Float     @default(0.8) @map("alert_threshold")
+  alertedAt      DateTime? @map("alerted_at") @db.Timestamptz(3)
+
+  @@unique([orgId, scopeType, scopeId, period])
+  @@map("budgets")
 }
 
 /// Journal append-only : source de vérité de ce qui s'est passé. seq contigu par org.

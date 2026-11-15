@@ -48,6 +48,9 @@ const empty: WorldSnapshot = {
   tools: [],
   tasks: [],
   invocations: [],
+  costs: { llmCalls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0, estimated: false },
+  budgets: [],
+  system: { paused: false },
   timeline: [],
 };
 
@@ -113,7 +116,14 @@ const cycle: DomainEvent[] = [
       aggregateType: 'agent_run',
       aggregateId: R1,
       aggregateVersion: 1,
-      payload: { runId: R1, agentId: 'sales-01', taskId: T1, providerClass: 'demo' },
+      payload: {
+        runId: R1,
+        agentId: 'sales-01',
+        taskId: T1,
+        providerClass: 'demo',
+        model: null,
+        agentVersion: 1,
+      },
     },
     5,
   ),
@@ -181,7 +191,21 @@ const finish: DomainEvent[] = [
       aggregateType: 'agent_run',
       aggregateId: R1,
       aggregateVersion: 2,
-      payload: { runId: R1, agentId: 'sales-01', taskId: T1, status: 'succeeded', stepCount: 1 },
+      payload: {
+        runId: R1,
+        agentId: 'sales-01',
+        taskId: T1,
+        status: 'succeeded',
+        stepCount: 1,
+        usage: {
+          llmCalls: 1,
+          inputTokens: 1200,
+          outputTokens: 300,
+          costMicros: 10800,
+          costSource: 'estimated',
+          model: 'claude-opus-5-5',
+        },
+      },
     },
     9,
   ),
@@ -267,6 +291,13 @@ describe('réducteur', () => {
     expect(end.invocations[0]).toMatchObject({ status: 'succeeded', durationMs: 3000 });
     expect(end.timeline[0]?.type).toBe('task.completed');
     expect(computeMetrics(end).activeInvocations).toBe(0);
+    expect(end.costs).toEqual({
+      llmCalls: 1,
+      inputTokens: 1200,
+      outputTokens: 300,
+      costMicros: 10800,
+      estimated: true,
+    });
   });
   it('ignore les doublons et signale les trous', () => {
     const w = applyEvents(empty, cycle.slice(0, 3));

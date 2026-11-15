@@ -44,9 +44,9 @@ export async function createTask(
         return { task: taskView(task), created: false };
       }
     }
-    if (ctx.mode !== 'demo') {
-      throw new DomainError('POLICY_DENIED', 'Les tâches DEMO ne sont autorisées qu’en mode démo');
-    }
+    // En live, les scénarios du catalogue s'exécutent avec un vrai modèle mais des outils
+    // démo (mode « hybride », signalé) : la provenance suit le mode de l'organisation.
+    const provenance = ctx.mode === 'demo' ? 'demo' : 'live';
     const spec = DEMO_TASK_CATALOG[input.kind];
     const agent = await pickAgent(tx, orgId, spec.departmentId, input.agentId);
 
@@ -64,7 +64,7 @@ export async function createTask(
         requesterType: input.requester.kind,
         requesterId: input.requester.id,
         correlationId,
-        provenance: 'demo',
+        provenance,
         idempotencyKey: input.idempotencyKey ?? null,
         createdAt: now,
       },
@@ -92,7 +92,7 @@ export async function createTask(
       correlationId,
       causationId: null,
       actor: input.requester,
-      provenance: 'demo',
+      provenance,
       payload: { taskId, agentId: agent.id, kind: input.kind, title: spec.title },
     });
     return { task: taskView(row), created: true };
@@ -105,13 +105,14 @@ async function pickAgent(tx: Tx, orgId: string, departmentId: string, agentId?: 
     const agent = await tx.agent.findFirst({ where: { id: agentId, orgId, deletedAt: null } });
     if (!agent) throw new DomainError('NOT_FOUND', `Agent ${agentId} introuvable`);
     if (agent.status !== 'active') throw new DomainError('CONFLICT', `Agent ${agentId} non actif`);
-    if (agent.departmentId !== departmentId) {
+    const dept = await tx.department.findUniqueOrThrow({ where: { id: agent.departmentId } });
+    if (dept.roomId !== departmentId) {
       throw new DomainError('POLICY_DENIED', `Cette tâche relève du département ${departmentId}`);
     }
     return agent;
   }
   const candidates = await tx.agent.findMany({
-    where: { orgId, departmentId, status: 'active', deletedAt: null },
+    where: { orgId, department: { roomId: departmentId }, status: 'active', deletedAt: null },
     include: {
       _count: { select: { tasks: { where: { status: { in: ['queued', 'running'] } } } } },
     },
@@ -155,6 +156,13 @@ export async function startNextTask(
     });
     if (!task) return null;
     const runId = randomUUID();
+    // Démo : fournisseur scripté déterministe (aucun LLM). Live : modèle de la version active.
+    const version = await tx.agentVersion.findUnique({
+      where: { agentId_version: { agentId: task.agentId, version: task.agent.activeVersion } },
+    });
+    const policy = (version?.modelPolicy ?? {}) as { model?: string };
+    const providerClass = org.mode === 'demo' ? 'demo' : 'llm';
+    const model = providerClass === 'llm' ? (policy.model ?? null) : null;
     const updated = await transitionTask(ctx, task.id, 'running', {
       startedAt: now,
       attempts: { increment: 1 },
@@ -185,7 +193,14 @@ export async function startNextTask(
       causationId: startedId,
       actor: { kind: 'agent', id: task.agentId },
       provenance: task.provenance,
-      payload: { runId, agentId: task.agentId, taskId: task.id, providerClass: 'demo' },
+      payload: {
+        runId,
+        agentId: task.agentId,
+        taskId: task.id,
+        providerClass,
+        model,
+        agentVersion: task.agent.activeVersion,
+      },
     });
     await tx.agentRun.create({
       data: {
@@ -193,11 +208,14 @@ export async function startNextTask(
         orgId,
         agentId: task.agentId,
         taskId: task.id,
-        provider: 'demo',
+        provider: providerClass === 'demo' ? 'demo-scripted' : 'anthropic',
+        model,
         status: 'running',
         startedAt: now,
         provenance: task.provenance,
         startEventId: runEventId,
+        agentVersion: task.agent.activeVersion,
+        workflowId: `agent-task-${task.id}`,
       },
     });
     return { task: taskView(updated), runId, runEventId };
@@ -278,6 +296,17 @@ export async function finishTask(
         taskId: updated.id,
         status: o.status,
         stepCount: run.stepCount,
+        usage: {
+          llmCalls: run.llmCalls,
+          inputTokens: run.inputTokens,
+          outputTokens: run.outputTokens,
+          costMicros: run.costMicros,
+          costSource:
+            run.costSource === 'estimated' || run.costSource === 'measured'
+              ? run.costSource
+              : 'none',
+          model: run.model,
+        },
       },
     });
     const common = {

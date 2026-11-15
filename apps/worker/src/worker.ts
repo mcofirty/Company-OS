@@ -1,16 +1,7 @@
 import { TaskKindSchema, type TaskKind } from '@company-os/contracts';
 import { createTask, listRunningTasks, startNextTask, type Db } from '@company-os/db';
-import { ToolGateway, type GatewayOptions } from '@company-os/tools';
-import { runDemoTask } from './workflows/demoTask';
-
-export interface WorkerOptions {
-  orgId: string;
-  concurrency?: number;
-  pollMs?: number;
-  autopilot?: { enabled: boolean; intervalMs: number; maxOpenTasks: number };
-  gateway?: GatewayOptions;
-  log?: (msg: string, extra?: Record<string, unknown>) => void;
-}
+import type { Activities } from './activities';
+import { runAgentTaskInline } from './inline';
 
 /** PRNG déterministe (mulberry32) : l'autopilote démo est reproductible pour un même historique. */
 export function prng(seed: number): () => number {
@@ -45,58 +36,67 @@ export function pickAutopilotKind(seed: number): TaskKind {
   return 'qualify_lead';
 }
 
+/** Lance l'exécution d'un run : workflow Temporal (durable) ou exécution inline. */
+export interface RunLauncher {
+  /** Idempotent : relancer un run déjà démarré ne crée pas de seconde exécution. */
+  launch(runId: string, taskId: string): Promise<void>;
+  stop(): Promise<void>;
+}
+
+export function inlineLauncher(
+  acts: Activities,
+  log: (m: string, x?: Record<string, unknown>) => void,
+): RunLauncher {
+  const inflight = new Map<string, Promise<void>>();
+  return {
+    async launch(runId) {
+      if (inflight.has(runId)) return;
+      const p = runAgentTaskInline(acts, runId)
+        .then((o) => log('run finished', { runId, status: o.status }))
+        .catch((err: unknown) => log('run error', { runId, err: String(err) }))
+        .finally(() => inflight.delete(runId));
+      inflight.set(runId, p);
+    },
+    async stop() {
+      await Promise.allSettled([...inflight.values()]);
+    },
+  };
+}
+
+export interface DispatcherOptions {
+  orgId: string;
+  pollMs?: number;
+  autopilot?: { enabled: boolean; intervalMs: number; maxOpenTasks: number };
+  log?: (msg: string, extra?: Record<string, unknown>) => void;
+}
+
 /**
- * Worker de tâches : indépendant du navigateur. Reprend les tâches `running` au démarrage,
- * puis démarre les tâches `queued` (une par agent à la fois), avec concurrence bornée.
+ * Dispatcher : démarre les tâches `queued` (une par agent) et confie chaque run au lanceur.
+ * Indépendant du navigateur. Au démarrage, relance les runs `running` (idempotent).
  */
-export function startWorker(db: Db, opts: WorkerOptions): { stop: () => Promise<void> } {
+export function startDispatcher(
+  db: Db,
+  launcher: RunLauncher,
+  opts: DispatcherOptions,
+): { stop: () => Promise<void> } {
   const log = opts.log ?? (() => undefined);
-  const gateway = new ToolGateway(db, opts.gateway);
-  const concurrency = opts.concurrency ?? 4;
   const pollMs = opts.pollMs ?? 300;
-  const inflight = new Set<Promise<void>>();
   let stopped = false;
 
-  const track = (p: Promise<void>): void => {
-    inflight.add(p);
-    void p.finally(() => inflight.delete(p));
-  };
-  const execute = (started: Parameters<typeof runDemoTask>[3]): Promise<void> =>
-    runDemoTask(db, gateway, opts.orgId, started)
-      .then((o) => log('task finished', { taskId: started.task.id, status: o.status }))
-      .catch((err: unknown) => log('task error', { taskId: started.task.id, err: String(err) }));
-
   const loop = async (): Promise<void> => {
-    // Reprise après redémarrage : les étapes déjà terminées ne sont pas rejouées.
     for (const t of await listRunningTasks(db, opts.orgId)) {
       const run = t.runs[0];
-      if (!run) continue;
-      log('resuming task', { taskId: t.id });
-      track(
-        execute({
-          runId: run.id,
-          runEventId: run.startEventId,
-          task: { id: t.id, kind: t.kind, agentId: t.agentId },
-        }),
-      );
+      if (run) {
+        log('resuming run', { runId: run.id, taskId: t.id });
+        await launcher.launch(run.id, t.id);
+      }
     }
     while (!stopped) {
       try {
-        if (inflight.size < concurrency) {
-          const started = await startNextTask(db, opts.orgId);
-          if (started) {
-            track(
-              execute({
-                ...started,
-                task: {
-                  id: started.task.id,
-                  kind: started.task.kind,
-                  agentId: started.task.agentId,
-                },
-              }),
-            );
-            continue;
-          }
+        const started = await startNextTask(db, opts.orgId);
+        if (started) {
+          await launcher.launch(started.runId, started.task.id);
+          continue;
         }
       } catch (err) {
         log('poll error', { err: String(err) });
@@ -117,10 +117,9 @@ export function startWorker(db: Db, opts: WorkerOptions): { stop: () => Promise<
             where: { orgId: opts.orgId, status: { in: ['queued', 'running'] } },
           });
           if (open >= ap.maxOpenTasks) return;
-          const kind = TaskKindSchema.parse(pickAutopilotKind(Number(org.lastSeq)));
           await createTask(db, {
             orgId: opts.orgId,
-            kind,
+            kind: TaskKindSchema.parse(pickAutopilotKind(Number(org.lastSeq))),
             requester: { kind: 'system', id: 'demo-autopilot' },
             idempotencyKey: `autopilot:${org.lastSeq}`,
           });
@@ -137,7 +136,7 @@ export function startWorker(db: Db, opts: WorkerOptions): { stop: () => Promise<
       stopped = true;
       clearInterval(autopilotTimer);
       await done;
-      await Promise.allSettled([...inflight]);
+      await launcher.stop();
     },
   };
 }
