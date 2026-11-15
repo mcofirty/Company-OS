@@ -3,7 +3,9 @@ import {
   canTransitionTask,
   DEMO_TASK_CATALOG,
   DELEGATION_LIMITS,
+  isDemoTaskKind,
   type Actor,
+  type Mission,
   type TaskKind,
   type TaskStatus,
   type TaskView,
@@ -27,6 +29,8 @@ export interface CreateTaskInput {
   /** Délégation : tâche parente. */
   parentTaskId?: string;
   causationId?: string | null;
+  /** Mission libre (kind `custom`) : organisations live seulement, agent explicite. */
+  mission?: Mission;
 }
 
 /** Crée une tâche démo (statut `queued`) et émet `task.created`. Idempotent par clé. */
@@ -63,11 +67,26 @@ export async function createTaskInTx(
   // En live, les scénarios du catalogue s'exécutent avec un vrai modèle mais des outils
   // démo (mode « hybride », signalé) : la provenance suit le mode de l'organisation.
   const provenance = ctx.mode === 'demo' ? 'demo' : 'live';
-  const spec = DEMO_TASK_CATALOG[input.kind];
-  const agent = await pickAgent(tx, orgId, spec.departmentId, input.agentId, {
-    toolId: spec.toolId,
-    action: spec.action,
-  });
+  let spec: { title: string; description: string };
+  let agent: Awaited<ReturnType<typeof pickAgent>>;
+  if (isDemoTaskKind(input.kind)) {
+    const demo = DEMO_TASK_CATALOG[input.kind];
+    spec = demo;
+    agent = await pickAgent(tx, orgId, demo.departmentId, input.agentId, {
+      toolId: demo.toolId,
+      action: demo.action,
+    });
+  } else {
+    // Mission libre : la démo reste déterministe (aucun modèle réel ne pourrait l'exécuter).
+    if (ctx.mode !== 'live') {
+      throw new DomainError('POLICY_DENIED', 'Missions libres réservées aux organisations live');
+    }
+    if (!input.mission || !input.agentId) {
+      throw new DomainError('VALIDATION_ERROR', 'Mission et agent requis');
+    }
+    spec = { title: input.mission.title, description: input.mission.instructions };
+    agent = await pickAgent(tx, orgId, null, input.agentId);
+  }
 
   let depth = 0;
   let correlationId: string = randomUUID();
@@ -163,7 +182,8 @@ export async function createTaskInTx(
 async function pickAgent(
   tx: Tx,
   orgId: string,
-  departmentId: string,
+  /** null : agent explicite sans contrainte de département (mission libre). */
+  departmentId: string | null,
   agentId?: string,
   need?: { toolId: string; action: string },
 ) {
@@ -171,12 +191,14 @@ async function pickAgent(
     const agent = await tx.agent.findFirst({ where: { id: agentId, orgId, deletedAt: null } });
     if (!agent) throw new DomainError('NOT_FOUND', `Agent ${agentId} introuvable`);
     if (agent.status !== 'active') throw new DomainError('CONFLICT', `Agent ${agentId} non actif`);
+    if (departmentId === null) return agent;
     const dept = await tx.department.findUniqueOrThrow({ where: { id: agent.departmentId } });
     if (dept.roomId !== departmentId) {
       throw new DomainError('POLICY_DENIED', `Cette tâche relève du département ${departmentId}`);
     }
     return agent;
   }
+  if (departmentId === null) throw new DomainError('VALIDATION_ERROR', 'Agent requis');
   const candidates = await tx.agent.findMany({
     where: { orgId, department: { roomId: departmentId }, status: 'active', deletedAt: null },
     include: {

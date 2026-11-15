@@ -15,6 +15,8 @@ export interface Controls {
 }
 
 const NONE: Me['capabilities'] = {
+  createAgent: false,
+  createMission: false,
   createTask: false,
   pauseAgent: false,
   deactivateAgent: false,

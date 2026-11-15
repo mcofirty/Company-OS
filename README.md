@@ -74,6 +74,7 @@ pnpm build
 ## Exploitation (M5)
 
 ```bash
+pnpm live:init --name "Ma Société"                          # organisation LIVE (vrai Claude si ANTHROPIC_API_KEY)
 pnpm users grant --sub <sub OIDC> --name "Nom" --role admin   # accès humains (OIDC)
 pnpm db:backup && pnpm db:verify                             # sauvegarde + intégrité du journal
 docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build

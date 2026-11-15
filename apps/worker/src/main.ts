@@ -1,13 +1,13 @@
 import path from 'node:path';
 import { config } from 'dotenv';
 import { z } from 'zod';
-import { createDb, DEMO_ORG } from '@company-os/db';
+import { createDb } from '@company-os/db';
 import { loadPricing } from '@company-os/policies';
 import { ToolGateway } from '@company-os/tools';
 import { createActivities, liveProviderFromEnv } from './activities';
 import { createTemporalWorker, temporalLauncher } from './temporal';
 import { initTelemetry } from './telemetry';
-import { inlineLauncher, startDispatcher, type RunLauncher } from './worker';
+import { inlineLauncher, startOrgDispatchers, type RunLauncher } from './worker';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
 
@@ -21,11 +21,10 @@ const Env = z.object({
 });
 const env = Env.parse(process.env);
 if (env.APP_MODE !== 'demo') {
-  // Le runtime live existe (AnthropicProvider) mais l'organisation live et son authentification
-  // ne sont pas encore livrées : refus explicite plutôt qu'un démarrage ambigu.
-  throw new Error(
-    'Mode live : utiliser `pnpm agent:live-smoke` (M2). Le worker continu live arrive avec l’auth (M5).',
-  );
+  // APP_MODE=live = connecteurs RÉELS (effets externes) : pas encore livrés, refus explicite.
+  // Les organisations live (pnpm live:init) fonctionnent déjà avec APP_MODE=demo : vrai modèle
+  // Claude, outils démo sans effet externe (mode « hybride », signalé dans le cockpit).
+  throw new Error('APP_MODE=live (connecteurs réels) non disponible : garder APP_MODE=demo.');
 }
 
 const log = (msg: string, extra: Record<string, unknown> = {}): void =>
@@ -33,11 +32,12 @@ const log = (msg: string, extra: Record<string, unknown> = {}): void =>
 
 initTelemetry(process.env);
 const db = createDb(env.DATABASE_URL);
+const liveProvider = liveProviderFromEnv(process.env);
 const activities = createActivities({
   db,
   gateway: new ToolGateway(db),
   pricing: loadPricing(),
-  liveProvider: liveProviderFromEnv(process.env),
+  liveProvider,
 });
 
 let launcher: RunLauncher;
@@ -54,8 +54,7 @@ if (env.ORCHESTRATOR === 'temporal') {
   launcher = inlineLauncher(activities, log);
 }
 
-const dispatcher = startDispatcher(db, launcher, {
-  orgId: DEMO_ORG.id,
+const dispatcher = startOrgDispatchers(db, launcher, {
   autopilot: {
     enabled: env.DEMO_AUTOPILOT === 'true',
     intervalMs: env.DEMO_AUTOPILOT_INTERVAL_MS,
@@ -63,6 +62,11 @@ const dispatcher = startDispatcher(db, launcher, {
   },
   log,
 });
+if (!liveProvider) {
+  log('live provider missing', {
+    effect: 'missions des organisations live refusées (PROVIDER_UNAVAILABLE) ; démo inchangée',
+  });
+}
 log('worker started', {
   mode: env.APP_MODE,
   orchestrator: env.ORCHESTRATOR,

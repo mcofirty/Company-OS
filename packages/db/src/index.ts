@@ -14,3 +14,4 @@ export * from './services/meetings';
 export * from './services/governance';
 export * from './services/users';
 export * from './ops/backup';
+export * from './services/live';

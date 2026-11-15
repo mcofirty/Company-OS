@@ -3,6 +3,66 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (7) — Live encadré (sans clé Anthropic)
+
+**État : organisations LIVE opérationnelles de bout en bout ; seul l'appel réel à Claude reste à
+vérifier (aucune clé fournie dans cet environnement).**
+
+### Réalisé
+- **Organisation LIVE** : `pnpm live:init --name "…" [--budget 5] [--admin-sub <sub OIDC>]` crée une
+  organisation séparée de la démo (6 départements calqués sur le plan, budget mensuel à plafond dur,
+  administrateur local membre), sans agent.
+- **Agents définis par un humain** : `POST /v1/agents` (admin, organisation live uniquement,
+  Idempotency-Key). Droits exactement cochés, validés contre le catalogue (`high_impact` et actions
+  de plateforme refusés), budget à plafond dur, poste libre du département ; les consignes de
+  l'humain s'ajoutent aux règles de la plateforme. Acteur de `agent.created` = l'humain.
+- **Missions libres** (`kind: custom`, titre + consignes, agent explicite) : réservées aux
+  organisations live (la démo reste déterministe) ; exécutées avec les seuls outils accordés.
+- **Worker multi-organisations** : un dispatcher par organisation, y compris celles créées après le
+  démarrage ; l'autopilote n'invente du travail que pour la démo. Sans `ANTHROPIC_API_KEY`, une
+  mission live est bloquée `PROVIDER_UNAVAILABLE` (visible, aucune exécution simulée).
+- **Cockpit** : sélecteur d'organisation (DEMO / LIVE, `X-Org-Id` et `auth.orgId`, adhésion vérifiée
+  par le serveur), badge LIVE « modèle réel · outils sans effet externe », formulaire « + Agent »,
+  « + Nouvelle mission » et « Confier une mission » ; état vide guidé. Les pièces de la carte sont
+  reliées aux départements par `roomId` (exposé dans le snapshot).
+- **Corrections de tests instables** : acquittement d'alerte et validation d'email ciblent
+  désormais l'élément exact (numéro de séquence, `data-task-id`) car l'autopilote démo crée des
+  alertes et validations en parallèle.
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK.
+- `pnpm test` : **124 tests passés** (16 fichiers) dont live : org séparée et idempotente, agent créé
+  par un admin (droits exacts, poste, budget, consignes, acteur humain), refus (fort impact,
+  plateforme, outil inconnu, org démo), mission libre exécutée avec un faux Claude (outils accordés
+  seulement, coût imputé, provenance live), blocage `PROVIDER_UNAVAILABLE` sans clé, dispatcher par
+  org sans autopilote en live ; API : `/v1/me` + bascule `X-Org-Id`, 403 hors adhésion, rôles et
+  idempotence de `POST /v1/agents`, validation des missions, isolation temps réel démo/live.
+- `pnpm e2e` : **21 tests passés** dont la bascule vers une org LIVE, la création d'agent depuis le
+  cockpit, la mission bloquée sans clé et le retour à la démo sans fuite.
+- Capture : `docs/screenshots/live-mission-1440.png`.
+
+### Écarts connus
+- **Aucun appel réel à Claude vérifié** : la clé ne peut pas être fournie à cet environnement cloud
+  (le domaine Anthropic n'accepte pas de secret réseau) ; à tester dans une session dont
+  l'environnement définit `ANTHROPIC_API_KEY`, ou sur un poste local.
+- Pas d'annulation de mission depuis le cockpit (une mission bloquée reste visible comme telle).
+- Outils : uniquement les adaptateurs démo (aucun connecteur réel ; `APP_MODE=live` refusé).
+- À 1440 px, avec le sélecteur d'organisation, certains libellés KPI sont tronqués.
+
+### Prochaine tâche exacte
+Avec une clé : `pnpm live:init`, créer un agent, lancer une mission, vérifier coût et résultat réels.
+Ensuite : annulation de mission, premier connecteur réel en lecture seule.
+
+### Commandes de reprise
+```bash
+cp .env.example .env && pnpm install
+docker compose up -d --wait
+pnpm db:migrate && pnpm db:seed
+pnpm live:init --name "Ma Société"
+pnpm dev
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e
+```
+
 ## Session 2026-11-15 (6) — M5 : durcissement et déploiement
 
 **Milestone courant : M5 livré (hors écarts listés). Le plan M0–M5 est parcouru.**

@@ -61,13 +61,13 @@ export async function resolvePrincipal(
   if (configured) {
     if (!c.bearer) throw new DomainError('UNAUTHORIZED', 'Authentification requise');
     if (cfg.accessToken && sameSecret(c.bearer, cfg.accessToken)) {
-      return {
+      return withOrgChoice(db, c.orgHeader, {
         userId: DEV_ADMIN.id,
         orgId: DEMO_ORG.id,
         role: 'admin',
         displayName: 'Administrateur (jeton)',
         via: 'token',
-      };
+      });
     }
     if (cfg.oidc && looksLikeJwt(c.bearer)) {
       const id = await cfg.oidc.verify(c.bearer); // lève UNAUTHORIZED si invalide
@@ -80,13 +80,31 @@ export async function resolvePrincipal(
   }
   const asked = typeof c.devRoleHeader === 'string' ? c.devRoleHeader : undefined;
   const role: Role = asked === 'viewer' || asked === 'operator' ? asked : 'admin';
-  return {
+  return withOrgChoice(db, c.orgHeader, {
     userId: DEV_ADMIN.id,
     orgId: DEMO_ORG.id,
     role,
     displayName: DEV_ADMIN.displayName,
     via: 'dev',
-  };
+  });
+}
+
+/**
+ * Administrateur local (jeton ou dev) : org démo par défaut ; `X-Org-Id` choisit une autre org
+ * SEULEMENT s'il en est membre (ex. organisation live créée par `pnpm live:init`). Sinon 403.
+ * Le rôle effectif ne dépasse jamais celui de l'adhésion.
+ */
+async function withOrgChoice(
+  db: Db,
+  orgHeader: string | string[] | undefined,
+  base: Principal,
+): Promise<Principal> {
+  const wanted = typeof orgHeader === 'string' ? orgHeader : undefined;
+  if (!wanted || wanted === base.orgId) return base;
+  const m = await db.membership.findFirst({ where: { orgId: wanted, userId: base.userId } });
+  if (!m) throw new DomainError('FORBIDDEN', 'Organisation non autorisée');
+  const rank = { viewer: 0, operator: 1, admin: 2 } as const;
+  return { ...base, orgId: wanted, role: rank[m.role] < rank[base.role] ? m.role : base.role };
 }
 
 async function principalFromDirectory(

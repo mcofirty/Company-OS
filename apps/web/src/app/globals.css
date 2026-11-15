@@ -1383,3 +1383,90 @@ kbd {
 .bench-world {
   position: relative;
 }
+
+/* ---------- Live : organisation, agents, missions ---------- */
+.org-switcher {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 200px;
+  padding: 5px 8px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.modal.modal-wide {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+.modal textarea,
+.modal select {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.modal textarea {
+  resize: vertical;
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.grant-picker {
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+.grant-picker legend {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+.grant-tool {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+.modal label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-weight: 400;
+}
+.empty-live {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  background: #ffe1e5;
+  border: 1px dashed var(--danger);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 6px 0;
+}
+.panel-head .small-btn {
+  margin-left: auto;
+}
+.panel-head .small-btn {
+  white-space: nowrap;
+}
+.org-switcher {
+  max-width: 150px;
+  text-overflow: ellipsis;
+}
+@media (max-width: 1700px) {
+  /* La recherche reste accessible par le rail et Ctrl/Cmd+K. */
+  .topbar [data-testid='open-search'] {
+    display: none;
+  }
+  .kpi-label {
+    font-size: 10.5px;
+  }
+}

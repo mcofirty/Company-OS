@@ -9,12 +9,13 @@ import {
   type DomainEvent,
   type ServerToClientEvents,
   type TaskKind,
+  type CreateAgentRequest,
   type TaskView,
   type WorldSnapshot,
   type AlertView,
 } from '@company-os/contracts';
 import { applyEvent } from '@company-os/world';
-import { api, ApiFailure, authToken, getBackend } from './api';
+import { api, ApiFailure, authToken, getBackend, getOrg, setOrg } from './api';
 import { completeLogin, fetchAuthConfig, type AuthPublicConfig } from './oidc';
 
 export type ConnectionState = 'connecting' | 'live' | 'reconnecting' | 'resyncing' | 'error';
@@ -130,6 +131,12 @@ export function useHq() {
         try {
           await loadSnapshot();
         } catch (err) {
+          // Organisation mémorisée devenue inaccessible : retour à l'organisation par défaut.
+          if (err instanceof ApiFailure && err.status === 403 && getOrg()) {
+            setOrg(null);
+            window.location.reload();
+            return;
+          }
           if (err instanceof ApiFailure && (err.status === 401 || err.status === 403)) {
             const config = await fetchAuthConfig(getBackend().url).catch((): AuthPublicConfig => ({
               mode: 'token',
@@ -149,7 +156,8 @@ export function useHq() {
           transports: ['websocket'],
           auth: (cb) => {
             const token = authToken(backend);
-            cb(token ? { token } : {});
+            const org = getOrg();
+            cb({ ...(token ? { token } : {}), ...(org ? { orgId: org } : {}) });
           },
         });
         if (process.env.NODE_ENV !== 'production') window.__hqSocket = socket as unknown as Socket;
@@ -246,6 +254,35 @@ export function useHq() {
     if (w) commit({ ...w, alerts: w.alerts.map((a) => (a.id === alertId ? data : a)) });
   }, []);
 
+  /** Mission libre confiée à un agent (organisation live). */
+  const createMission = useCallback(
+    async (
+      agentId: string,
+      mission: { title: string; instructions: string },
+    ): Promise<TaskView> => {
+      const { data } = await api<TaskView>('/v1/tasks', {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({ kind: 'custom', agentId, mission }),
+      });
+      return data;
+    },
+    [],
+  );
+
+  /** Création d'un agent par l'administrateur (organisation live). */
+  const createAgent = useCallback(
+    async (body: CreateAgentRequest, idempotencyKey: string): Promise<string> => {
+      const { data } = await api<{ agentId: string }>('/v1/agents', {
+        method: 'POST',
+        headers: { 'idempotency-key': idempotencyKey },
+        body: JSON.stringify(body),
+      });
+      return data.agentId;
+    },
+    [],
+  );
+
   const agentLifecycle = useCallback(
     async (
       agentId: string,
@@ -275,14 +312,26 @@ export function useHq() {
     decideApproval,
     ackAlert,
     agentLifecycle,
+    createMission,
+    createAgent,
   };
 }
 
+export interface OrgChoice {
+  id: string;
+  name: string;
+  mode: 'demo' | 'live';
+  role: 'admin' | 'operator' | 'viewer';
+}
 export interface Me {
   userId: string;
+  orgId: string;
+  orgs: OrgChoice[];
   role: 'admin' | 'operator' | 'viewer';
   displayName: string;
   capabilities: {
+    createAgent: boolean;
+    createMission: boolean;
     createTask: boolean;
     pauseAgent: boolean;
     deactivateAgent: boolean;

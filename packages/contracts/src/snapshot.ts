@@ -18,6 +18,8 @@ import { DomainEventSchema } from './events';
 
 export const DepartmentViewSchema = z.object({
   id: z.string(),
+  /** Pièce du plan occupée par le département (les identifiants live sont préfixés par l'org). */
+  roomId: z.string(),
   name: z.string(),
   color: z.string(),
   capacity: z.number().int(),

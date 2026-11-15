@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  CreateAgentRequestSchema,
   CreateTaskRequestSchema,
   IdempotencyKeySchema,
   SystemControlRequestSchema,
@@ -28,6 +29,8 @@ import {
   metricsSummary,
   approvalView,
   meetingView,
+  createAgentByAdmin,
+  orgsOfUser,
 } from '@company-os/db';
 import { principalOf, requireRole } from '../auth';
 
@@ -52,9 +55,13 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
     const p = principalOf(req);
     const operator = p.role !== 'viewer';
     const admin = p.role === 'admin';
+    const orgs = await orgsOfUser(db, p.userId);
+    const live = orgs.find((o) => o.id === p.orgId)?.mode === 'live';
     return {
       data: {
         ...p,
+        // Organisations accessibles (sélecteur du cockpit) ; la courante est `orgId`.
+        orgs,
         // Indicatif pour l'UI : le serveur revérifie chaque action.
         capabilities: {
           createTask: operator,
@@ -63,10 +70,30 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
           decideApproval: admin,
           systemControl: admin,
           ackAlert: operator,
+          createAgent: admin && live,
+          createMission: operator && live,
         },
       },
       meta,
     };
+  });
+
+  /** Création d'un agent par un administrateur (organisation live uniquement). */
+  app.post('/v1/agents', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+    if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+    const body = CreateAgentRequestSchema.parse(req.body);
+    const { agentId, created } = await createAgentByAdmin(db, {
+      orgId: p.orgId,
+      actor: { kind: 'user', id: p.userId },
+      req: body,
+      idempotencyKey: key.data,
+    });
+    return reply
+      .status(created ? 201 : 200)
+      .send({ data: { agentId }, meta: { ...meta, idempotentReplay: !created } });
   });
 
   app.get('/v1/bootstrap', async (req) => {
@@ -166,6 +193,7 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
       orgId: p.orgId,
       kind: body.kind,
       agentId: body.agentId,
+      ...(body.mission ? { mission: body.mission } : {}),
       requester: { kind: 'user', id: p.userId },
       idempotencyKey: key.data,
     });

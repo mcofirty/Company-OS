@@ -274,8 +274,10 @@ test('validation d’un envoi d’email : en attente, puis approuvé depuis l’
   page.on('dialog', (d) => void d.accept('Relance validée (e2e)'));
   const id = await createViaUi(page, 'send_followup');
   await page.keyboard.press('Escape');
-  const row = page.getByTestId('approval-row').filter({ hasText: 'Action externe' }).first();
+  // La demande de CETTE tâche (l'autopilote démo peut en créer d'autres en parallèle).
+  const row = page.locator(`[data-testid="approval-row"][data-task-id="${id}"]`);
   await expect(row).toBeVisible({ timeout: 30_000 });
+  await expect(row).toContainText('Action externe');
   await expect(page.getByTestId('kpi-approvals')).not.toContainText(/^0/);
   await row.click();
   await page.getByTestId('approve').click();
@@ -375,9 +377,12 @@ test('M4 — suspendre puis reprendre un agent ; alerte acquittée', async ({ pa
     .filter({ has: page.getByTestId('alert-ack') })
     .first();
   await expect(row).toBeVisible({ timeout: 15_000 });
-  const before = await page.getByTestId('alert-ack').count();
+  // Le numéro de séquence (#seq) identifie l'alerte de façon unique, même si d'autres arrivent.
+  const seq = /#\d+/.exec(await row.innerText())![0];
   await row.getByTestId('alert-ack').click();
-  await expect(page.getByTestId('alert-ack')).toHaveCount(before - 1);
+  const same = page.getByTestId('alert-row').filter({ hasText: seq });
+  await expect(same).toContainText('acquittée');
+  await expect(same.getByTestId('alert-ack')).toHaveCount(0);
 
   // Nettoyage : refuser la validation créée pour ne pas bloquer l'agent dans les scénarios suivants.
   await expect

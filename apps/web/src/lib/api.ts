@@ -56,6 +56,24 @@ export function checkBackendUrl(input: string): string | null {
   }
 }
 
+const ORG_KEY = 'companyos.org';
+/** Organisation choisie dans CE navigateur (démo par défaut). Le serveur vérifie l'adhésion. */
+export function getOrg(): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(ORG_KEY) : null;
+  } catch {
+    return null;
+  }
+}
+export function setOrg(orgId: string | null): void {
+  try {
+    if (orgId) window.localStorage.setItem(ORG_KEY, orgId);
+    else window.localStorage.removeItem(ORG_KEY);
+  } catch {
+    /* ignoré */
+  }
+}
+
 /** Jeton à présenter à l'API : jeton d'accès saisi (tunnel) ou session OIDC de cet onglet. */
 export function authToken(backend: BackendConfig = getBackend()): string | null {
   if (backend.token) return backend.token;
@@ -80,11 +98,13 @@ export async function api<T>(
 ): Promise<{ data: T; meta: Record<string, unknown> }> {
   const backend = getBackend();
   const token = authToken(backend);
+  const org = getOrg();
   const res = await fetch(`${backend.url}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
       ...(token ? { authorization: `Bearer ${token}` } : {}),
+      ...(org ? { 'x-org-id': org } : {}),
       ...(init?.headers ?? {}),
     },
   });

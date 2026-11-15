@@ -17,6 +17,7 @@
     "db:migrate": "pnpm --filter @company-os/db migrate",
     "db:seed": "pnpm --filter @company-os/db seed",
     "users": "pnpm --filter @company-os/db users",
+    "live:init": "pnpm --filter @company-os/db live:init",
     "db:backup": "pnpm --filter @company-os/db ops backup",
     "db:restore": "pnpm --filter @company-os/db ops restore",
     "db:verify": "pnpm --filter @company-os/db ops verify",

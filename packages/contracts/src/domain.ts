@@ -119,8 +119,13 @@ export const TaskKindSchema = z.enum([
   'propose_hire',
   'pricing_review',
   'prepare_offer',
+  /** Mission libre rédigée par un humain : organisations live uniquement (la démo reste scriptée). */
+  'custom',
 ]);
 export type TaskKind = z.infer<typeof TaskKindSchema>;
+/** Tâches du catalogue démo (déterministes) : toutes sauf la mission libre. */
+export type DemoTaskKind = Exclude<TaskKind, 'custom'>;
+export const isDemoTaskKind = (k: TaskKind): k is DemoTaskKind => k !== 'custom';
 
 export const ActorSchema = z.object({
   kind: z.enum(['user', 'agent', 'system', 'tool']),

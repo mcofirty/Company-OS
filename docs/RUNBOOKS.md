@@ -119,7 +119,21 @@ docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d
 - En démo : `DEMO_AGENTS` dans `packages/db/src/seed-data.ts` (poste libre de son département).
 - Retirer : *Désactiver* (admin) ; refusé tant que des tâches sont ouvertes ; le poste est libéré.
 
-## 8. Charge
+## 8. Passer des agents en LIVE (vrai Claude)
+
+1. Clé API Anthropic (console.anthropic.com, avec une **limite de dépense**) dans `ANTHROPIC_API_KEY`
+   (fichier `.env` local, ou variable de l'environnement cloud — jamais dans le dépôt).
+2. Créer l'organisation : `pnpm live:init --name "Ma Société" --budget 5`.
+3. Redémarrer le worker si nécessaire (il détecte les nouvelles organisations en ~10 s).
+4. Cockpit : sélecteur d'organisation → `LIVE · Ma Société` → « + Agent » (outils cochés un par un,
+   consignes, budget) → « Confier une mission ».
+5. Suivre la mission dans l'inspecteur : étapes, outils, coût estimé. Tout envoi externe passe par la
+   boîte « À valider ». En cas de doute : *Suspendre* l'agent ou *Pause système*.
+
+Sans clé, les missions live sont bloquées `PROVIDER_UNAVAILABLE` : c'est voulu (rien n'est simulé).
+Les outils restent en mode démo (aucun effet externe) tant qu'aucun connecteur réel n'est livré.
+
+## 9. Charge
 
 - API : `apps/api/src/load.test.ts` (p95 de `/v1/bootstrap` < 500 ms avec 200 tâches).
 - Rendu : `/bench?agents=50` (monde synthétique local, compteur d'images/s, aucune requête réseau).

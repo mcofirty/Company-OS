@@ -61,6 +61,7 @@ export function ApprovalsInbox({
           className="approval-row"
           onClick={() => onSelect({ kind: 'approval', id: a.id })}
           data-testid="approval-row"
+          data-task-id={a.taskId ?? undefined}
         >
           <span className="approval-kind">{KIND_LABEL[a.kind]}</span>
           <strong>{summaryOf(a, world)}</strong>

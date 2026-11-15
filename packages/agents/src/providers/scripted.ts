@@ -1,4 +1,4 @@
-import { DEMO_TASK_CATALOG, TaskKindSchema } from '@company-os/contracts';
+import { DEMO_TASK_CATALOG, isDemoTaskKind, TaskKindSchema } from '@company-os/contracts';
 import { SUBMIT_RESULT, toolName } from '../tools';
 import type { LLMProvider, LlmContentBlock, LlmMessage, LlmRequest, LlmResponse } from '../types';
 
@@ -26,7 +26,8 @@ export class ScriptedDemoProvider implements LLMProvider {
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
     });
 
-    if (!kind.success) {
+    // Fournisseur scripté : seulement les scénarios du catalogue (une mission libre exige un vrai modèle).
+    if (!kind.success || !isDemoTaskKind(kind.data)) {
       return respond([submit(`demo-${step}`, 'failed', 'Mission démo inconnue.')]);
     }
     const spec = DEMO_TASK_CATALOG[kind.data];

@@ -7,13 +7,53 @@ export const ApiErrorSchema = z.object({
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
+export const MissionSchema = z
+  .object({
+    title: z.string().trim().min(3).max(120),
+    /** Consignes de l'humain (données confiées à l'agent, jamais des droits supplémentaires). */
+    instructions: z.string().trim().min(10).max(4000),
+  })
+  .strict();
+export type Mission = z.infer<typeof MissionSchema>;
+
 export const CreateTaskRequestSchema = z
   .object({
     kind: TaskKindSchema,
     /** Optionnel : sinon le serveur choisit un agent disponible du département. */
     agentId: SlugIdSchema.optional(),
+    /** Obligatoire pour `custom` (avec agentId), interdit sinon. */
+    mission: MissionSchema.optional(),
+  })
+  .strict()
+  .refine((r) => (r.kind === 'custom') === (r.mission !== undefined), {
+    message: 'mission requise pour kind=custom, et seulement pour lui',
+    path: ['mission'],
+  })
+  .refine((r) => r.kind !== 'custom' || r.agentId !== undefined, {
+    message: 'agentId requis pour une mission',
+    path: ['agentId'],
+  });
+
+/** Création d'un agent par un administrateur (organisation live). Droits listés explicitement. */
+export const CreateAgentRequestSchema = z
+  .object({
+    name: z.string().trim().min(2).max(40),
+    title: z.string().trim().min(2).max(60),
+    departmentId: z.string().min(1).max(64),
+    role: z.enum(['manager', 'specialist']).default('specialist'),
+    /** toolId -> actions autorisées (validées contre le catalogue ; `high_impact` refusé). */
+    grants: z.record(z.string(), z.array(z.string()).min(1)).default({}),
+    goal: z.string().trim().min(5).max(300),
+    instructions: z.string().trim().min(20).max(4000),
+    /** Budget mensuel plafonné (plafond dur). */
+    monthlyBudgetUsd: z.number().min(0.5).max(50).default(5),
+    avatarId: z
+      .string()
+      .regex(/^avatar-\d{2}$/)
+      .default('avatar-01'),
   })
   .strict();
+export type CreateAgentRequest = z.infer<typeof CreateAgentRequestSchema>;
 export type CreateTaskRequest = z.infer<typeof CreateTaskRequestSchema>;
 
 export const IdempotencyKeySchema = z.string().min(8).max(128);

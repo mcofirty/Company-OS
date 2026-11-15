@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { DEMO_TASK_CATALOG, type TaskKind, type WorldSnapshot } from '@company-os/contracts';
+import {
+  DEMO_TASK_CATALOG,
+  type DemoTaskKind,
+  type TaskKind,
+  type WorldSnapshot,
+} from '@company-os/contracts';
 import { computeMetrics } from '@company-os/world';
 import type { ConnectionState } from '../../lib/useHq';
 import { usd } from '../../lib/format';
@@ -26,6 +31,8 @@ export function Topbar({
   onSystem,
   alerts,
   onSearch,
+  orgSwitcher,
+  onMission,
 }: {
   world: WorldSnapshot | null;
   connection: ConnectionState;
@@ -36,6 +43,10 @@ export function Topbar({
   onSystem: (pause: boolean) => Promise<void>;
   alerts: ReactNode;
   onSearch: () => void;
+  /** Sélecteur d'organisation (démo / live), absent s'il n'y en a qu'une. */
+  orgSwitcher?: ReactNode;
+  /** Organisation live : ouvre le formulaire de mission libre. */
+  onMission?: () => void;
 }) {
   const { caps, readOnly } = useControls();
   const [open, setOpen] = useState(false);
@@ -62,16 +73,21 @@ export function Topbar({
         <div
           className={`mode-banner mode-${world.org.mode}`}
           data-testid="mode-badge"
-          title="Simulation déterministe côté serveur : aucune action externe, aucun appel LLM."
+          title={
+            world.org.mode === 'demo'
+              ? 'Simulation déterministe côté serveur : aucune action externe, aucun appel LLM.'
+              : 'Missions exécutées par un vrai modèle Claude (coûts réels plafonnés). Outils en mode démo : aucun effet externe ; tout envoi exige une validation humaine.'
+          }
         >
           <strong>{world.org.mode === 'demo' ? 'DEMO' : 'LIVE'}</strong>
           <span>
             {world.org.mode === 'demo'
               ? 'activité simulée · aucun effet réel'
-              : 'exécutions réelles'}
+              : 'modèle réel · outils sans effet externe'}
           </span>
         </div>
       )}
+      {orgSwitcher}
       <div className="kpis" data-testid="kpis">
         <Kpi
           label="Agents actifs"
@@ -156,7 +172,12 @@ export function Topbar({
           ⌕ <kbd>Ctrl K</kbd>
         </button>
         {alerts}
-        {caps.createTask && (
+        {world?.org.mode === 'live' && caps.createMission && onMission && (
+          <button className="btn primary" onClick={onMission} data-testid="new-mission">
+            + Nouvelle mission
+          </button>
+        )}
+        {caps.createTask && world?.org.mode !== 'live' && (
           <div className="menu">
             <button
               className="btn primary"
@@ -168,7 +189,7 @@ export function Topbar({
             </button>
             {open && (
               <div className="menu-pop" role="menu">
-                {(Object.keys(DEMO_TASK_CATALOG) as TaskKind[]).map((k) => (
+                {(Object.keys(DEMO_TASK_CATALOG) as DemoTaskKind[]).map((k) => (
                   <button
                     key={k}
                     role="menuitem"
@@ -232,5 +253,33 @@ function Kpi({
       <span className="kpi-label">{label}</span>
       <span className="kpi-sub">{sub}</span>
     </div>
+  );
+}
+
+/** Bascule entre organisations accessibles ; recharge le cockpit pour repartir d'un état propre. */
+export function OrgSwitcher({
+  orgs,
+  current,
+  onChange,
+}: {
+  orgs: { id: string; name: string; mode: 'demo' | 'live' }[];
+  current: string;
+  onChange: (orgId: string) => void;
+}) {
+  if (orgs.length < 2) return null;
+  return (
+    <select
+      className="org-switcher"
+      value={current}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="Organisation"
+      data-testid="org-switcher"
+    >
+      {orgs.map((o) => (
+        <option key={o.id} value={o.id}>
+          {o.mode === 'live' ? 'LIVE' : 'DEMO'} · {o.name}
+        </option>
+      ))}
+    </select>
   );
 }

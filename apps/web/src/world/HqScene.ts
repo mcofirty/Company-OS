@@ -400,7 +400,11 @@ export class HqScene extends Phaser.Scene {
     if (room.kind === 'department') {
       text.setInteractive({ useHandCursor: true });
       text.on('pointerup', () => {
-        if (this.dragMoved < 6) this.cb.onSelect({ kind: 'department', id: room.id });
+        if (this.dragMoved < 6) {
+          // Département qui occupe cette pièce dans l'organisation affichée (démo ou live).
+          const dept = this.lastWorld?.departments.find((d) => d.roomId === room.id);
+          this.cb.onSelect({ kind: 'department', id: dept?.id ?? room.id });
+        }
       });
     }
   }
@@ -561,7 +565,8 @@ export class HqScene extends Phaser.Scene {
     // Badges de département « X/Y au poste »
     for (const room of HQ_MAP.rooms) {
       if (room.kind !== 'department') continue;
-      const { atDesk, total } = departmentPresence(world.agents, room.id, now, seats);
+      const deptId = world.departments.find((d) => d.roomId === room.id)?.id ?? room.id;
+      const { atDesk, total } = departmentPresence(world.agents, deptId, now, seats);
       const l = this.labels.get(room.id);
       const txt = `${room.label}  ·  ${atDesk}/${total} au poste`;
       if (l && l.text.text !== txt) {

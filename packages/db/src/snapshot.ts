@@ -107,6 +107,7 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
         worldMap: { id: HQ_MAP.id, version: HQ_MAP.version },
         departments: departments.map((d) => ({
           id: d.id,
+          roomId: d.roomId,
           name: d.name,
           color: d.color,
           capacity: d.capacity,

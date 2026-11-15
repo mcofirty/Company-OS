@@ -151,3 +151,49 @@ export function startDispatcher(
     },
   };
 }
+
+/**
+ * Un dispatcher par organisation, y compris celles créées après le démarrage (vérification
+ * périodique). L'autopilote n'invente du travail QUE pour les organisations démo : en live,
+ * seules les missions demandées par un humain sont exécutées.
+ */
+export function startOrgDispatchers(
+  db: Db,
+  launcher: RunLauncher,
+  opts: {
+    autopilot: { enabled: boolean; intervalMs: number; maxOpenTasks: number };
+    log?: (msg: string, extra?: Record<string, unknown>) => void;
+    rescanMs?: number;
+  },
+): { stop: () => Promise<void>; orgIds: () => string[] } {
+  const running = new Map<string, { stop: () => Promise<void> }>();
+  let stopped = false;
+  const scan = async (): Promise<void> => {
+    const orgs = await db.organization.findMany({ select: { id: true, mode: true, name: true } });
+    for (const org of orgs) {
+      if (running.has(org.id) || stopped) continue;
+      running.set(
+        org.id,
+        startDispatcher(db, launcher, {
+          orgId: org.id,
+          autopilot: { ...opts.autopilot, enabled: opts.autopilot.enabled && org.mode === 'demo' },
+          log: (msg, extra) => opts.log?.(msg, { org: org.id, ...extra }),
+        }),
+      );
+      opts.log?.('dispatcher started', { org: org.id, mode: org.mode, name: org.name });
+    }
+  };
+  void scan().catch((err: unknown) => opts.log?.('org scan failed', { err: String(err) }));
+  const timer = setInterval(
+    () => void scan().catch((err: unknown) => opts.log?.('org scan failed', { err: String(err) })),
+    opts.rescanMs ?? 10_000,
+  );
+  return {
+    orgIds: () => [...running.keys()],
+    stop: async () => {
+      stopped = true;
+      clearInterval(timer);
+      await Promise.all([...running.values()].map((d) => d.stop()));
+    },
+  };
+}

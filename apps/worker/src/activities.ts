@@ -1,4 +1,4 @@
-import { DEMO_TASK_CATALOG, TaskKindSchema } from '@company-os/contracts';
+import { DEMO_TASK_CATALOG, isDemoTaskKind, TaskKindSchema } from '@company-os/contracts';
 import {
   AnthropicProvider,
   buildSystemPrompt,
@@ -165,7 +165,8 @@ export function createActivities(deps: ActivityDeps) {
     async prepareRun(input: { runId: string }): Promise<PreparedRun> {
       const ctx = await loadRunContext(db, input.runId);
       const kind = TaskKindSchema.parse(ctx.task.kind);
-      const spec = DEMO_TASK_CATALOG[kind];
+      // Mission libre : consignes de l'humain (description), sans paramètres de scénario.
+      const params = isDemoTaskKind(kind) ? DEMO_TASK_CATALOG[kind].input : {};
       return {
         runId: input.runId,
         taskMessage: buildTaskMessage({
@@ -173,7 +174,7 @@ export function createActivities(deps: ActivityDeps) {
           kind,
           title: ctx.task.title,
           description: ctx.task.description,
-          input: spec.input,
+          input: params,
         }),
         limits: ctx.version.limits,
         providerClass: ctx.org.mode === 'demo' ? 'demo' : 'llm',

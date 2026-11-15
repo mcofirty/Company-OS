@@ -4,7 +4,9 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   ACTIVE_INVOCATION_STATUSES,
   DEMO_TASK_CATALOG,
+  isDemoTaskKind,
   type AgentView,
+  type DemoTaskKind,
   type DomainEvent,
   type InvocationView,
   type TaskKind,
@@ -43,6 +45,8 @@ interface Props {
     reason: string,
   ) => Promise<void>;
   metrics: MetricsSummary | null;
+  /** Organisation live : confier une mission libre à cet agent. */
+  onMission: (agentId: string) => void;
 }
 
 /** Inspecteur universel (docs/01 §6) : provenance, état réel, horodatages, identifiants. */
@@ -112,6 +116,7 @@ function AgentInspector({
   onCreateTask,
   onFocus,
   onLifecycle,
+  onMission,
 }: Props & { id: string }) {
   const { caps } = useControls();
   const agent = world.agents.find((a) => a.id === id);
@@ -131,7 +136,7 @@ function AgentInspector({
   const recent = world.timeline
     .filter((e) => (e.payload as { agentId?: string }).agentId === id)
     .slice(0, 8);
-  const kinds = (Object.keys(DEMO_TASK_CATALOG) as TaskKind[]).filter(
+  const kinds = (Object.keys(DEMO_TASK_CATALOG) as DemoTaskKind[]).filter(
     (k) => DEMO_TASK_CATALOG[k].departmentId === agent.departmentId,
   );
   const index = world.agents.findIndex((a) => a.id === id);
@@ -224,7 +229,17 @@ function AgentInspector({
         </ol>
       </Section>
       <div className="actions">
+        {world.org.mode === 'live' && caps.createMission && agent.status === 'active' && (
+          <button
+            className="btn primary"
+            onClick={() => onMission(agent.id)}
+            data-testid="agent-mission"
+          >
+            Confier une mission
+          </button>
+        )}
         {caps.createTask &&
+          world.org.mode !== 'live' &&
           kinds.map((k) => (
             <button
               key={k}
@@ -371,7 +386,12 @@ function TaskInspector({ world, id, onSelect }: Props & { id: string }) {
         </span>
         <div>
           <h2 data-testid="inspector-title">{task.title}</h2>
-          <p className="muted">Tâche · {DEMO_TASK_CATALOG[task.kind].description}</p>
+          <p className="muted">
+            Tâche ·{' '}
+            {isDemoTaskKind(task.kind)
+              ? DEMO_TASK_CATALOG[task.kind].description
+              : 'Mission libre rédigée par un humain'}
+          </p>
         </div>
       </header>
       <div className="insp-badges">

@@ -1,4 +1,4 @@
-import type { TaskKind, ToolActionKind, ToolRisk } from './domain';
+import type { DemoTaskKind, ToolActionKind, ToolRisk } from './domain';
 
 /** Catalogue des tâches démo déclenchables (scénarios déterministes, sans appel externe). */
 export interface DemoTaskSpec {
@@ -12,7 +12,7 @@ export interface DemoTaskSpec {
 }
 
 /** Catalogue des tâches démo déclenchables (scénarios déterministes, sans appel externe). */
-export const DEMO_TASK_CATALOG: Record<TaskKind, DemoTaskSpec> = {
+export const DEMO_TASK_CATALOG: Record<DemoTaskKind, DemoTaskSpec> = {
   qualify_lead: {
     title: 'Qualifier un prospect (DEMO)',
     departmentId: 'sales',

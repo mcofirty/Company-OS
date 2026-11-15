@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TaskKind } from '@company-os/contracts';
-import { ApiFailure, getBackend } from '../lib/api';
+import { ApiFailure, getBackend, setOrg } from '../lib/api';
 import { ControlsContext, controlsFrom } from '../lib/controls';
 import { useHq } from '../lib/useHq';
 import { useMetrics, type MetricsWindow } from '../lib/useMetrics';
@@ -15,7 +15,8 @@ import { LoginPanel } from './cockpit/LoginPanel';
 import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
 import { Timeline } from './cockpit/Timeline';
-import { Topbar } from './cockpit/Topbar';
+import { OrgSwitcher, Topbar } from './cockpit/Topbar';
+import { AgentForm, MissionForm } from './cockpit/LiveForms';
 import { ApprovalsInbox } from './panels/Governance';
 import { Inspector, TeamRows } from './panels/Inspector';
 import { ToolWall } from './panels/ToolWall';
@@ -39,6 +40,9 @@ export function Cockpit() {
   const [dept, setDept] = useState<string | null>(null);
   const [links, setLinks] = useState(false);
   const [metricsWindow, setMetricsWindow] = useState<MetricsWindow>('24h');
+  const [agentFormOpen, setAgentFormOpen] = useState(false);
+  /** undefined = fermé ; '' = mission sans agent présélectionné. */
+  const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
   const scene = useRef<HqScene | null>(null);
 
   // En replay, tout l'écran montre l'état reconstruit et rien n'est déclenchable.
@@ -121,6 +125,19 @@ export function Cockpit() {
           metricsWindow={metricsWindow}
           onMetricsWindow={setMetricsWindow}
           onCreateTask={(k) => onCreateTask(k)}
+          onMission={() => setMissionFor('')}
+          orgSwitcher={
+            hq.me && !replay.active ? (
+              <OrgSwitcher
+                orgs={hq.me.orgs}
+                current={hq.me.orgId}
+                onChange={(id) => {
+                  setOrg(id);
+                  window.location.reload();
+                }}
+              />
+            ) : null
+          }
           onSystem={async (pause) => {
             try {
               await hq.setSystemPaused(pause);
@@ -291,6 +308,7 @@ export function Cockpit() {
                 onFocus={(id) => scene.current?.focusAgent(id)}
                 onDecide={onDecide}
                 onLifecycle={onLifecycle}
+                onMission={(agentId) => setMissionFor(agentId)}
               />
             ) : (
               <section className="panel" aria-label="Équipe">
@@ -299,7 +317,24 @@ export function Cockpit() {
                   <span className="muted">
                     {world?.agents.length ?? 0} agents · cliquez pour inspecter
                   </span>
+                  {controls.caps.createAgent && (
+                    <button
+                      className="btn small-btn"
+                      onClick={() => setAgentFormOpen(true)}
+                      data-testid="new-agent"
+                    >
+                      + Agent
+                    </button>
+                  )}
                 </header>
+                {world?.org.mode === 'live' && world.agents.length === 0 && (
+                  <p className="empty-live" data-testid="live-empty">
+                    Organisation LIVE sans agent.{' '}
+                    {controls.caps.createAgent
+                      ? 'Créez le premier avec « + Agent » : vous choisissez ses outils, ses consignes et son budget.'
+                      : 'Un administrateur doit créer les agents.'}
+                  </p>
+                )}
                 {world && (
                   <TeamRows
                     agents={
@@ -319,6 +354,29 @@ export function Cockpit() {
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}
         {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
+        {agentFormOpen && world && (
+          <AgentForm
+            world={world}
+            onClose={() => setAgentFormOpen(false)}
+            onCreate={async (body, key) => {
+              const agentId = await hq.createAgent(body, key);
+              toast({ text: `${body.name} rejoint l’équipe (LIVE)`, tone: 'success' });
+              setSelection({ kind: 'agent', id: agentId });
+            }}
+          />
+        )}
+        {missionFor !== undefined && world && (
+          <MissionForm
+            world={world}
+            {...(missionFor ? { agentId: missionFor } : {})}
+            onClose={() => setMissionFor(undefined)}
+            onCreate={async (agentId, mission) => {
+              const task = await hq.createMission(agentId, mission);
+              toast({ text: `Mission lancée : ${task.title}`, tone: 'success' });
+              setSelection({ kind: 'task', id: task.id });
+            }}
+          />
+        )}
         <div className="toasts" aria-live="polite">
           {toasts.map((t) => (
             <div key={t.id} className={`toast tone-${t.tone}`}>

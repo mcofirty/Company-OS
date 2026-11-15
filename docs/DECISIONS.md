@@ -182,3 +182,22 @@ ADR-040 — **Banc de rendu synthétique.** La carte hq-v1 n'a que 22 postes : 5
 l'organisation démo. `/bench` génère un monde synthétique local (étiqueté, sans réseau) passant par les mêmes
 règles visuelles, pour mesurer le rendu.
 
+ADR-041 — **Le mode est porté par l'organisation.** Une organisation `live` (créée par `pnpm live:init`) exécute
+ses missions avec un vrai modèle mais des outils démo sans effet externe (mode « hybride », affiché) ;
+`APP_MODE=live` reste réservé aux futurs connecteurs réels et refusé. Démo et live ne partagent ni agents,
+ni départements, ni événements (identifiants de département préfixés, `roomId` relie au plan).
+
+ADR-042 — **Agents live créés par un humain, pas par un agent.** `POST /v1/agents` est réservé aux admins ; les
+droits sont validés contre le catalogue (`high_impact` et actions de plateforme exclus). Le recrutement par
+l'agent RH (proposition + validation) reste le chemin de la démo.
+
+ADR-043 — **Missions libres seulement en live.** Le fournisseur démo est scripté par type de tâche ; une
+mission libre n'a de sens qu'avec un vrai modèle. Agent explicite obligatoire (pas de routage implicite).
+
+ADR-044 — **Sans clé, échec fermé et visible.** Le worker sert toutes les organisations ; une mission live sans
+fournisseur configuré est bloquée `PROVIDER_UNAVAILABLE`. L'autopilote ne crée jamais de travail en live.
+
+ADR-045 — **Choix d'organisation par `X-Org-Id`, adhésion vérifiée.** L'administrateur local (jeton/dev) et
+les comptes OIDC choisissent l'organisation parmi leurs adhésions ; tout autre identifiant renvoie 403. Le
+rôle effectif ne dépasse jamais celui de l'adhésion.
+

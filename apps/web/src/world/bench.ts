@@ -73,7 +73,7 @@ export function syntheticWorld(count: number, tick: number, now: number): WorldS
     lastSeq: tick,
     serverTime: iso(now),
     worldMap: { id: HQ_MAP.id, version: HQ_MAP.version },
-    departments: DEPTS.map((d) => ({ ...d, capacity: 4, managerAgentId: null })),
+    departments: DEPTS.map((d) => ({ ...d, roomId: d.id, capacity: 4, managerAgentId: null })),
     agents,
     tools: TOOL_CATALOG.map((t) => ({
       id: t.id,
