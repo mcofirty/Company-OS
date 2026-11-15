@@ -26,7 +26,11 @@ export interface ToolStepResult {
   content: string;
   isError: boolean;
   lastEventId: string | null;
+  /** Action externe suspendue : décision humaine attendue avant exécution. */
+  approvalId?: string | null;
 }
+
+export type ApprovalDecision = 'approved' | 'rejected' | 'expired';
 
 export interface LoopDeps {
   modelStep(input: { step: number; messages: LlmMessage[] }): Promise<ModelStepResult>;
@@ -36,7 +40,10 @@ export interface LoopDeps {
     name: string;
     input: unknown;
     causationId: string | null;
+    approvalId?: string;
   }): Promise<ToolStepResult>;
+  /** Attend la décision humaine (signal Temporal ou interrogation en mode inline). */
+  waitForApproval(input: { approvalId: string }): Promise<ApprovalDecision>;
   now(): number;
 }
 
@@ -149,13 +156,33 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
         }
         continue;
       }
-      const out = await deps.toolStep({
+      let out = await deps.toolStep({
         step: steps,
         toolUseId: tu.id,
         name: tu.name,
         input: tu.input,
         causationId: lastEventId,
       });
+      if (out.approvalId) {
+        if (out.lastEventId) lastEventId = out.lastEventId;
+        const approvalId = out.approvalId;
+        const decision = await deps.waitForApproval({ approvalId });
+        out =
+          decision === 'approved'
+            ? await deps.toolStep({
+                step: steps,
+                toolUseId: tu.id,
+                name: tu.name,
+                input: tu.input,
+                causationId: lastEventId,
+                approvalId,
+              })
+            : {
+                content: `Action non exécutée : validation ${decision === 'rejected' ? 'refusée' : 'expirée'} par la plateforme. Ne pas réessayer.`,
+                isError: true,
+                lastEventId: null,
+              };
+      }
       if (out.lastEventId) lastEventId = out.lastEventId;
       results.push({
         type: 'tool_result',

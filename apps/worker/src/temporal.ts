@@ -39,7 +39,7 @@ export async function temporalLauncher(
           taskQueue: TASK_QUEUE,
           workflowId: workflowIdFor(taskId),
           args: [{ runId }],
-          workflowExecutionTimeout: '10 minutes',
+          workflowExecutionTimeout: '2 hours', // inclut l'attente d'une validation humaine
         });
         log('workflow started', { taskId, runId });
       } catch (err) {

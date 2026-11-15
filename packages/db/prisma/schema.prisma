@@ -193,6 +193,9 @@ model Task {
   resultSummary  String?      @map("result_summary")
   resultRef      String?      @map("result_ref")
   failureCode    String?      @map("failure_code")
+  /// Délégation : tâche parente (DAG, profondeur bornée, cycles refusés côté service).
+  parentTaskId   String?      @map("parent_task_id") @db.Uuid
+  depth          Int          @default(0)
 
   runs        AgentRun[]
   invocations ToolInvocation[]
@@ -311,6 +314,68 @@ model Budget {
 
   @@unique([orgId, scopeType, scopeId, period])
   @@map("budgets")
+}
+
+/// Demandes de validation humaine (docs/05 §5). Une décision est terminale et versionnée.
+model ApprovalRequest {
+  id             String    @id @db.Uuid
+  orgId          String    @map("org_id") @db.Uuid
+  kind           String
+  status         String    @default("pending")
+  agentId        String    @map("agent_id")
+  taskId         String?   @map("task_id") @db.Uuid
+  invocationId   String?   @unique @map("invocation_id") @db.Uuid
+  toolId         String?   @map("tool_id")
+  action         String?
+  riskReason     String    @map("risk_reason")
+  safePreview    Json      @map("safe_preview")
+  /// Données complètes de la proposition (côté serveur uniquement).
+  payload        Json
+  idempotencyKey String    @map("idempotency_key")
+  requestedAt    DateTime  @map("requested_at") @db.Timestamptz(3)
+  deadlineAt     DateTime  @map("deadline_at") @db.Timestamptz(3)
+  reviewedBy     String?   @map("reviewed_by")
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  decisionReason String?   @map("decision_reason")
+  version        Int       @default(1)
+
+  @@unique([orgId, idempotencyKey])
+  @@index([orgId, status, requestedAt])
+  @@map("approval_requests")
+}
+
+/// Réunion = workflow collaboratif borné (docs/04 §7).
+model Meeting {
+  id               String    @id @db.Uuid
+  orgId            String    @map("org_id") @db.Uuid
+  topic            String
+  status           String
+  roomId           String    @map("room_id")
+  initiatorAgentId String    @map("initiator_agent_id")
+  taskId           String?   @map("task_id") @db.Uuid
+  invocationId     String?   @unique @map("invocation_id") @db.Uuid
+  startedAt        DateTime? @map("started_at") @db.Timestamptz(3)
+  endedAt          DateTime? @map("ended_at") @db.Timestamptz(3)
+  summary          String?
+  decisions        Json      @default("[]")
+  taskIdsCreated   String[]  @map("task_ids_created")
+  participants     MeetingParticipant[]
+
+  @@index([orgId, status])
+  @@map("meetings")
+}
+
+model MeetingParticipant {
+  meetingId  String    @map("meeting_id") @db.Uuid
+  meeting    Meeting   @relation(fields: [meetingId], references: [id])
+  agentId    String    @map("agent_id")
+  seatAnchor String    @map("seat_anchor")
+  role       String
+  joinedAt   DateTime  @map("joined_at") @db.Timestamptz(3)
+  leftAt     DateTime? @map("left_at") @db.Timestamptz(3)
+
+  @@id([meetingId, agentId])
+  @@map("meeting_participants")
 }
 
 /// Journal append-only : source de vérité de ce qui s'est passé. seq contigu par org.

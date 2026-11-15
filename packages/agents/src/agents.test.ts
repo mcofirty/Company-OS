@@ -38,6 +38,7 @@ function deps(
   return {
     tools,
     now: () => 0,
+    waitForApproval: async () => 'approved',
     modelStep: async ({ messages }) => ({
       kind: 'ok',
       costMicros: cost,
@@ -127,6 +128,7 @@ describe('boucle bornée', () => {
   it('refus de budget/kill switch remonté par modelStep', async () => {
     const d: LoopDeps = {
       now: () => 0,
+      waitForApproval: async () => 'approved',
       modelStep: async () => ({ kind: 'denied', code: 'BUDGET_EXCEEDED', message: 'plafond' }),
       toolStep: async () => ({ content: '', isError: false, lastEventId: null }),
     };
@@ -250,4 +252,41 @@ describe('AnthropicProvider (fetch simulé, aucun appel réseau)', () => {
     await expect(p401.complete(req)).rejects.toBeInstanceOf(ProviderError);
     await expect(p401.complete(req)).rejects.toMatchObject({ code: 'AUTH', retryable: false });
   }, 30_000);
+});
+
+describe('validation humaine dans la boucle', () => {
+  const approvalDeps = (decision: 'approved' | 'rejected') => {
+    const calls: { approvalId?: string }[] = [];
+    const d: LoopDeps = {
+      now: () => 0,
+      waitForApproval: async () => decision,
+      modelStep: async ({ messages }) => ({
+        kind: 'ok',
+        costMicros: 0,
+        response: {
+          model: 'm',
+          stopReason: 'tool_use',
+          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+          content: messages.length === 1 ? [call('t1', 'email__send_email')] : [submit()],
+        },
+      }),
+      toolStep: async (i) => {
+        calls.push({ approvalId: i.approvalId });
+        return i.approvalId
+          ? { content: 'envoyé', isError: false, lastEventId: null }
+          : { content: '', isError: false, lastEventId: null, approvalId: 'appr-1' };
+      },
+    };
+    return { d, calls };
+  };
+  it('approuvée : l’outil est rappelé avec la décision', async () => {
+    const { d, calls } = approvalDeps('approved');
+    expect((await agentLoop(d, { taskMessage: 'm', limits })).status).toBe('succeeded');
+    expect(calls).toEqual([{ approvalId: undefined }, { approvalId: 'appr-1' }]);
+  });
+  it('refusée : jamais exécutée, le modèle est informé', async () => {
+    const { d, calls } = approvalDeps('rejected');
+    await agentLoop(d, { taskMessage: 'm', limits });
+    expect(calls).toEqual([{ approvalId: undefined }]);
+  });
 });

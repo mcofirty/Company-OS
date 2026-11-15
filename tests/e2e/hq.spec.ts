@@ -39,12 +39,14 @@ test('S01 — premier affichage : carte, départements, 12 agents, outils, KPI, 
   await expect(page.getByTestId('mode-badge')).toContainText('DEMO');
   await expect(page.getByTestId('mode-badge')).toContainText('activité simulée');
   await expect(page.getByTestId('world-canvas').locator('canvas')).toBeVisible();
-  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(12);
   await expect(page.getByTestId('toolwall')).toBeVisible();
   await expect(page.getByTestId('kpis')).toContainText('Agents actifs');
   const boot = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
     data: { departments: unknown[]; tools: unknown[]; agents: { provenance: string }[] };
   };
+  // ≥ 12 agents seedés (des recrutements approuvés lors d'autres scénarios peuvent s'ajouter).
+  expect(boot.data.agents.length).toBeGreaterThanOrEqual(12);
+  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(boot.data.agents.length);
   expect(boot.data.departments.length).toBeGreaterThanOrEqual(6);
   expect(boot.data.tools.length).toBeGreaterThanOrEqual(8);
   expect(boot.data.agents.every((a) => a.provenance === 'demo')).toBe(true);
@@ -203,4 +205,67 @@ test('S12 — kill switch depuis le cockpit : bannière, timeline, reprise', asy
   await page.getByTestId('kill-switch').click();
   await expect(page.getByTestId('pause-banner')).toHaveCount(0, { timeout: 10_000 });
   await expect(page.getByTestId('timeline')).toContainText('Système repris');
+});
+
+test('S05 — RH propose un agent, l’admin approuve depuis le cockpit, l’agent apparaît et persiste', async ({
+  page,
+}) => {
+  await open(page);
+  page.on('dialog', (d) => void d.accept('Capacité Support validée (e2e)'));
+  const before = await page.getByTestId('team-list').locator('li').count();
+  await createViaUi(page, 'propose_hire');
+  await page.keyboard.press('Escape');
+  const row = page.getByTestId('approval-row').filter({ hasText: 'Nouvel agent' }).first();
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await row.click();
+  await expect(page.getByTestId('inspector')).toContainText('décision engageante');
+  await page.getByTestId('approve').click();
+  await expect(page.getByTestId('inspector')).toContainText('APPROUVÉE', { timeout: 10_000 });
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(before + 1, {
+    timeout: 10_000,
+  });
+  await expect(page.getByTestId('timeline')).toContainText("rejoint l'équipe");
+  // Au rechargement, l'agent est toujours là (état serveur), sans nouvelle notification d'arrivée.
+  await page.reload();
+  await expect(page.getByTestId('connection')).toContainText('Temps réel', { timeout: 20_000 });
+  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(before + 1);
+  await expect(page.locator('.toast').filter({ hasText: 'Nouvel agent' })).toHaveCount(0);
+});
+
+test('S06 — réunion réelle : participants, décisions et tâche déléguée visibles', async ({
+  page,
+}) => {
+  await open(page);
+  const id = await createViaUi(page, 'pricing_review');
+  await expect(page.getByTestId('inspector')).toContainText('Réussie', { timeout: 40_000 });
+  const meetings = (await (await page.request.get(`${API}/v1/meetings`)).json()) as {
+    data: { id: string; taskId: string; participantAgentIds: string[]; decisions: unknown[] }[];
+  };
+  const m = meetings.data.find((x) => x.taskId === id)!;
+  expect(m.participantAgentIds.length).toBeGreaterThanOrEqual(2);
+  expect(m.decisions.length).toBeGreaterThan(0);
+  await page.getByTestId('timeline').locator('button[title*="meeting.completed"]').first().click();
+  await expect(page.getByTestId('inspector-title')).toContainText('Remise');
+  await expect(page.getByTestId('inspector')).toContainText('Décisions');
+  await expect(page.getByTestId('inspector')).toContainText('Préparer une offre');
+});
+
+test('validation d’un envoi d’email : en attente, puis approuvé depuis l’inbox', async ({
+  page,
+}) => {
+  await open(page);
+  page.on('dialog', (d) => void d.accept('Relance validée (e2e)'));
+  const id = await createViaUi(page, 'send_followup');
+  await page.keyboard.press('Escape');
+  const row = page.getByTestId('approval-row').filter({ hasText: 'Action externe' }).first();
+  await expect(row).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('kpi-approvals')).not.toContainText(/^0/);
+  await row.click();
+  await page.getByTestId('approve').click();
+  await expect
+    .poll(async () => (await taskDetail(page, id)).task.status, { timeout: 40_000 })
+    .toBe('succeeded');
+  const d = await taskDetail(page, id);
+  expect(d.invocations.map((i) => i.status)).toEqual(['succeeded']);
 });

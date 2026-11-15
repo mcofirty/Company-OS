@@ -10,6 +10,7 @@ import { Timeline } from './cockpit/Timeline';
 import { Topbar } from './cockpit/Topbar';
 import { Inspector, TeamRows } from './panels/Inspector';
 import { ToolWall } from './panels/ToolWall';
+import { ApprovalsInbox } from './panels/Governance';
 
 const WorldViewport = dynamic(
   () => import('./cockpit/WorldViewport').then((m) => m.WorldViewport),
@@ -21,7 +22,34 @@ const WorldViewport = dynamic(
 
 /** Écran unique (docs/01 §3) : carte dominante, KPI, outils, inspecteur, timeline. */
 export function Cockpit() {
-  const { world, connection, error, toasts, now, createTask, toast, setSystemPaused } = useHq();
+  const {
+    world,
+    connection,
+    error,
+    toasts,
+    now,
+    createTask,
+    toast,
+    setSystemPaused,
+    decideApproval,
+  } = useHq();
+  const onDecide = useCallback(
+    async (approvalId: string, decision: 'approve' | 'reject', reason: string) => {
+      try {
+        await decideApproval(approvalId, decision, reason);
+        toast({
+          text: decision === 'approve' ? 'Validation accordée' : 'Validation refusée',
+          tone: 'success',
+        });
+      } catch (err) {
+        toast({
+          text: `Refusé : ${err instanceof ApiFailure ? `${err.code} · ${err.message}` : 'erreur'}`,
+          tone: 'danger',
+        });
+      }
+    },
+    [decideApproval, toast],
+  );
   const [selection, setSelection] = useState<Selection | null>(null);
   const scene = useRef<HqScene | null>(null);
 
@@ -119,6 +147,7 @@ export function Cockpit() {
         </div>
       </main>
       <aside className="side">
+        {world && !selection && <ApprovalsInbox world={world} now={now} onSelect={select} />}
         <div className="side-top">
           {world && selection ? (
             <Inspector
@@ -128,6 +157,7 @@ export function Cockpit() {
               onSelect={select}
               onCreateTask={onCreateTask}
               onFocus={(id) => scene.current?.focusAgent(id)}
+              onDecide={onDecide}
             />
           ) : (
             <section className="panel" aria-label="Équipe">

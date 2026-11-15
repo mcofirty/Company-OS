@@ -4,11 +4,11 @@ import {
   OPEN_TASK_STATUSES,
   type WorldSnapshot,
 } from '@company-os/contracts';
-import { HQ_MAP, trimInvocations, trimTasks } from '@company-os/world';
+import { HQ_MAP, trimApprovals, trimInvocations, trimMeetings, trimTasks } from '@company-os/world';
 import type { Db } from './client';
 import { Prisma } from './generated/prisma/client';
 import { rowToEvent } from './events';
-import { agentView, invocationView, taskView, toolView } from './views';
+import { agentView, approvalView, invocationView, meetingView, taskView, toolView } from './views';
 
 /**
  * Snapshot cohérent : toutes les lectures dans une transaction REPEATABLE READ, donc
@@ -46,6 +46,24 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
           }),
         ]);
       // Coûts : imputés au snapshot quand le run est terminé (même règle que le réducteur).
+      const [approvalsOpen, approvalsDone, meetingsOpen, meetingsDone] = await Promise.all([
+        tx.approvalRequest.findMany({ where: { orgId, status: 'pending' } }),
+        tx.approvalRequest.findMany({
+          where: { orgId, status: { not: 'pending' } },
+          orderBy: [{ reviewedAt: 'desc' }, { id: 'desc' }],
+          take: LIMITS.approvals,
+        }),
+        tx.meeting.findMany({
+          where: { orgId, status: 'in_progress' },
+          include: { participants: true },
+        }),
+        tx.meeting.findMany({
+          where: { orgId, status: { not: 'in_progress' } },
+          orderBy: [{ endedAt: 'desc' }, { id: 'desc' }],
+          take: LIMITS.meetings,
+          include: { participants: true },
+        }),
+      ]);
       const [costAgg, estimatedRuns, budgets] = await Promise.all([
         tx.agentRun.aggregate({
           where: { orgId, status: { not: 'running' } },
@@ -92,6 +110,8 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
           alertThreshold: b.alertThreshold,
         })),
         system: { paused: org.killSwitch },
+        approvals: trimApprovals([...approvalsOpen, ...approvalsDone].map(approvalView)),
+        meetings: trimMeetings([...meetingsOpen, ...meetingsDone].map(meetingView)),
         timeline: events.map(rowToEvent),
       };
     },

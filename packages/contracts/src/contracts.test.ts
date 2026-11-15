@@ -77,8 +77,8 @@ describe('domaine', () => {
     expect(canTransitionTask('failed', 'queued')).toBe(true);
     expect(canTransitionTask('created', 'succeeded')).toBe(false);
   });
-  it('catalogue : 8 outils, ids uniques', () => {
-    expect(TOOL_CATALOG).toHaveLength(8);
-    expect(new Set(TOOL_CATALOG.map((t) => t.id)).size).toBe(8);
+  it('catalogue : 8 outils métier + plateforme, ids uniques', () => {
+    expect(TOOL_CATALOG).toHaveLength(9);
+    expect(new Set(TOOL_CATALOG.map((t) => t.id)).size).toBe(9);
   });
 });

@@ -9,3 +9,5 @@ export * from './services/tasks';
 export * from './services/invocations';
 export * from './services/agents';
 export * from './services/runs';
+export * from './services/approvals';
+export * from './services/meetings';

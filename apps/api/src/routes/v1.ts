@@ -4,6 +4,7 @@ import {
   CreateTaskRequestSchema,
   IdempotencyKeySchema,
   SystemControlRequestSchema,
+  ApprovalStatusSchema,
   InvocationStatusSchema,
   SlugIdSchema,
   TaskStatusSchema,
@@ -20,6 +21,9 @@ import {
   toolView,
   type Db,
   setSystemPaused,
+  decideApproval,
+  approvalView,
+  meetingView,
 } from '@company-os/db';
 import { principalOf, requireRole, type AuthConfig } from '../auth';
 
@@ -27,7 +31,22 @@ const Id = z.object({ id: z.uuid() });
 const SlugParam = z.object({ id: SlugIdSchema });
 const Limit = z.coerce.number().int().min(1).max(200).default(50);
 
-export function registerV1(app: FastifyInstance, db: Db, auth: AuthConfig): void {
+export type ApprovalSignaler = (
+  workflowId: string,
+  approvalId: string,
+  decision: 'approved' | 'rejected',
+) => Promise<void>;
+
+const DecideBody = z
+  .object({ decision: z.enum(['approve', 'reject']), reason: z.string().min(3).max(280) })
+  .strict();
+
+export function registerV1(
+  app: FastifyInstance,
+  db: Db,
+  auth: AuthConfig,
+  signalApproval?: ApprovalSignaler,
+): void {
   const meta = { schemaVersion: 1 };
 
   app.get('/v1/me', async (req) => {
@@ -304,6 +323,94 @@ export function registerV1(app: FastifyInstance, db: Db, auth: AuthConfig): void
         alertThreshold: b.alertThreshold,
       })),
       meta: { ...meta, unit: 'micro-USD' },
+    };
+  });
+
+  // ---------- Validations humaines (docs/05 §5, docs/07) ----------
+  app.get('/v1/approvals', async (req) => {
+    const p = principalOf(req, auth);
+    requireRole(p, 'operator');
+    const q = z.object({ status: ApprovalStatusSchema.optional(), limit: Limit }).parse(req.query);
+    const rows = await db.approvalRequest.findMany({
+      where: { orgId: p.orgId, ...(q.status ? { status: q.status } : {}) },
+      orderBy: { requestedAt: 'desc' },
+      take: q.limit,
+    });
+    return { data: rows.map(approvalView), meta };
+  });
+
+  app.get('/v1/approvals/:id', async (req) => {
+    const p = principalOf(req, auth);
+    requireRole(p, 'operator');
+    const { id } = Id.parse(req.params);
+    const a = await db.approvalRequest.findFirst({ where: { id, orgId: p.orgId } });
+    if (!a) throw new DomainError('NOT_FOUND', 'Demande introuvable');
+    return { data: approvalView(a), meta };
+  });
+
+  app.post('/v1/approvals/:id/decide', async (req) => {
+    const p = principalOf(req, auth);
+    requireRole(p, 'admin');
+    const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+    if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+    const { id } = Id.parse(req.params);
+    const body = DecideBody.parse(req.body);
+    const decision = body.decision === 'approve' ? 'approved' : 'rejected';
+    const r = await decideApproval(db, {
+      orgId: p.orgId,
+      approvalId: id,
+      decision,
+      reviewer: { kind: 'user', id: p.userId },
+      reason: body.reason,
+    });
+    // Reprise du workflow par signal Temporal (le workflow revérifie aussi en base).
+    let signaled = false;
+    if (r.workflowId && signalApproval) {
+      try {
+        await signalApproval(r.workflowId, id, decision);
+        signaled = true;
+      } catch (err) {
+        req.log.warn(
+          { err, workflowId: r.workflowId },
+          'signal Temporal non délivré (repli par interrogation)',
+        );
+      }
+    }
+    return { data: { approval: r.approval, changed: r.changed, signaled }, meta };
+  });
+
+  // ---------- Réunions ----------
+  app.get('/v1/meetings', async (req) => {
+    const p = principalOf(req, auth);
+    const rows = await db.meeting.findMany({
+      where: { orgId: p.orgId },
+      include: { participants: true },
+      orderBy: { startedAt: 'desc' },
+      take: 50,
+    });
+    return { data: rows.map(meetingView), meta };
+  });
+
+  app.get('/v1/meetings/:id', async (req) => {
+    const p = principalOf(req, auth);
+    const { id } = Id.parse(req.params);
+    const m = await db.meeting.findFirst({
+      where: { id, orgId: p.orgId },
+      include: { participants: true },
+    });
+    if (!m) throw new DomainError('NOT_FOUND', 'Réunion introuvable');
+    const task = m.taskId ? await db.task.findUnique({ where: { id: m.taskId } }) : null;
+    const events = task
+      ? (await listEventsByCorrelation(db, p.orgId, task.correlationId)).filter(
+          (e) => e.aggregateId === m.id,
+        )
+      : [];
+    const children = m.taskIdsCreated.length
+      ? await db.task.findMany({ where: { id: { in: m.taskIdsCreated } } })
+      : [];
+    return {
+      data: { meeting: meetingView(m), events, tasksCreated: children.map(taskView) },
+      meta,
     };
   });
 }

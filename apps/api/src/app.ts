@@ -6,7 +6,7 @@ import type { ErrorCode } from '@company-os/contracts';
 import { DomainError, relayOutbox, type Db } from '@company-os/db';
 import type { AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
-import { registerV1 } from './routes/v1';
+import { registerV1, type ApprovalSignaler } from './routes/v1';
 
 const STATUS: Partial<Record<ErrorCode, number>> = {
   UNAUTHORIZED: 401,
@@ -27,6 +27,7 @@ export interface AppOptions {
   auth: AuthConfig;
   corsOrigin: string;
   logger?: boolean;
+  signalApproval?: ApprovalSignaler;
 }
 
 export async function buildApp(
@@ -81,7 +82,7 @@ export async function buildApp(
     }
   });
 
-  registerV1(app, db, opts.auth);
+  registerV1(app, db, opts.auth, opts.signalApproval);
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
   const relayOnce = (): Promise<number> => relayOutbox(db, (events) => broadcast(io, events));

@@ -70,6 +70,45 @@ export const DEMO_TASK_CATALOG: Record<TaskKind, DemoTaskSpec> = {
     description: 'Consolide les indicateurs fictifs de la semaine.',
     input: { metric: 'weekly_kpis' },
   },
+  send_followup: {
+    title: 'Relancer un prospect par email (DEMO, validation requise)',
+    departmentId: 'sales',
+    toolId: 'email',
+    action: 'send_email',
+    description:
+      "Envoi externe : la plateforme suspend l'action jusqu'à la décision d'un humain habilité (email simulé).",
+    input: { ticketRef: 'demo-lead-042-relance' },
+  },
+  propose_hire: {
+    title: 'Proposer un nouvel agent Support (DEMO)',
+    departmentId: 'rh',
+    toolId: 'platform',
+    action: 'propose_agent',
+    description:
+      "Les RH proposent un agent ; seul un admin peut l'approuver. L'agent apparaît ensuite à l'accueil.",
+    input: {
+      departmentId: 'operations',
+      title: 'Support',
+      justification: 'File de tickets en hausse (données démo)',
+    },
+  },
+  pricing_review: {
+    title: 'Revue de remise client (réunion, DEMO)',
+    departmentId: 'finance',
+    toolId: 'platform',
+    action: 'convene_meeting',
+    description:
+      'Réunion Finance + Sales en salle de réunion ; décisions structurées et délégation de la préparation de l’offre.',
+    input: { topic: 'Remise de 12 % pour Acme Démo', participants: 'sales-manager,billing-01' },
+  },
+  prepare_offer: {
+    title: 'Préparer une offre (DEMO)',
+    departmentId: 'sales',
+    toolId: 'docs',
+    action: 'draft_doc',
+    description: 'Brouillon d’offre interne (aucun envoi).',
+    input: { topic: 'offre-acme-demo' },
+  },
 };
 
 export interface ToolActionSpec {
@@ -77,8 +116,10 @@ export interface ToolActionSpec {
   kind: ToolActionKind;
   risk: ToolRisk;
   label: string;
-  /** Paramètre unique (référence opaque) attendu par l'action, exposé au modèle. */
+  /** Paramètre principal attendu par l'action, exposé au modèle. */
   input: { field: string; description: string };
+  /** Paramètres supplémentaires (tous requis). */
+  moreInputs?: { field: string; description: string }[];
 }
 export interface ToolCatalogEntry {
   id: string;
@@ -243,6 +284,48 @@ export const TOOL_CATALOG: ToolCatalogEntry[] = [
     ],
   },
 ];
+
+TOOL_CATALOG.push({
+  id: 'platform',
+  name: 'Plateforme (actions internes)',
+  code: 'HQ',
+  category: 'coordination',
+  color: '#7c60c9',
+  actions: [
+    {
+      action: 'propose_agent',
+      kind: 'write',
+      risk: 'internal_write',
+      label: 'Proposer un agent (approbation admin)',
+      input: { field: 'departmentId', description: 'Département cible (ex. operations)' },
+      moreInputs: [
+        { field: 'title', description: 'Intitulé du poste' },
+        { field: 'justification', description: 'Besoin opérationnel observé' },
+      ],
+    },
+    {
+      action: 'convene_meeting',
+      kind: 'execute',
+      risk: 'internal_write',
+      label: 'Réunir des agents',
+      input: { field: 'topic', description: 'Sujet de la réunion' },
+      moreInputs: [
+        {
+          field: 'participants',
+          description: 'Identifiants des participants, séparés par des virgules',
+        },
+      ],
+    },
+    {
+      action: 'delegate_task',
+      kind: 'write',
+      risk: 'internal_write',
+      label: 'Déléguer une tâche',
+      input: { field: 'kind', description: 'Type de tâche du catalogue' },
+      moreInputs: [{ field: 'assigneeAgentId', description: 'Agent destinataire' }],
+    },
+  ],
+});
 
 export const toolById = (id: string): ToolCatalogEntry | undefined =>
   TOOL_CATALOG.find((t) => t.id === id);

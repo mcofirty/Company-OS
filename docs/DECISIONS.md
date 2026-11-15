@@ -108,3 +108,21 @@ ADR-021 — **Rattachement département -> plan par `roomId`.** Les identifiants
 sélection d'agent et la validation de poste passent par `department.roomId` (prépare le multi-tenant).
 
 ADR-022 — **OpenTelemetry reporté à M5**, logs JSON corrélés en attendant (le jalon M2 du plan le mentionnait).
+
+### 2026-11-15 — M3
+
+ADR-023 — **Reprise après validation par signal Temporal + filet en base.** L'API signale `approvalDecided` au workflow
+(`workflowId` du run) ; si le signal est perdu (Temporal indisponible côté API), le workflow relit la décision toutes les
+20 s et expire la demande à échéance. La gateway revérifie les droits au moment de l'exécution.
+
+ADR-024 — **Actions internes = outil « platform ».** Proposer un agent, réunir, déléguer passent par la ToolGateway :
+mêmes grants, même audit, visibles dans le mur des outils. Les handlers sont idempotents par invocation.
+
+ADR-025 — **Le recrutement est exécuté par la décision humaine**, dans la même transaction que `approval.decided`
+(acteur de `agent.created` = l'approbateur). Les droits accordés sont exactement ceux affichés dans l'aperçu.
+
+ADR-026 — **Réunions déterministes en M3.** Synthèse/décisions démo scriptées et étiquetées ; la délégation qui en
+découle applique les règles de docs/04 §6. Les contributions LLM par participant sont reportées.
+
+ADR-027 — **Assignation automatique filtrée par autorisation** : parmi les agents du département, priorité à ceux qui
+ont le grant de l'outil requis (sinon la gateway refuserait l'appel).

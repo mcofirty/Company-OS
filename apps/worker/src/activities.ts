@@ -16,6 +16,8 @@ import {
   type ToolStepResult,
 } from '@company-os/agents';
 import {
+  expireApprovalIfDue,
+  getApprovalStatus,
   finishTask,
   loadRunContext,
   recordLlmCall,
@@ -187,6 +189,7 @@ export function createActivities(deps: ActivityDeps) {
       name: string;
       input: unknown;
       causationId: string | null;
+      approvalId?: string;
     }): Promise<ToolStepResult> {
       const ctx = await loadRunContext(db, input.runId);
       const parsed = parseToolName(input.name);
@@ -216,7 +219,16 @@ export function createActivities(deps: ActivityDeps) {
         input: args,
         idempotencyKey: `run:${input.runId}:tool:${input.toolUseId}`,
         causationId: input.causationId ?? ctx.run.startEventId,
+        ...(input.approvalId ? { approvalId: input.approvalId } : {}),
       });
+      if (r.status === 'waiting_approval') {
+        return {
+          content: '',
+          isError: false,
+          lastEventId: r.lastEventId,
+          approvalId: r.approvalId,
+        };
+      }
       if (r.status === 'succeeded') {
         return {
           content: wrapToolOutput(parsed.toolId, parsed.action, r.output),
@@ -236,6 +248,16 @@ export function createActivities(deps: ActivityDeps) {
         isError: true,
         lastEventId: r.lastEventId,
       };
+    },
+
+    /** Lecture de l'état d'une validation (filet de sécurité si un signal est perdu). */
+    async checkApproval(input: { approvalId: string }): Promise<string> {
+      return getApprovalStatus(db, input.approvalId);
+    },
+
+    /** Expire la demande si l'échéance est passée ; retourne le statut final. */
+    async expireApproval(input: { approvalId: string }): Promise<string> {
+      return expireApprovalIfDue(db, input.approvalId);
     },
 
     async finishRun(input: { runId: string; outcome: LoopOutcome }): Promise<{ status: string }> {

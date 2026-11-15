@@ -3,6 +3,63 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (4) — M3 : entreprise organisée (validations, recrutement, réunions, délégation)
+
+**Milestone courant : M3 terminé. Prochain : M4.**
+
+### Réalisé
+- **Validations humaines** (`approval_requests`, `approval.requested/decided`) : toute écriture externe (ex. `send_email`)
+  met l'invocation en `waiting_approval` ; le workflow Temporal attend durablement le signal `approvalDecided` envoyé par
+  l'API (repli : vérification en base toutes les 20 s, expiration à échéance). À la reprise, la gateway revérifie grant,
+  kill switch et mode (TOCTOU). Refus/expiration => invocation `rejected`, jamais exécutée. Décision : humains (admin)
+  uniquement, terminale, idempotente au double-clic, contraire => CONFLICT.
+- **Recrutement (S05)** : action plateforme `propose_agent` (RH) => demande `agent_hire` (aucun agent créé). Approbation
+  admin => `agent.created` + `agent.activated` (acteur = l'humain), droits minimaux explicites, budget plafonné, version 1,
+  poste libre du département (unicité org+poste) ou salle d'attente de l'accueil. L'avatar apparaît à l'accueil puis
+  marche vers son poste ; pas de seconde animation au rechargement.
+- **Réunions (S06)** : action `convene_meeting` => salle libre, participants disponibles (un agent occupé n'est pas
+  arraché à sa tâche), un siège réservé chacun, `meeting.started` ; synthèse + décisions structurées + délégation,
+  `meeting.completed`, retour au poste. Bulle de sujet sur la table, badge « RÉUNION ».
+- **Délégation** : `parent_task_id`/`depth`, profondeur ≤ 3, ≤ 5 sous-tâches par parent, cycles d'agents refusés,
+  corrélation partagée avec la tâche parente. Assignation automatique : priorité aux agents autorisés pour l'outil requis.
+- **Outil « Plateforme »** : actions internes (proposer, réunir, déléguer) passant par la gateway => visibles, auditées.
+- **API** : `GET /v1/approvals`, `GET /v1/approvals/:id`, `POST /v1/approvals/:id/decide` (admin, Idempotency-Key, signal
+  Temporal), `GET /v1/meetings`, `GET /v1/meetings/:id`.
+- **Web** : boîte « À valider » toujours visible, KPI approbations, inspecteurs Validation (aperçu rédigé, motif,
+  traçabilité, Approuver/Refuser) et Réunion (participants, sièges, synthèse, décisions, tâches déléguées), badge
+  VALIDATION, délégation visible dans l'inspecteur de tâche, nouveaux événements dans la timeline.
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK · `pnpm build` OK.
+- `pnpm test` : **85 tests passés** (9 fichiers) dont M3 : action externe approuvée (une seule exécution, séquence
+  d'événements exacte), refusée (rejetée, tâche bloquée), décision humaine seulement / double-clic / contraire, S05
+  (aucun agent avant décision, poste libre, droits explicites, acteur humain, refus, salle d'attente), S06 (3 sièges
+  distincts, décisions, sous-tâche déléguée, participant occupé exclu), délégation (cycle, profondeur, fan-out), signal
+  Temporal réel, API (rôles, idempotence). Projection serveur = rejeu client vérifiée à chaque scénario.
+- `pnpm e2e` : **10 tests passés** dont S05 (approbation depuis le cockpit + persistance au rechargement), S06 (inspecteur
+  de réunion), validation d'email depuis l'inbox.
+- Capture : `docs/screenshots/m3-meeting-approvals-1440.png`.
+
+### Écarts connus
+- Synthèses et décisions de réunion déterministes (démo) : pas encore de contributions LLM par participant.
+- Pas de désactivation/pause d'agent individuelle (`agent.paused/deactivated`) ni de gestion des permissions depuis l'UI.
+- Une seule salle de réunion ; si elle est occupée, la réunion échoue (`ROOM_BUSY`) au lieu d'être replanifiée.
+- Le cockpit et le worker continus live attendent toujours l'authentification (M5).
+
+### Prochaine tâche exacte
+M4 : overlay agent→outil (≤ 5 liens, regroupement), recherche Ctrl+K, filtres de département, santé des outils et
+KPI par fenêtre (1h/24h/7j), replay scrubbable sans effet, rôles viewer/operator/admin dans l'UI, pause/désactivation
+d'agent, alertes persistées avec acquittement.
+
+### Commandes de reprise
+```bash
+cp .env.example .env && pnpm install
+docker compose up -d --wait
+pnpm db:migrate && pnpm db:seed
+pnpm dev
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm build
+```
+
 ## Session 2026-11-15 (3) — M2 : agent LLM borné, outils sécurisés, coûts, Temporal
 
 **Milestone courant : M2 terminé (parcours LIVE réel non vérifié faute de clé). Prochain : M3.**

@@ -8,6 +8,7 @@ import {
   ToolActionKindSchema,
   ToolRiskSchema,
   AgentRoleSchema,
+  ApprovalKindSchema,
 } from './domain';
 
 /** Tous les types de l'enveloppe v1 (doit rester égal à l'enum de specs/events.schema.json). */
@@ -76,6 +77,9 @@ export const Payloads = {
     agentId: SlugIdSchema,
     kind: TaskKindSchema,
     title: z.string().min(1).max(120),
+    /** Délégation : tâche parente et profondeur (0 = tâche racine). */
+    parentTaskId: Uuid.nullable().default(null),
+    depth: z.number().int().min(0).max(3).default(0),
   }),
   'task.started': z.object({
     taskId: Uuid,
@@ -167,6 +171,47 @@ export const Payloads = {
     limitMicros: z.number().int().min(0),
     hardStop: z.boolean(),
   }),
+  'approval.requested': z.object({
+    approvalId: Uuid,
+    kind: ApprovalKindSchema,
+    /** Agent à l'origine de la demande (jamais l'approbateur). */
+    agentId: SlugIdSchema,
+    taskId: Uuid.nullable(),
+    invocationId: Uuid.nullable(),
+    toolId: SlugIdSchema.nullable(),
+    action: z.string().max(64).nullable(),
+    riskReason: SafeText,
+    /** Aperçu rédigé, sans secret ni donnée sensible. */
+    safePreview: z.record(
+      z.string(),
+      z.union([z.string().max(300), z.number(), z.boolean(), z.array(z.string().max(80)).max(20)]),
+    ),
+    deadlineAt: z.iso.datetime(),
+  }),
+  'approval.decided': z.object({
+    approvalId: Uuid,
+    decision: z.enum(['approved', 'rejected', 'expired']),
+    reviewerId: z.string().min(1).max(128),
+    reason: z.string().max(280),
+  }),
+  'meeting.started': z.object({
+    meetingId: Uuid,
+    roomId: z.string().min(1).max(64),
+    topic: z.string().min(1).max(160),
+    initiatorAgentId: SlugIdSchema,
+    taskId: Uuid.nullable(),
+    participantAgentIds: z.array(SlugIdSchema).min(2).max(8),
+    /** Siège réservé par participant (aucun chevauchement). */
+    seats: z.record(z.string(), z.string().max(64)),
+  }),
+  'meeting.completed': z.object({
+    meetingId: Uuid,
+    summary: SafeText,
+    decisions: z
+      .array(z.object({ decision: z.string().max(200), ownerAgentId: SlugIdSchema }))
+      .max(10),
+    taskIdsCreated: z.array(Uuid).max(5),
+  }),
   'system.paused': z.object({ reason: z.string().min(1).max(200) }),
   'system.resumed': z.object({ reason: z.string().min(1).max(200) }),
   'tool.invocation.rejected': z.object({
@@ -219,6 +264,10 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('budget.threshold_reached'),
   variant('system.paused'),
   variant('system.resumed'),
+  variant('approval.requested'),
+  variant('approval.decided'),
+  variant('meeting.started'),
+  variant('meeting.completed'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

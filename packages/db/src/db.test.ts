@@ -24,7 +24,7 @@ describe('seed démo', () => {
     const snap = (await loadSnapshot(db, org))!;
     expect(snap.agents).toHaveLength(12);
     expect(snap.departments).toHaveLength(6);
-    expect(snap.tools).toHaveLength(8);
+    expect(snap.tools).toHaveLength(9); // 8 outils métier + plateforme
     expect(snap.agents.every((a) => a.provenance === 'demo' && a.status === 'active')).toBe(true);
     const events = await listEventsAfter(db, org, 0, 1000);
     expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));

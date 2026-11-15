@@ -64,7 +64,12 @@ export interface DemoAgentSeed {
   grants: Record<string, string[]>;
 }
 
-const sales = { crm: ['lookup_lead', 'add_note'], email: ['draft_email'] };
+// send_email est une écriture externe : accordée, mais toujours soumise à validation humaine.
+const sales = {
+  crm: ['lookup_lead', 'add_note'],
+  email: ['draft_email', 'send_email'],
+  docs: ['draft_doc'],
+};
 
 export const DEMO_AGENTS: DemoAgentSeed[] = [
   {
@@ -142,7 +147,11 @@ export const DEMO_AGENTS: DemoAgentSeed[] = [
     managerId: 'coo-01',
     avatarId: 'avatar-07',
     deskAnchor: 'finance-desk-01',
-    grants: { erp: ['fetch_invoice'], analytics: ['query_metrics'] },
+    grants: {
+      erp: ['fetch_invoice'],
+      analytics: ['query_metrics'],
+      platform: ['convene_meeting', 'delegate_task'],
+    },
   },
   {
     id: 'billing-01',
@@ -164,7 +173,8 @@ export const DEMO_AGENTS: DemoAgentSeed[] = [
     managerId: 'coo-01',
     avatarId: 'avatar-01',
     deskAnchor: 'rh-desk-01',
-    grants: { ats: ['list_candidates'], docs: ['draft_doc'] },
+    // Les RH peuvent PROPOSER un agent ; seule l'approbation d'un admin humain le crée.
+    grants: { ats: ['list_candidates'], docs: ['draft_doc'], platform: ['propose_agent'] },
   },
   {
     id: 'recruiter-01',

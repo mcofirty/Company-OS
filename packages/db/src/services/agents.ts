@@ -2,7 +2,7 @@ import type { AgentRole, Provenance } from '@company-os/contracts';
 import { HQ_MAP } from '@company-os/world';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
-import { withOrgTx } from '../events';
+import { withOrgTx, type OrgTxContext } from '../events';
 
 export interface CreateAgentInput {
   orgId: string;
@@ -40,13 +40,27 @@ export interface CreateAgentInput {
  */
 export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ created: boolean }> {
   const now = input.now ?? new Date();
-  const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {
-    const { tx, orgId } = ctx;
+  const { result } = await withOrgTx(db, input.orgId, now, (ctx) => createAgentInTx(ctx, input));
+  return result;
+}
+
+/** Cœur transactionnel (réutilisé par l'approbation d'un recrutement). */
+export async function createAgentInTx(
+  ctx: OrgTxContext,
+  input: Omit<CreateAgentInput, 'orgId' | 'now'> & {
+    causationId?: string | null;
+    correlationId?: string;
+  },
+): Promise<{ created: boolean }> {
+  const { tx, orgId, now } = ctx;
+  {
     if (await tx.agent.findUnique({ where: { id: input.id } })) return { created: false };
-    // Le poste doit être une ancre « desk » de la salle du département (dans cette org).
+    // Le poste doit être une ancre « desk » de la salle du département, ou la salle d'attente.
     const dept = await tx.department.findFirst({ where: { id: input.departmentId, orgId } });
     const anchor = HQ_MAP.anchors[input.deskAnchor];
-    if (!dept || !anchor || anchor.kind !== 'desk' || anchor.roomId !== dept.roomId) {
+    const validDesk = anchor?.kind === 'desk' && anchor.roomId === dept?.roomId;
+    const waiting = anchor?.kind === 'waiting';
+    if (!dept || !anchor || !(validDesk || waiting)) {
       throw new DomainError(
         'VALIDATION_ERROR',
         `Poste ${input.deskAnchor} invalide pour ${input.departmentId}`,
@@ -93,7 +107,7 @@ export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ cr
       classification: 'internal',
       aggregateType: 'agent',
       aggregateId: input.id,
-      correlationId: crypto.randomUUID(),
+      correlationId: input.correlationId ?? crypto.randomUUID(),
       actor: input.createdBy,
       provenance: input.provenance,
     } as const;
@@ -101,7 +115,7 @@ export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ cr
       ...common,
       type: 'agent.created',
       aggregateVersion: 1,
-      causationId: null,
+      causationId: input.causationId ?? null,
       payload: {
         agentId: input.id,
         name: input.name,
@@ -123,8 +137,7 @@ export async function createAgent(db: Db, input: CreateAgentInput): Promise<{ cr
       });
     }
     return { created: true };
-  });
-  return result;
+  }
 }
 
 /** Vérifie l'autorisation explicite agent -> outil -> action (à chaque invocation). */

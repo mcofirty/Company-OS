@@ -72,7 +72,7 @@ describe('/v1/bootstrap', () => {
     expect(meta.schemaVersion).toBe(1);
     expect(snap.org.mode).toBe('demo');
     expect(snap.agents).toHaveLength(12);
-    expect(snap.tools).toHaveLength(8);
+    expect(snap.tools).toHaveLength(9); // 8 outils métier + plateforme
     expect(snap.lastSeq).toBe(24);
   });
 });
@@ -139,8 +139,8 @@ describe('lectures', () => {
     const agent = (await app.inject('/v1/agents/sdr-01')).json<{
       data: { grants: { toolId: string }[] };
     }>();
-    expect(agent.data.grants.map((g) => g.toolId).sort()).toEqual(['crm', 'email']);
-    expect((await app.inject('/v1/tools')).json<{ data: unknown[] }>().data).toHaveLength(8);
+    expect(agent.data.grants.map((g) => g.toolId).sort()).toEqual(['crm', 'docs', 'email']);
+    expect((await app.inject('/v1/tools')).json<{ data: unknown[] }>().data).toHaveLength(9);
     expect((await app.inject('/v1/departments')).json<{ data: unknown[] }>().data).toHaveLength(6);
   });
 });
@@ -219,5 +219,42 @@ describe('kill switch et budgets', () => {
     }>();
     expect(res.data).toHaveLength(13);
     expect(res.meta.unit).toBe('micro-USD');
+  });
+});
+
+describe('validations (API)', () => {
+  it('liste, décide (admin uniquement), double décision idempotente', async () => {
+    const { proposeAgentHire } = await import('@company-os/db');
+    const { approval } = await proposeAgentHire(db, {
+      orgId: DEMO_ORG.id,
+      requesterAgentId: 'hr-manager',
+      taskId: null,
+      proposal: { departmentId: 'operations', title: 'Support', justification: 'Charge en hausse' },
+      idempotencyKey: 'api-test-hire',
+      correlationId: '00000000-0000-4000-8000-0000000000ff',
+      causationId: null,
+    });
+    const list = (await app.inject('/v1/approvals?status=pending')).json<{
+      data: { id: string }[];
+    }>();
+    expect(list.data.map((a) => a.id)).toEqual([approval.id]);
+    expect(
+      (await app.inject({ url: '/v1/approvals', headers: { 'x-dev-role': 'viewer' } })).statusCode,
+    ).toBe(403);
+    const decide = (role: string, key: string) =>
+      app.inject({
+        method: 'POST',
+        url: `/v1/approvals/${approval.id}/decide`,
+        payload: { decision: 'approve', reason: 'Validé en test' },
+        headers: { 'idempotency-key': key, 'x-dev-role': role },
+      });
+    expect((await decide('operator', 'decide-op-1')).statusCode).toBe(403);
+    const ok = await decide('admin', 'decide-admin-1');
+    expect(ok.json()).toMatchObject({ data: { changed: true, approval: { status: 'approved' } } });
+    expect((await decide('admin', 'decide-admin-2')).json()).toMatchObject({
+      data: { changed: false },
+    });
+    const boot = (await app.inject('/v1/bootstrap')).json<{ data: { agents: unknown[] } }>();
+    expect(boot.data.agents).toHaveLength(13);
   });
 });

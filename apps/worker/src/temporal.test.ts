@@ -85,3 +85,39 @@ describe('workflow Temporal agentTask', () => {
     expect(activities).toBeGreaterThanOrEqual(4); // prepareRun, modelStep×2, toolStep, finishRun
   }, 60_000);
 });
+
+describe('validation humaine via signal Temporal', () => {
+  it('le workflow attend durablement puis reprend au signal approvalDecided', async () => {
+    const { decideApproval } = await import('@company-os/db');
+    const { task } = await createTask(db, {
+      orgId: DEMO_ORG.id,
+      kind: 'send_followup',
+      agentId: 'sdr-01',
+      requester: { kind: 'user', id: 'test' },
+    });
+    const started = (await startNextTask(db, DEMO_ORG.id))!;
+    const handle = await client.workflow.start('agentTaskWorkflow', {
+      taskQueue,
+      workflowId: `agent-task-${task.id}`,
+      args: [{ runId: started.runId }],
+    });
+    await expect
+      .poll(() => db.approvalRequest.count({ where: { taskId: task.id, status: 'pending' } }), {
+        timeout: 15_000,
+      })
+      .toBe(1);
+    const a = await db.approvalRequest.findFirstOrThrow({ where: { taskId: task.id } });
+    await decideApproval(db, {
+      orgId: DEMO_ORG.id,
+      approvalId: a.id,
+      decision: 'approved',
+      reviewer: { kind: 'user', id: 'test-admin' },
+      reason: 'ok',
+    });
+    await handle.signal('approvalDecided', { approvalId: a.id, decision: 'approved' });
+    const outcome = (await handle.result()) as { status: string };
+    expect(outcome.status).toBe('succeeded');
+    const inv = await db.toolInvocation.findFirstOrThrow({ where: { taskId: task.id } });
+    expect(inv.status).toBe('succeeded');
+  }, 60_000);
+});

@@ -61,6 +61,8 @@ export const time = (iso: string): string =>
 
 export function duration(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
+  if (s >= 3600)
+    return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`;
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
 }
 
@@ -161,6 +163,33 @@ export function describe(
       return { text: `Système mis en pause : ${e.payload.reason}`, tone: 'danger', icon: '■' };
     case 'system.resumed':
       return { text: `Système repris : ${e.payload.reason}`, tone: 'success', icon: '▶' };
+    case 'approval.requested':
+      return {
+        text:
+          e.payload.kind === 'agent_hire'
+            ? `${agentName(e.payload.agentId)} propose un nouvel agent · validation admin requise`
+            : `${agentName(e.payload.agentId)} → ${tool(e.payload.toolId ?? '')} · ${e.payload.action} en attente de validation`,
+        tone: 'warning',
+        icon: '?',
+      };
+    case 'approval.decided':
+      return {
+        text: `Validation ${e.payload.decision === 'approved' ? 'accordée' : e.payload.decision === 'rejected' ? 'refusée' : 'expirée'} · ${e.payload.reason}`,
+        tone: e.payload.decision === 'approved' ? 'success' : 'danger',
+        icon: e.payload.decision === 'approved' ? '✓' : '✕',
+      };
+    case 'meeting.started':
+      return {
+        text: `Réunion « ${e.payload.topic} » · ${e.payload.participantAgentIds.map(agentName).join(', ')}`,
+        tone: 'accent',
+        icon: '◎',
+      };
+    case 'meeting.completed':
+      return {
+        text: `Réunion terminée · ${e.payload.decisions.length} décision(s), ${e.payload.taskIdsCreated.length} tâche(s) déléguée(s)`,
+        tone: 'success',
+        icon: '◎',
+      };
   }
 }
 
@@ -171,7 +200,12 @@ export function usd(micros: number): string {
 }
 
 /** Cible d'inspection associée à un événement. */
-export function eventTarget(e: DomainEvent): { kind: 'agent' | 'task' | 'invocation'; id: string } {
+export function eventTarget(e: DomainEvent): {
+  kind: 'agent' | 'task' | 'invocation' | 'approval' | 'meeting';
+  id: string;
+} {
+  if (e.type.startsWith('approval.')) return { kind: 'approval', id: e.aggregateId };
+  if (e.type.startsWith('meeting.')) return { kind: 'meeting', id: e.aggregateId };
   if (e.type.startsWith('tool.invocation')) return { kind: 'invocation', id: e.aggregateId };
   if (e.type.startsWith('task.')) return { kind: 'task', id: e.aggregateId };
   const p = e.payload as {

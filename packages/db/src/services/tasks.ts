@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   canTransitionTask,
   DEMO_TASK_CATALOG,
+  DELEGATION_LIMITS,
   type Actor,
   type TaskKind,
   type TaskStatus,
@@ -23,6 +24,9 @@ export interface CreateTaskInput {
   requester: Actor;
   idempotencyKey?: string;
   now?: Date;
+  /** Délégation : tâche parente. */
+  parentTaskId?: string;
+  causationId?: string | null;
 }
 
 /** Crée une tâche démo (statut `queued`) et émet `task.created`. Idempotent par clé. */
@@ -31,76 +35,138 @@ export async function createTask(
   input: CreateTaskInput,
 ): Promise<{ task: TaskView; created: boolean }> {
   const now = input.now ?? new Date();
-  const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {
-    const { tx, orgId } = ctx;
-    if (input.idempotencyKey) {
-      const prior = await tx.idempotencyKey.findUnique({
-        where: {
-          orgId_key_operation: { orgId, key: input.idempotencyKey, operation: 'create_task' },
-        },
-      });
-      if (prior) {
-        const task = await tx.task.findUniqueOrThrow({ where: { id: prior.responseRef } });
-        return { task: taskView(task), created: false };
-      }
-    }
-    // En live, les scénarios du catalogue s'exécutent avec un vrai modèle mais des outils
-    // démo (mode « hybride », signalé) : la provenance suit le mode de l'organisation.
-    const provenance = ctx.mode === 'demo' ? 'demo' : 'live';
-    const spec = DEMO_TASK_CATALOG[input.kind];
-    const agent = await pickAgent(tx, orgId, spec.departmentId, input.agentId);
-
-    const taskId = randomUUID();
-    const correlationId = randomUUID();
-    const row = await tx.task.create({
-      data: {
-        id: taskId,
-        orgId,
-        kind: input.kind,
-        title: spec.title,
-        description: spec.description,
-        status: 'queued',
-        agentId: agent.id,
-        requesterType: input.requester.kind,
-        requesterId: input.requester.id,
-        correlationId,
-        provenance,
-        idempotencyKey: input.idempotencyKey ?? null,
-        createdAt: now,
-      },
-    });
-    if (agent.activity === 'idle') {
-      await tx.agent.update({ where: { id: agent.id }, data: { activity: 'queued' } });
-    }
-    if (input.idempotencyKey) {
-      await tx.idempotencyKey.create({
-        data: {
-          orgId,
-          key: input.idempotencyKey,
-          operation: 'create_task',
-          responseRef: taskId,
-          expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
-        },
-      });
-    }
-    ctx.emit({
-      ...base,
-      type: 'task.created',
-      aggregateType: 'task',
-      aggregateId: taskId,
-      aggregateVersion: 1,
-      correlationId,
-      causationId: null,
-      actor: input.requester,
-      provenance,
-      payload: { taskId, agentId: agent.id, kind: input.kind, title: spec.title },
-    });
-    return { task: taskView(row), created: true };
-  });
+  const { result } = await withOrgTx(db, input.orgId, now, (ctx) => createTaskInTx(ctx, input));
   return result;
 }
 
-async function pickAgent(tx: Tx, orgId: string, departmentId: string, agentId?: string) {
+/**
+ * Cœur transactionnel de la création de tâche, réutilisable dans une autre mutation
+ * (délégation décidée en réunion). Règles de délégation (docs/04 §6) : profondeur ≤ 3,
+ * ≤ 5 sous-tâches par tâche parente, aucun cycle d'agents (A→B→A), destinataire actif.
+ */
+export async function createTaskInTx(
+  ctx: OrgTxContext,
+  input: Omit<CreateTaskInput, 'orgId' | 'now'>,
+): Promise<{ task: TaskView; created: boolean }> {
+  const { tx, orgId, now } = ctx;
+  if (input.idempotencyKey) {
+    const prior = await tx.idempotencyKey.findUnique({
+      where: {
+        orgId_key_operation: { orgId, key: input.idempotencyKey, operation: 'create_task' },
+      },
+    });
+    if (prior) {
+      const task = await tx.task.findUniqueOrThrow({ where: { id: prior.responseRef } });
+      return { task: taskView(task), created: false };
+    }
+  }
+  // En live, les scénarios du catalogue s'exécutent avec un vrai modèle mais des outils
+  // démo (mode « hybride », signalé) : la provenance suit le mode de l'organisation.
+  const provenance = ctx.mode === 'demo' ? 'demo' : 'live';
+  const spec = DEMO_TASK_CATALOG[input.kind];
+  const agent = await pickAgent(tx, orgId, spec.departmentId, input.agentId, {
+    toolId: spec.toolId,
+    action: spec.action,
+  });
+
+  let depth = 0;
+  let correlationId: string = randomUUID();
+  if (input.parentTaskId) {
+    const parent = await tx.task.findFirst({ where: { id: input.parentTaskId, orgId } });
+    if (!parent) throw new DomainError('NOT_FOUND', 'Tâche parente introuvable');
+    depth = parent.depth + 1;
+    if (depth > DELEGATION_LIMITS.maxDepth) {
+      throw new DomainError(
+        'POLICY_DENIED',
+        `Profondeur de délégation > ${DELEGATION_LIMITS.maxDepth}`,
+      );
+    }
+    const siblings = await tx.task.count({ where: { orgId, parentTaskId: parent.id } });
+    if (siblings >= DELEGATION_LIMITS.maxPerRun) {
+      throw new DomainError(
+        'POLICY_DENIED',
+        `Plus de ${DELEGATION_LIMITS.maxPerRun} délégations pour cette tâche`,
+      );
+    }
+    // Cycle : le destinataire ne doit pas apparaître dans la chaîne des ancêtres.
+    let cursor: typeof parent | null = parent;
+    while (cursor) {
+      if (cursor.agentId === agent.id) {
+        throw new DomainError(
+          'CONFLICT',
+          `Délégation circulaire refusée (${agent.id} est déjà dans la chaîne)`,
+        );
+      }
+      cursor = cursor.parentTaskId
+        ? await tx.task.findFirst({ where: { id: cursor.parentTaskId, orgId } })
+        : null;
+    }
+    correlationId = parent.correlationId;
+  }
+
+  const taskId = randomUUID();
+  const row = await tx.task.create({
+    data: {
+      id: taskId,
+      orgId,
+      kind: input.kind,
+      title: spec.title,
+      description: spec.description,
+      status: 'queued',
+      agentId: agent.id,
+      requesterType: input.requester.kind,
+      requesterId: input.requester.id,
+      correlationId,
+      provenance,
+      idempotencyKey: input.idempotencyKey ?? null,
+      createdAt: now,
+      parentTaskId: input.parentTaskId ?? null,
+      depth,
+    },
+  });
+  if (agent.activity === 'idle') {
+    await tx.agent.update({ where: { id: agent.id }, data: { activity: 'queued' } });
+  }
+  if (input.idempotencyKey) {
+    await tx.idempotencyKey.create({
+      data: {
+        orgId,
+        key: input.idempotencyKey,
+        operation: 'create_task',
+        responseRef: taskId,
+        expiresAt: new Date(now.getTime() + IDEMPOTENCY_TTL_MS),
+      },
+    });
+  }
+  ctx.emit({
+    ...base,
+    type: 'task.created',
+    aggregateType: 'task',
+    aggregateId: taskId,
+    aggregateVersion: 1,
+    correlationId,
+    causationId: input.causationId ?? null,
+    actor: input.requester,
+    provenance,
+    payload: {
+      taskId,
+      agentId: agent.id,
+      kind: input.kind,
+      title: spec.title,
+      parentTaskId: input.parentTaskId ?? null,
+      depth,
+    },
+  });
+  return { task: taskView(row), created: true };
+}
+
+async function pickAgent(
+  tx: Tx,
+  orgId: string,
+  departmentId: string,
+  agentId?: string,
+  need?: { toolId: string; action: string },
+) {
   if (agentId) {
     const agent = await tx.agent.findFirst({ where: { id: agentId, orgId, deletedAt: null } });
     if (!agent) throw new DomainError('NOT_FOUND', `Agent ${agentId} introuvable`);
@@ -115,12 +181,20 @@ async function pickAgent(tx: Tx, orgId: string, departmentId: string, agentId?: 
     where: { orgId, department: { roomId: departmentId }, status: 'active', deletedAt: null },
     include: {
       _count: { select: { tasks: { where: { status: { in: ['queued', 'running'] } } } } },
+      grants: true,
     },
     orderBy: { id: 'asc' },
   });
+  // Priorité aux agents explicitement autorisés pour l'outil requis (sinon la gateway refusera).
+  const granted = need
+    ? candidates.filter((c) =>
+        c.grants.some((g) => g.toolId === need.toolId && g.actions.includes(need.action)),
+      )
+    : candidates;
+  const pool = granted.length > 0 ? granted : candidates;
   // Agent le moins chargé, puis le moins récemment occupé, puis id (déterministe).
   const ended = (d: Date | null): number => d?.getTime() ?? 0;
-  const best = [...candidates].sort(
+  const best = [...pool].sort(
     (a, b) =>
       a._count.tasks - b._count.tasks ||
       ended(a.lastTaskEndedAt) - ended(b.lastTaskEndedAt) ||
@@ -150,7 +224,11 @@ export async function startNextTask(
     const org = await tx.organization.findUniqueOrThrow({ where: { id: orgId } });
     if (org.killSwitch) return null;
     const task = await tx.task.findFirst({
-      where: { orgId, status: 'queued', agent: { status: 'active', currentTaskId: null } },
+      where: {
+        orgId,
+        status: 'queued',
+        agent: { status: 'active', currentTaskId: null, activity: { not: 'in_meeting' } },
+      },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       include: { agent: true },
     });

@@ -90,6 +90,9 @@ export function useHq() {
           if (r.outcome === 'applied' && live.current && e.type === 'agent.created') {
             toast({ text: `Nouvel agent : ${e.payload.name} rejoint l'équipe`, tone: 'info' });
           }
+          if (r.outcome === 'applied' && live.current && e.type === 'approval.requested') {
+            toast({ text: 'Nouvelle demande de validation', tone: 'info' });
+          }
           if (r.outcome === 'applied' && live.current && e.type === 'task.blocked') {
             toast({ text: `Tâche bloquée : ${e.payload.reasonCode}`, tone: 'danger' });
           }
@@ -184,5 +187,26 @@ export function useHq() {
     });
   }, []);
 
-  return { world, connection, error, toasts, now, createTask, toast, setSystemPaused };
+  const decideApproval = useCallback(
+    async (approvalId: string, decision: 'approve' | 'reject', reason: string): Promise<void> => {
+      await api(`/v1/approvals/${approvalId}/decide`, {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({ decision, reason }),
+      });
+    },
+    [],
+  );
+
+  return {
+    world,
+    connection,
+    error,
+    toasts,
+    now,
+    createTask,
+    toast,
+    setSystemPaused,
+    decideApproval,
+  };
 }

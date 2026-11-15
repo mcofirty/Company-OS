@@ -82,6 +82,10 @@ export const DEMO_ADAPTERS: ToolAdapter[] = [
   demoAdapter('email', 'draft_email', ref('ticketRef'), 2600, (i) => ({
     summary: `Brouillon de réponse préparé pour ${i['ticketRef']} (non envoyé).`,
   })),
+  // Écriture externe simulée : n'est jamais atteinte sans validation humaine (gateway).
+  demoAdapter('email', 'send_email', ref('ticketRef'), 1800, (i) => ({
+    summary: `Email simulé envoyé pour ${i['ticketRef']} (démo : aucun envoi réel).`,
+  })),
   demoAdapter('analytics', 'query_metrics', ref('metric'), 2400, (i) => ({
     summary: `Métrique ${i['metric']} consolidée (données fictives).`,
   })),

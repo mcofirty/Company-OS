@@ -5,6 +5,9 @@ import {
   AgentStatusSchema,
   InvocationStatusSchema,
   ModeSchema,
+  ApprovalKindSchema,
+  ApprovalStatusSchema,
+  MeetingStatusSchema,
   ProvenanceSchema,
   TaskKindSchema,
   TaskStatusSchema,
@@ -53,6 +56,8 @@ export const TaskViewSchema = z.object({
   resultSummary: z.string().nullable(),
   failureCode: z.string().nullable(),
   provenance: ProvenanceSchema,
+  parentTaskId: z.string().nullable(),
+  depth: z.number().int(),
 });
 export type TaskView = z.infer<typeof TaskViewSchema>;
 
@@ -95,6 +100,42 @@ export const ToolViewSchema = z.object({
 });
 export type ToolView = z.infer<typeof ToolViewSchema>;
 
+export const ApprovalViewSchema = z.object({
+  id: z.string(),
+  kind: ApprovalKindSchema,
+  status: ApprovalStatusSchema,
+  agentId: z.string(),
+  taskId: z.string().nullable(),
+  invocationId: z.string().nullable(),
+  toolId: z.string().nullable(),
+  action: z.string().nullable(),
+  riskReason: z.string(),
+  safePreview: z.record(z.string(), z.unknown()),
+  requestedAt: z.iso.datetime(),
+  deadlineAt: z.iso.datetime(),
+  reviewedBy: z.string().nullable(),
+  reviewedAt: z.iso.datetime().nullable(),
+  decisionReason: z.string().nullable(),
+});
+export type ApprovalView = z.infer<typeof ApprovalViewSchema>;
+
+export const MeetingViewSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  status: MeetingStatusSchema,
+  roomId: z.string(),
+  initiatorAgentId: z.string(),
+  taskId: z.string().nullable(),
+  participantAgentIds: z.array(z.string()),
+  seats: z.record(z.string(), z.string()),
+  startedAt: z.iso.datetime().nullable(),
+  endedAt: z.iso.datetime().nullable(),
+  summary: z.string().nullable(),
+  decisions: z.array(z.object({ decision: z.string(), ownerAgentId: z.string() })),
+  taskIdsCreated: z.array(z.string()),
+});
+export type MeetingView = z.infer<typeof MeetingViewSchema>;
+
 export const WorldSnapshotSchema = z.object({
   org: z.object({ id: z.uuid(), name: z.string(), mode: ModeSchema }),
   lastSeq: z.number().int().min(0),
@@ -127,9 +168,19 @@ export const WorldSnapshotSchema = z.object({
     }),
   ),
   system: z.object({ paused: z.boolean() }),
+  /** Approbations en attente + dernières décidées (bornées). */
+  approvals: z.array(ApprovalViewSchema),
+  /** Réunions en cours + dernières terminées (bornées). */
+  meetings: z.array(MeetingViewSchema),
   /** Derniers événements (plus récents en premier). */
   timeline: z.array(DomainEventSchema),
 });
 export type WorldSnapshot = z.infer<typeof WorldSnapshotSchema>;
 
-export const LIMITS = { tasks: 60, invocations: 60, timeline: 80 } as const;
+export const LIMITS = {
+  tasks: 60,
+  invocations: 60,
+  timeline: 80,
+  approvals: 30,
+  meetings: 20,
+} as const;

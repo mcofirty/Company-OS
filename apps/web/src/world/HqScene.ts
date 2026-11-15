@@ -3,6 +3,7 @@ import type { AgentView, InvocationView, WorldSnapshot } from '@company-os/contr
 import {
   departmentPresence,
   findPath,
+  meetingSeats,
   HQ_MAP,
   visualIntent,
   type Anchor,
@@ -33,7 +34,9 @@ export type Selection =
   | { kind: 'department'; id: string }
   | { kind: 'task'; id: string }
   | { kind: 'invocation'; id: string }
-  | { kind: 'tool'; id: string };
+  | { kind: 'tool'; id: string }
+  | { kind: 'approval'; id: string }
+  | { kind: 'meeting'; id: string };
 
 export interface HqSceneCallbacks {
   onSelect: (sel: Selection | null) => void;
@@ -498,8 +501,10 @@ export class HqScene extends Phaser.Scene {
     }
     const toolColor = new Map(world.tools.map((t) => [t.id, t]));
 
+    const seats = meetingSeats(world.meetings);
+    this.updateMeetingBubble(world);
     world.agents.forEach((agent, index) => {
-      const intent = visualIntent(agent, index, now);
+      const intent = visualIntent(agent, index, now, HQ_MAP, seats.get(agent.id) ?? null);
       let av = this.avatars.get(agent.id);
       if (!av) av = this.spawn(agent, intent, animateSpawn);
       av.agent = agent;
@@ -546,7 +551,7 @@ export class HqScene extends Phaser.Scene {
     // Badges de département « X/Y au poste »
     for (const room of HQ_MAP.rooms) {
       if (room.kind !== 'department') continue;
-      const { atDesk, total } = departmentPresence(world.agents, room.id, now);
+      const { atDesk, total } = departmentPresence(world.agents, room.id, now, seats);
       const l = this.labels.get(room.id);
       const txt = `${room.label}  ·  ${atDesk}/${total} au poste`;
       if (l && l.text.text !== txt) {
@@ -705,6 +710,12 @@ export class HqScene extends Phaser.Scene {
       const t = tools.get(inv.toolId);
       label = t?.code ?? inv.toolId;
       color = t ? hex(t.color) : color;
+    } else if (av.agent.activity === 'waiting_approval') {
+      label = 'VALIDATION';
+      color = 0xd49c30;
+    } else if (av.agent.activity === 'in_meeting') {
+      label = 'RÉUNION';
+      color = 0x7c60c9;
     } else if (av.agent.activity === 'blocked') {
       label = '! BLOQUÉ';
       color = 0xce4b61;
@@ -777,6 +788,41 @@ export class HqScene extends Phaser.Scene {
         this.applyPose(av);
       },
     });
+  }
+
+  private meetingBubble: Phaser.GameObjects.Container | null = null;
+
+  /** Bulle de sujet au-dessus de la table pendant une réunion réelle (cliquable). */
+  private updateMeetingBubble(world: WorldSnapshot): void {
+    const m = world.meetings.find((x) => x.status === 'in_progress');
+    if (!m) {
+      this.meetingBubble?.destroy();
+      this.meetingBubble = null;
+      return;
+    }
+    if (this.meetingBubble?.getData('id') === m.id) return;
+    this.meetingBubble?.destroy();
+    const c = this.P(HQ_MAP.anchors['meeting-seat-01']!.x + 2, 12.5);
+    const text = this.add
+      .text(0, 0, `◎ ${m.topic}`, {
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '18px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+        padding: { x: 10, y: 6 },
+      })
+      .setOrigin(0.5, 1)
+      .setResolution(2);
+    const b = text.getBounds();
+    const bg = this.add.graphics();
+    bg.fillStyle(0x7c60c9, 0.95);
+    bg.fillRoundedRect(-b.width / 2, -b.height, b.width, b.height, 10);
+    this.meetingBubble = this.add
+      .container(c.x, c.y - 120, [bg, text])
+      .setDepth(7000)
+      .setData('id', m.id);
+    text.setInteractive({ useHandCursor: true });
+    text.on('pointerup', () => this.cb.onSelect({ kind: 'meeting', id: m.id }));
   }
 
   /** Hook e2e (hors production) : position écran (canvas) d'un avatar. */

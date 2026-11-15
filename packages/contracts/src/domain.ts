@@ -115,6 +115,10 @@ export const TaskKindSchema = z.enum([
   'screen_candidates',
   'answer_ticket',
   'weekly_review',
+  'send_followup',
+  'propose_hire',
+  'pricing_review',
+  'prepare_offer',
 ]);
 export type TaskKind = z.infer<typeof TaskKindSchema>;
 
@@ -147,3 +151,27 @@ export const ErrorCodeSchema = z.enum([
   'INTERNAL_ERROR',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCodeSchema>;
+
+export const ApprovalStatusSchema = z.enum([
+  'pending',
+  'approved',
+  'rejected',
+  'expired',
+  'cancelled',
+]);
+export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>;
+export const ApprovalKindSchema = z.enum(['tool_action', 'agent_hire']);
+export type ApprovalKind = z.infer<typeof ApprovalKindSchema>;
+
+export const MeetingStatusSchema = z.enum([
+  'proposed',
+  'scheduled',
+  'in_progress',
+  'completed',
+  'cancelled',
+  'failed',
+]);
+export type MeetingStatus = z.infer<typeof MeetingStatusSchema>;
+
+/** Limites de délégation (docs/04 §6). */
+export const DELEGATION_LIMITS = { maxDepth: 3, maxPerRun: 5 } as const;

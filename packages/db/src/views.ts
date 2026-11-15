@@ -8,6 +8,11 @@ import {
   ToolActionKindSchema,
   ToolRiskSchema,
   ToolViewSchema,
+  ApprovalKindSchema,
+  ApprovalStatusSchema,
+  MeetingStatusSchema,
+  type ApprovalView,
+  type MeetingView,
   type AgentView,
   type InvocationView,
   type TaskView,
@@ -49,6 +54,51 @@ export function taskView(t: Prisma.TaskGetPayload<object>): TaskView {
     resultSummary: t.resultSummary,
     failureCode: t.failureCode,
     provenance: t.provenance,
+    parentTaskId: t.parentTaskId,
+    depth: t.depth,
+  };
+}
+
+export function approvalView(a: Prisma.ApprovalRequestGetPayload<object>): ApprovalView {
+  return {
+    id: a.id,
+    kind: ApprovalKindSchema.parse(a.kind),
+    status: ApprovalStatusSchema.parse(a.status),
+    agentId: a.agentId,
+    taskId: a.taskId,
+    invocationId: a.invocationId,
+    toolId: a.toolId,
+    action: a.action,
+    riskReason: a.riskReason,
+    safePreview: a.safePreview as Record<string, unknown>,
+    requestedAt: a.requestedAt.toISOString(),
+    deadlineAt: a.deadlineAt.toISOString(),
+    reviewedBy: a.reviewedBy,
+    reviewedAt: iso(a.reviewedAt),
+    decisionReason: a.decisionReason,
+  };
+}
+
+export function meetingView(
+  m: Prisma.MeetingGetPayload<{ include: { participants: true } }>,
+): MeetingView {
+  const ordered = [...m.participants].sort(
+    (x, y) => x.joinedAt.getTime() - y.joinedAt.getTime() || x.agentId.localeCompare(y.agentId),
+  );
+  return {
+    id: m.id,
+    topic: m.topic,
+    status: MeetingStatusSchema.parse(m.status),
+    roomId: m.roomId,
+    initiatorAgentId: m.initiatorAgentId,
+    taskId: m.taskId,
+    participantAgentIds: ordered.map((p) => p.agentId),
+    seats: Object.fromEntries(ordered.map((p) => [p.agentId, p.seatAnchor])),
+    startedAt: iso(m.startedAt),
+    endedAt: iso(m.endedAt),
+    summary: m.summary,
+    decisions: (m.decisions ?? []) as MeetingView['decisions'],
+    taskIdsCreated: m.taskIdsCreated,
   };
 }
 

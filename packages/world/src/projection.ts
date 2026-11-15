@@ -4,6 +4,8 @@ import {
   ACTIVE_INVOCATION_STATUSES,
   toolAction,
   type AgentView,
+  type ApprovalView,
+  type MeetingView,
   type DomainEvent,
   type InvocationView,
   type TaskView,
@@ -72,6 +74,8 @@ export function applyEvent(
         resultSummary: null,
         failureCode: null,
         provenance: e.provenance,
+        parentTaskId: p.parentTaskId,
+        depth: p.depth,
       };
       w = { ...w, tasks: trimTasks([task, ...w.tasks]) };
       w = patchAgent(w, p.agentId, (a) => (a.activity === 'idle' ? { activity: 'queued' } : {}));
@@ -116,6 +120,107 @@ export function applyEvent(
     case 'system.resumed':
       w = { ...w, system: { paused: false } };
       break;
+    case 'approval.requested': {
+      const p = e.payload;
+      const approval: ApprovalView = {
+        id: p.approvalId,
+        kind: p.kind,
+        status: 'pending',
+        agentId: p.agentId,
+        taskId: p.taskId,
+        invocationId: p.invocationId,
+        toolId: p.toolId,
+        action: p.action,
+        riskReason: p.riskReason,
+        safePreview: p.safePreview,
+        requestedAt: at,
+        deadlineAt: p.deadlineAt,
+        reviewedBy: null,
+        reviewedAt: null,
+        decisionReason: null,
+      };
+      w = { ...w, approvals: trimApprovals([approval, ...w.approvals]) };
+      if (p.invocationId) {
+        w = patchInvocation(w, p.invocationId, () => ({ status: 'waiting_approval' }));
+      }
+      if (p.kind === 'tool_action') {
+        w = patchAgent(w, p.agentId, () => ({ activity: 'waiting_approval' }));
+      }
+      break;
+    }
+    case 'approval.decided': {
+      const p = e.payload;
+      const before = w.approvals.find((a) => a.id === p.approvalId);
+      w = {
+        ...w,
+        approvals: trimApprovals(
+          w.approvals.map((a) =>
+            a.id === p.approvalId
+              ? {
+                  ...a,
+                  status: p.decision,
+                  reviewedBy: p.reviewerId,
+                  reviewedAt: at,
+                  decisionReason: p.reason,
+                }
+              : a,
+          ),
+        ),
+      };
+      if (before?.kind === 'tool_action') {
+        w = patchAgent(w, before.agentId, (a) =>
+          a.activity === 'waiting_approval' ? { activity: 'working' } : {},
+        );
+      }
+      break;
+    }
+    case 'meeting.started': {
+      const p = e.payload;
+      const meeting: MeetingView = {
+        id: p.meetingId,
+        topic: p.topic,
+        status: 'in_progress',
+        roomId: p.roomId,
+        initiatorAgentId: p.initiatorAgentId,
+        taskId: p.taskId,
+        participantAgentIds: p.participantAgentIds,
+        seats: p.seats,
+        startedAt: at,
+        endedAt: null,
+        summary: null,
+        decisions: [],
+        taskIdsCreated: [],
+      };
+      w = { ...w, meetings: trimMeetings([meeting, ...w.meetings]) };
+      for (const id of p.participantAgentIds)
+        w = patchAgent(w, id, () => ({ activity: 'in_meeting' }));
+      break;
+    }
+    case 'meeting.completed': {
+      const p = e.payload;
+      const m = w.meetings.find((x) => x.id === p.meetingId);
+      w = {
+        ...w,
+        meetings: trimMeetings(
+          w.meetings.map((x) =>
+            x.id === p.meetingId
+              ? {
+                  ...x,
+                  status: 'completed',
+                  endedAt: at,
+                  summary: p.summary,
+                  decisions: p.decisions,
+                  taskIdsCreated: p.taskIdsCreated,
+                }
+              : x,
+          ),
+        ),
+      };
+      for (const id of m?.participantAgentIds ?? []) {
+        w = patchAgent(w, id, (a) => ({ activity: activityAtRest(w.tasks, a) }));
+      }
+      break;
+    }
     case 'tool.invocation.requested': {
       const p = e.payload;
       const inv: InvocationView = {
@@ -217,6 +322,18 @@ export function applyEvents(world: WorldSnapshot, events: readonly DomainEvent[]
 }
 
 /** Règle commune serveur/client : activité d'un agent qui vient de terminer une tâche. */
+/**
+ * Règle commune serveur/client : activité d'un agent libéré (fin de réunion).
+ * Tâche en cours -> working ; sinon tâche en file -> queued ; sinon idle.
+ */
+export function activityAtRest(
+  tasks: readonly Pick<TaskView, 'agentId' | 'status'>[],
+  agent: Pick<AgentView, 'id' | 'currentTaskId'>,
+): AgentView['activity'] {
+  if (agent.currentTaskId) return 'working';
+  return tasks.some((t) => t.agentId === agent.id && t.status === 'queued') ? 'queued' : 'idle';
+}
+
 export function activityAfterTask(
   tasks: readonly Pick<TaskView, 'agentId' | 'status'>[],
   agentId: string,
@@ -258,6 +375,29 @@ export function trimTasks(tasks: TaskView[]): TaskView[] {
     (a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
   );
 }
+export function trimApprovals(list: ApprovalView[]): ApprovalView[] {
+  const open = list.filter((a) => a.status === 'pending');
+  const done = list
+    .filter((a) => a.status !== 'pending')
+    .sort(
+      (a, b) => (b.reviewedAt ?? '').localeCompare(a.reviewedAt ?? '') || b.id.localeCompare(a.id),
+    )
+    .slice(0, Math.max(0, LIMITS.approvals - open.length));
+  return [...open, ...done].sort(
+    (a, b) => b.requestedAt.localeCompare(a.requestedAt) || b.id.localeCompare(a.id),
+  );
+}
+export function trimMeetings(list: MeetingView[]): MeetingView[] {
+  const open = list.filter((m) => m.status === 'in_progress');
+  const done = list
+    .filter((m) => m.status !== 'in_progress')
+    .sort((a, b) => (b.endedAt ?? '').localeCompare(a.endedAt ?? '') || b.id.localeCompare(a.id))
+    .slice(0, Math.max(0, LIMITS.meetings - open.length));
+  return [...open, ...done].sort(
+    (a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? '') || b.id.localeCompare(a.id),
+  );
+}
+
 export function trimInvocations(invs: InvocationView[]): InvocationView[] {
   const active = invs.filter(isActiveInv);
   const done = invs
@@ -301,6 +441,7 @@ export interface Metrics {
   activeInvocations: number;
   activeToolIds: string[];
   pendingApprovals: number;
+  activeMeetings: number;
   /** Coût LLM cumulé (micro-dollars) et nature (estimé depuis la grille tarifaire). */
   llmCostMicros: number;
   llmCalls: number;
@@ -319,7 +460,8 @@ export function computeMetrics(w: WorldSnapshot): Metrics {
     tasksBlocked: w.tasks.filter((t) => t.status === 'blocked').length,
     activeInvocations: active.length,
     activeToolIds: [...new Set(active.map((i) => i.toolId))],
-    pendingApprovals: 0,
+    pendingApprovals: w.approvals.filter((a) => a.status === 'pending').length,
+    activeMeetings: w.meetings.filter((m) => m.status === 'in_progress').length,
     llmCostMicros: w.costs.costMicros,
     llmCalls: w.costs.llmCalls,
     costEstimated: w.costs.estimated,

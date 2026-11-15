@@ -51,6 +51,8 @@ const empty: WorldSnapshot = {
   costs: { llmCalls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0, estimated: false },
   budgets: [],
   system: { paused: false },
+  approvals: [],
+  meetings: [],
   timeline: [],
 };
 
@@ -93,7 +95,14 @@ const cycle: DomainEvent[] = [
       aggregateType: 'task',
       aggregateId: T1,
       aggregateVersion: 1,
-      payload: { taskId: T1, agentId: 'sales-01', kind: 'qualify_lead', title: 'Qualifier' },
+      payload: {
+        taskId: T1,
+        agentId: 'sales-01',
+        kind: 'qualify_lead',
+        title: 'Qualifier',
+        parentTaskId: null,
+        depth: 0,
+      },
     },
     3,
   ),

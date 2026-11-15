@@ -77,7 +77,13 @@ export function Topbar({
           sub={m ? `${m.activeToolIds.length} outil(s)` : ''}
           testId="kpi-tools"
         />
-        <Kpi label="Approbations" value={m?.pendingApprovals} sub="en attente" />
+        <Kpi
+          label="Approbations"
+          value={m?.pendingApprovals}
+          sub={m ? `en attente · ${m.activeMeetings} réunion(s)` : ''}
+          tone={m && m.pendingApprovals > 0 ? 'warning' : undefined}
+          testId="kpi-approvals"
+        />
         <Kpi
           label="Coût IA"
           value={m ? usd(m.llmCostMicros) : undefined}

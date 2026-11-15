@@ -1,6 +1,8 @@
 import { toolAction, type InvocationView } from '@company-os/contracts';
 import {
   completeInvocation,
+  invocationView,
+  requestInvocationApproval,
   hasGrant,
   rejectInvocation,
   requestInvocation,
@@ -8,7 +10,8 @@ import {
   type Db,
 } from '@company-os/db';
 import { redactJson, redactText } from '@company-os/policies';
-import { findAdapter, ToolError } from './adapters';
+import { findAdapter, ToolError, type ToolAdapter } from './adapters';
+import { findPlatformAdapter } from './platform';
 
 export interface GatewayOptions {
   /** Facteur appliqué aux latences simulées (0 en test). */
@@ -29,6 +32,8 @@ export interface InvokeRequest {
   /** Clé logique : la même action d'un même run n'est jamais exécutée deux fois. */
   idempotencyKey: string;
   causationId: string | null;
+  /** Reprise après validation humaine d'une action externe. */
+  approvalId?: string;
 }
 
 export type InvokeResult =
@@ -40,7 +45,13 @@ export type InvokeResult =
       lastEventId: string;
     }
   | { status: 'failed'; invocation: InvocationView; errorCode: string; lastEventId: string }
-  | { status: 'rejected'; invocation: InvocationView; reasonCode: string; lastEventId: string };
+  | { status: 'rejected'; invocation: InvocationView; reasonCode: string; lastEventId: string }
+  | {
+      status: 'waiting_approval';
+      invocation: InvocationView;
+      approvalId: string;
+      lastEventId: string;
+    };
 
 /**
  * Point de passage unique de tous les appels d'outils (docs/05 §2) : validation Zod,
@@ -67,7 +78,8 @@ export class ToolGateway {
 
   async invoke(req: InvokeRequest): Promise<InvokeResult> {
     const spec = toolAction(req.toolId, req.action);
-    const adapter = findAdapter(req.toolId, req.action);
+    const platform = findPlatformAdapter(req.toolId, req.action);
+    const adapter = platform ?? findAdapter(req.toolId, req.action);
     const parsed = adapter?.inputSchema.safeParse(req.input);
 
     const requested = await requestInvocation(this.db, {
@@ -82,7 +94,10 @@ export class ToolGateway {
     });
     let invocation = requested.invocation;
     let lastEventId = requested.eventId ?? req.causationId ?? '';
-    if (requested.existing && !['requested', 'authorized', 'running'].includes(invocation.status)) {
+    if (
+      requested.existing &&
+      !['requested', 'authorized', 'running', 'waiting_approval'].includes(invocation.status)
+    ) {
       // Déjà terminée (reprise après crash) : on ne ré-exécute pas.
       return this.fromTerminal(invocation, lastEventId);
     }
@@ -105,10 +120,46 @@ export class ToolGateway {
     if (!(await hasGrant(this.db, req.agentId, req.toolId, req.action)))
       return reject('POLICY_DENIED');
     if (spec.risk === 'high_impact') return reject('POLICY_DENIED');
-    // Pas encore de circuit d'approbation (M3) : toute écriture externe est refusée.
-    if (spec.risk === 'external_write') return reject('APPROVAL_REQUIRED');
     if (!adapter) return reject('TOOL_UNAVAILABLE');
     if (!parsed?.success) return reject('VALIDATION_ERROR');
+    // Écriture externe : validation humaine obligatoire avant toute exécution (docs/05 §3).
+    if (spec.risk === 'external_write') {
+      const pending = await this.db.approvalRequest.findUnique({
+        where: { invocationId: invocation.id },
+      });
+      if (!pending) {
+        const r = await requestInvocationApproval(this.db, {
+          orgId: req.orgId,
+          invocationId: invocation.id,
+          riskReason: `Action externe « ${spec.label} » (${req.toolId}.${req.action}) : validation humaine requise.`,
+          safePreview: {
+            tool: req.toolId,
+            action: req.action,
+            ...Object.fromEntries(
+              Object.entries(redactJson(req.input)).map(([k, v]) => [k, String(v).slice(0, 300)]),
+            ),
+            mode: org.mode === 'demo' ? 'démo : envoi simulé' : 'live : outil démo (hybride)',
+          },
+          causationId: lastEventId || null,
+          now: this.now(),
+        });
+        const inv = await this.db.toolInvocation.findUniqueOrThrow({
+          where: { id: invocation.id },
+        });
+        return {
+          status: 'waiting_approval',
+          invocation: invocationView(inv),
+          approvalId: r.approval.id,
+          lastEventId: r.eventId ?? lastEventId,
+        };
+      }
+      if (pending.status === 'pending' || req.approvalId !== pending.id) {
+        return { status: 'waiting_approval', invocation, approvalId: pending.id, lastEventId };
+      }
+      // Revérification au moment de l'exécution (TOCTOU) : grant, kill switch et mode
+      // viennent d'être réévalués ci-dessus ; la décision doit être « approved ».
+      if (pending.status !== 'approved') return reject('APPROVAL_REJECTED');
+    }
     // Échec fermé : en démo, seul un adaptateur démo peut s'exécuter.
     if (org.mode === 'demo' && adapter.kind !== 'demo') return reject('POLICY_DENIED');
 
@@ -126,8 +177,28 @@ export class ToolGateway {
       try {
         await this.sleep(Math.round(adapter.simulatedLatencyMs * this.scale));
         const output = await withTimeout(
-          adapter.invoke({ mode: org.mode, invocationId: invocation.id, attempt }, parsed.data),
-          this.timeoutMs,
+          platform
+            ? platform.invoke(
+                {
+                  db: this.db,
+                  orgId: req.orgId,
+                  runId: req.runId,
+                  agentId: req.agentId,
+                  taskId: invocation.taskId,
+                  invocationId: invocation.id,
+                  correlationId: invocation.correlationId,
+                  causationId: lastEventId || null,
+                  mode: org.mode,
+                  sleep: this.sleep,
+                  latencyScale: this.scale,
+                },
+                parsed.data as Record<string, string>,
+              )
+            : (adapter as ToolAdapter).invoke(
+                { mode: org.mode, invocationId: invocation.id, attempt },
+                parsed.data,
+              ),
+          platform ? this.timeoutMs + 20_000 : this.timeoutMs,
         );
         const parsedOut = adapter.outputSchema.parse(output);
         // Rédaction avant tout stockage (UI/logs) et avant renvoi au modèle.

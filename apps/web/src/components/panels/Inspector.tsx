@@ -25,6 +25,7 @@ import {
 } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
+import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 
 interface Props {
   world: WorldSnapshot;
@@ -33,6 +34,7 @@ interface Props {
   onSelect: (s: Selection | null) => void;
   onCreateTask: (kind: TaskKind, agentId?: string) => Promise<void>;
   onFocus: (agentId: string) => void;
+  onDecide: DecideFn;
 }
 
 /** Inspecteur universel (docs/01 §6) : provenance, état réel, horodatages, identifiants. */
@@ -52,6 +54,17 @@ export function Inspector(p: Props) {
       {selection.kind === 'invocation' && <InvocationInspector {...p} id={selection.id} />}
       {selection.kind === 'department' && <DepartmentInspector {...p} id={selection.id} />}
       {selection.kind === 'tool' && <ToolInspector {...p} id={selection.id} />}
+      {selection.kind === 'approval' && (
+        <ApprovalInspector
+          world={p.world}
+          id={selection.id}
+          onSelect={p.onSelect}
+          onDecide={p.onDecide}
+        />
+      )}
+      {selection.kind === 'meeting' && (
+        <MeetingInspector world={p.world} id={selection.id} onSelect={p.onSelect} />
+      )}
     </aside>
   );
 }
@@ -333,6 +346,16 @@ function TaskInspector({ world, id, onSelect }: Props & { id: string }) {
           ['Terminée', task.endedAt ? time(task.endedAt) : '—'],
           ['Résultat', task.resultSummary ?? '—'],
           ['Erreur', task.failureCode ?? '—'],
+          [
+            'Délégation',
+            task.parentTaskId ? (
+              <a key="p" onClick={() => onSelect({ kind: 'task', id: task.parentTaskId! })}>
+                tâche parente · profondeur {task.depth}
+              </a>
+            ) : (
+              'tâche racine'
+            ),
+          ],
           ['Task ID', <code key="t">{task.id}</code>],
           ['Correlation', <code key="c">{task.correlationId}</code>],
         ]}
