@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: companyos
+          POSTGRES_PASSWORD: companyos
+          POSTGRES_DB: companyos
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U companyos" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://companyos:companyos@localhost:5432/companyos
+      DATABASE_URL_TEST: postgresql://companyos:companyos@localhost:5432/companyos_test
+      APP_MODE: demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: cp .env.example .env
+      - run: pnpm install --frozen-lockfile
+      - run: PGPASSWORD=companyos psql -h localhost -U companyos -c "CREATE DATABASE companyos_test"
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: checks
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: companyos
+          POSTGRES_PASSWORD: companyos
+          POSTGRES_DB: companyos
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U companyos" --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: cp .env.example .env
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm db:migrate && pnpm db:seed
+      - run: pnpm e2e

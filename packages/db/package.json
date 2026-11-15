@@ -10,7 +10,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate deploy && prisma generate",
     "migrate:dev": "prisma migrate dev",
-    "seed": "tsx src/seed.ts",
+    "seed": "tsx src/seed-cli.ts",
     "reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
     "typecheck": "tsc --noEmit",

@@ -1,25 +1,36 @@
 import path from 'node:path';
 import { config } from 'dotenv';
+import { z } from 'zod';
 import { createDb } from '@company-os/db';
 import { buildApp } from './app';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
 
-const databaseUrl = process.env.DATABASE_URL;
-if (!databaseUrl) throw new Error('DATABASE_URL manquant');
-const port = Number(process.env.API_PORT ?? 4000);
-const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:3000';
+const Env = z.object({
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  APP_MODE: z.enum(['demo', 'live']).default('demo'),
+  DATABASE_URL: z.string().min(1),
+  API_PORT: z.coerce.number().int().default(4000),
+  API_HOST: z.string().default('127.0.0.1'),
+  WEB_ORIGIN: z.string().default('http://localhost:3000'),
+});
+const env = Env.parse(process.env);
+if (env.APP_MODE === 'live') throw new Error('Mode live non implémenté (M2) : refus de démarrer.');
 
-const db = createDb(databaseUrl);
-const { app, relayOnce } = await buildApp({ db, webOrigin, logger: true });
+const db = createDb(env.DATABASE_URL);
+const { app, relayOnce } = await buildApp({
+  db,
+  corsOrigin: env.WEB_ORIGIN,
+  auth: { allowDevPrincipal: env.NODE_ENV !== 'production' && env.APP_MODE === 'demo' },
+  logger: true,
+});
 
-// Relais outbox -> Socket.IO. Polling court (M0) ; LISTEN/NOTIFY envisageable plus tard.
+// Relais outbox -> Socket.IO (polling court ; LISTEN/NOTIFY possible plus tard).
 let stopped = false;
-const loop = async (): Promise<void> => {
+const relayLoop = async (): Promise<void> => {
   while (!stopped) {
     try {
-      const n = await relayOnce();
-      if (n === 0) await new Promise((r) => setTimeout(r, 200));
+      if ((await relayOnce()) === 0) await new Promise((r) => setTimeout(r, 150));
     } catch (err) {
       app.log.error({ err }, 'outbox relay failed, retrying');
       await new Promise((r) => setTimeout(r, 1000));
@@ -27,8 +38,8 @@ const loop = async (): Promise<void> => {
   }
 };
 
-await app.listen({ port, host: '0.0.0.0' });
-void loop();
+await app.listen({ port: env.API_PORT, host: env.API_HOST });
+void relayLoop();
 
 const shutdown = async (): Promise<void> => {
   stopped = true;

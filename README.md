@@ -54,26 +54,33 @@ cp .env.example .env
 pnpm install
 docker compose up -d --wait
 pnpm db:migrate && pnpm db:seed
-pnpm dev            # API :4000, worker demo, web :3000
+pnpm dev            # API http://localhost:4000 · worker démo · web http://localhost:3000
 ```
 
-Ouvrir http://localhost:3000. Le badge **MODE DÉMO** signale une simulation déterministe, sans aucun appel externe.
+Le badge **DEMO** signale une simulation déterministe côté serveur : aucun appel LLM, e-mail ou SaaS externe.
+Contrôles : `curl localhost:4000/health/ready`, `curl localhost:4000/v1/bootstrap`.
 
 ## Vérifications
 
 ```bash
-pnpm lint && pnpm typecheck && pnpm test   # tests unitaires + intégration (base companyos_test)
-pnpm e2e                                    # Playwright (lance pnpm dev si besoin)
+pnpm lint && pnpm typecheck
+pnpm test                 # unitaires + intégration (base companyos_test)
+pnpm test:contracts       # contrats Zod <-> specs/events.schema.json, projection
+pnpm test:integration     # PostgreSQL réel : DB, gateway, worker, API
+pnpm e2e                  # Playwright (lance pnpm dev si besoin)
 pnpm build
 ```
 
-## Structure
+## Code
 
-| Dossier              | Rôle                                                                |
-| -------------------- | ------------------------------------------------------------------- |
-| `packages/contracts` | Schémas Zod : événements, snapshot du monde, protocole Socket.IO    |
-| `packages/world`     | Projection pure événements → état du monde (idempotente)            |
-| `packages/db`        | Prisma/PostgreSQL : EventLog, outbox transactionnelle, état courant |
-| `apps/api`           | Fastify + Socket.IO : snapshot, rejeu, relais outbox → temps réel   |
-| `apps/worker`        | Simulateur demo déterministe (Temporal prévu, cf. DECISIONS)        |
-| `apps/web`           | Next.js + Phaser : QG isométrique, inspecteur, journal              |
+| Dossier              | Rôle                                                                        |
+| -------------------- | --------------------------------------------------------------------------- |
+| `packages/contracts` | Zod : enveloppe d'événements v1, payloads, snapshot, API, catalogues démo   |
+| `packages/world`     | Carte hq-v1, A*, réducteur idempotent, KPI, projection visuelle             |
+| `packages/db`        | Prisma/PostgreSQL : event_log + outbox, services métier, seed               |
+| `packages/tools`     | ToolGateway (politique, retries, timeout) + adaptateurs démo                |
+| `apps/api`           | Fastify `/v1` + Socket.IO (`events:resume`, `domain:event`), relais outbox |
+| `apps/worker`        | Exécution des tâches hors navigateur, reprise après crash, autopilote démo  |
+| `apps/web`           | Cockpit Next.js + monde Phaser isométrique                                  |
+
+État d'avancement et prochaines étapes : `docs/PROGRESS.md`. Décisions : `docs/DECISIONS.md`.

@@ -13,9 +13,10 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 } },
     },
   ],
-  // Démarre API + worker demo + web si non déjà lancés. Prérequis : docker compose up, db:migrate, db:seed.
+  // Démarre API + worker démo + web si besoin. Prérequis : docker compose up -d, pnpm db:migrate, pnpm db:seed.
   webServer: {
     command: 'pnpm dev',
+    env: { DEMO_AUTOPILOT: process.env.DEMO_AUTOPILOT ?? 'true' },
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 120_000,

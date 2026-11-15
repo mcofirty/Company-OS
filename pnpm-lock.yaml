@@ -8,6 +8,18 @@ importers:
 
   .:
     devDependencies:
+      '@company-os/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
+      '@company-os/db':
+        specifier: workspace:*
+        version: link:packages/db
+      '@company-os/tools':
+        specifier: workspace:*
+        version: link:packages/tools
+      '@company-os/world':
+        specifier: workspace:*
+        version: link:packages/world
       '@eslint/js':
         specifier: ^10.0.1
         version: 10.0.1(eslint@10.15.0(jiti@2.7.0))
@@ -53,6 +65,9 @@ importers:
       '@company-os/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@company-os/world':
+        specifier: workspace:*
+        version: link:../../packages/world
       '@fastify/cors':
         specifier: ^11.4.3
         version: 11.4.3
@@ -70,7 +85,7 @@ importers:
         version: 4.6.7
     devDependencies:
       socket.io-client:
-        specifier: ^4.8.4
+        specifier: '4'
         version: 4.8.4
 
   apps/web:
@@ -115,19 +130,28 @@ importers:
       '@company-os/db':
         specifier: workspace:*
         version: link:../../packages/db
-      dotenv:
-        specifier: ^18.0.10
-        version: 18.0.10
-    devDependencies:
+      '@company-os/tools':
+        specifier: workspace:*
+        version: link:../../packages/tools
       '@company-os/world':
         specifier: workspace:*
         version: link:../../packages/world
+      dotenv:
+        specifier: ^18.0.10
+        version: 18.0.10
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
 
   packages/contracts:
     dependencies:
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
 
   packages/db:
     dependencies:
@@ -157,11 +181,27 @@ importers:
         specifier: 7.10.1
         version: 7.10.1(@types/node@22.20.5)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
 
+  packages/tools:
+    dependencies:
+      '@company-os/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@company-os/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
+
   packages/world:
     dependencies:
       '@company-os/contracts':
         specifier: workspace:*
         version: link:../contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
 
 packages:
 

@@ -1,5 +1,5 @@
-import { HQ } from '../components/HQ';
+import { Cockpit } from '../components/Cockpit';
 
 export default function Page() {
-  return <HQ companyId="co_demo" />;
+  return <Cockpit />;
 }

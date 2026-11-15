@@ -1,120 +1,183 @@
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { io as connect, type Socket } from 'socket.io-client';
-import type {
-  ClientToServerEvents,
-  DomainEvent,
-  ServerToClientEvents,
-} from '@company-os/contracts';
 import {
-  appendEvents,
-  createDb,
-  DEMO_COMPANY,
-  demoSpawnEvents,
-  ensureCompany,
-} from '@company-os/db';
+  WorldSnapshotSchema,
+  type ClientToServerEvents,
+  type DomainEvent,
+  type ServerToClientEvents,
+} from '@company-os/contracts';
+import { createTask, DEMO_ORG } from '@company-os/db';
+import { resetAndSeed, testDb } from '../../../tests/setup/helpers';
 import { buildApp } from './app';
 
-const url = process.env.DATABASE_URL_TEST;
-if (!url) throw new Error('DATABASE_URL_TEST manquant');
-const db = createDb(url);
-const built = await buildApp({ db, webOrigin: 'http://localhost:3000' });
-const { app, relayOnce } = built;
+const db = testDb();
+const { app, relayOnce } = await buildApp({
+  db,
+  corsOrigin: 'http://localhost:3000',
+  auth: { allowDevPrincipal: true },
+});
+const locked = await buildApp({
+  db,
+  corsOrigin: 'http://localhost:3000',
+  auth: { allowDevPrincipal: false },
+});
 let baseUrl = '';
+let lockedUrl = '';
 
 beforeAll(async () => {
   await app.listen({ port: 0, host: '127.0.0.1' });
+  await locked.app.listen({ port: 0, host: '127.0.0.1' });
   baseUrl = `http://127.0.0.1:${(app.server.address() as AddressInfo).port}`;
+  lockedUrl = `http://127.0.0.1:${(locked.app.server.address() as AddressInfo).port}`;
 });
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE "OutboxMessage", "Event", "Agent", "Company" CASCADE');
-  await ensureCompany(db, DEMO_COMPANY);
-  await appendEvents(db, demoSpawnEvents());
+  await resetAndSeed(db);
+  while ((await relayOnce()) > 0);
 });
 afterAll(async () => {
   await app.close();
+  await locked.app.close();
   await db.$disconnect();
 });
 
-const statusEvent = (activity: string) =>
-  ({
-    type: 'agent.status_changed',
-    companyId: DEMO_COMPANY.id,
-    mode: 'demo',
-    actor: { kind: 'system', id: null },
-    payload: { agentId: 'ag_demo_eng', status: 'working', activity },
-  }) as const;
+const post = (body: unknown, headers: Record<string, string> = {}) =>
+  app.inject({ method: 'POST', url: '/v1/tasks', payload: body as object, headers });
 
-describe('HTTP', () => {
-  it('GET /health', async () => {
-    const res = await app.inject('/health');
-    expect(res.json()).toEqual({ ok: true });
+describe('santé', () => {
+  it('live et ready', async () => {
+    expect((await app.inject('/health/live')).json()).toEqual({ status: 'ok' });
+    const ready = await app.inject('/health/ready');
+    expect(ready.statusCode).toBe(200);
+    expect(ready.json()).toMatchObject({ status: 'ready', checks: { database: 'ok' } });
   });
-  it('GET world snapshot en mode demo', async () => {
-    const res = await app.inject(`/api/companies/${DEMO_COMPANY.id}/world`);
+});
+
+describe('auth', () => {
+  it('401 sans principal de développement autorisé, avec enveloppe d’erreur', async () => {
+    const res = await locked.app.inject('/v1/bootstrap');
+    expect(res.statusCode).toBe(401);
+    const body = res.json<{ error: { code: string; requestId: string } }>();
+    expect(body.error.code).toBe('UNAUTHORIZED');
+    expect(body.error.requestId).toBe(res.headers['x-request-id']);
+  });
+});
+
+describe('/v1/bootstrap', () => {
+  it('snapshot conforme au contrat, mode démo, 12 agents', async () => {
+    const res = await app.inject('/v1/bootstrap');
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ mode: string; agents: unknown[]; lastSeq: number }>();
-    expect(body.mode).toBe('demo');
-    expect(body.agents).toHaveLength(5);
-    expect(body.lastSeq).toBeGreaterThan(0);
+    const { data, meta } = res.json<{ data: unknown; meta: { schemaVersion: number } }>();
+    const snap = WorldSnapshotSchema.parse(data);
+    expect(meta.schemaVersion).toBe(1);
+    expect(snap.org.mode).toBe('demo');
+    expect(snap.agents).toHaveLength(12);
+    expect(snap.tools).toHaveLength(8);
+    expect(snap.lastSeq).toBe(24);
   });
-  it('404 pour une entreprise inconnue, 400 pour paramètre invalide', async () => {
-    expect((await app.inject('/api/companies/nope/world')).statusCode).toBe(404);
-    expect((await app.inject(`/api/companies/${DEMO_COMPANY.id}/events?after=-3`)).statusCode).toBe(
+});
+
+describe('POST /v1/tasks', () => {
+  it('exige Idempotency-Key', async () => {
+    const res = await post({ kind: 'qualify_lead' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: { code: 'VALIDATION_ERROR' } });
+  });
+  it('S07 : un viewer reçoit 403 et aucune tâche n’est créée', async () => {
+    const res = await post(
+      { kind: 'qualify_lead' },
+      { 'idempotency-key': 'viewer-attempt-1', 'x-dev-role': 'viewer' },
+    );
+    expect(res.statusCode).toBe(403);
+    expect(await db.task.count()).toBe(0);
+  });
+  it('S09 : deux POST identiques -> une seule tâche', async () => {
+    const h = { 'idempotency-key': 'same-key-123' };
+    const a = await post({ kind: 'qualify_lead', agentId: 'sdr-01' }, h);
+    const b = await post({ kind: 'qualify_lead', agentId: 'sdr-01' }, h);
+    expect(a.statusCode).toBe(201);
+    expect(b.statusCode).toBe(200);
+    expect(b.json<{ data: { id: string } }>().data.id).toBe(
+      a.json<{ data: { id: string } }>().data.id,
+    );
+    expect(await db.task.count()).toBe(1);
+  });
+  it('rejette un corps invalide et un champ inconnu', async () => {
+    expect((await post({ kind: 'nope' }, { 'idempotency-key': 'k-invalid-1' })).statusCode).toBe(
       400,
     );
+    expect(
+      (await post({ kind: 'qualify_lead', extra: 1 }, { 'idempotency-key': 'k-invalid-2' }))
+        .statusCode,
+    ).toBe(400);
   });
-  it("inspecteur d'agent avec historique", async () => {
-    await appendEvents(db, [statusEvent('Code la feature X')]);
-    const res = await app.inject(`/api/companies/${DEMO_COMPANY.id}/agents/ag_demo_eng`);
-    const body = res.json<{ agent: { status: string }; events: DomainEvent[] }>();
-    expect(body.agent.status).toBe('working');
-    expect(body.events.map((e) => e.type)).toEqual(['agent.status_changed', 'agent.spawned']);
+  it('GET /v1/tasks/:id renvoie la tâche et ses événements corrélés ; 404 / 400', async () => {
+    const created = await post({ kind: 'qualify_lead' }, { 'idempotency-key': 'detail-key-1' });
+    const id = created.json<{ data: { id: string } }>().data.id;
+    const res = await app.inject(`/v1/tasks/${id}`);
+    expect(res.json<{ data: { events: DomainEvent[] } }>().data.events.map((e) => e.type)).toEqual([
+      'task.created',
+    ]);
+    expect((await app.inject('/v1/tasks/00000000-0000-4000-8000-000000000000')).statusCode).toBe(
+      404,
+    );
+    expect((await app.inject('/v1/tasks/pas-un-uuid')).statusCode).toBe(400);
+  });
+});
+
+describe('lectures', () => {
+  it('/v1/events?afterSeq, /v1/agents, /v1/tools, /v1/departments', async () => {
+    const ev = (await app.inject('/v1/events?afterSeq=20')).json<{
+      data: DomainEvent[];
+      meta: { lastSeq: number };
+    }>();
+    expect(ev.data.map((e) => e.seq)).toEqual([21, 22, 23, 24]);
+    expect(ev.meta.lastSeq).toBe(24);
+    expect(
+      (await app.inject('/v1/agents?departmentId=sales')).json<{ data: unknown[] }>().data,
+    ).toHaveLength(3);
+    const agent = (await app.inject('/v1/agents/sdr-01')).json<{
+      data: { grants: { toolId: string }[] };
+    }>();
+    expect(agent.data.grants.map((g) => g.toolId).sort()).toEqual(['crm', 'email']);
+    expect((await app.inject('/v1/tools')).json<{ data: unknown[] }>().data).toHaveLength(8);
+    expect((await app.inject('/v1/departments')).json<{ data: unknown[] }>().data).toHaveLength(6);
   });
 });
 
 describe('Socket.IO', () => {
-  const open = (): Socket<ServerToClientEvents, ClientToServerEvents> =>
-    connect(baseUrl, { transports: ['websocket'], forceNew: true });
+  type S = Socket<ServerToClientEvents, ClientToServerEvents>;
+  const open = (url = baseUrl): S =>
+    connect(url, { transports: ['websocket'], forceNew: true, reconnection: false });
 
-  it('rejoue les événements manqués puis pousse le live depuis l’outbox', async () => {
-    const socket = open();
-    const received: DomainEvent[] = [];
-    socket.on('world:event', (e) => received.push(e));
-    const ack = await socket.emitWithAck('world:subscribe', {
-      companyId: DEMO_COMPANY.id,
-      afterSeq: 0,
+  it('events:resume rejoue après afterSeq puis pousse le live depuis l’outbox', async () => {
+    const s = open();
+    const got: DomainEvent[] = [];
+    s.on('domain:event', (e) => got.push(e));
+    const ack = await s.emitWithAck('events:resume', { afterSeq: 20 });
+    expect(ack).toEqual({ accepted: true, lastSeq: 24, replayed: 4 });
+    await createTask(db, {
+      orgId: DEMO_ORG.id,
+      kind: 'qualify_lead',
+      requester: { kind: 'user', id: 'x' },
     });
-    expect(ack).toEqual({ ok: true, replayed: 5 });
-
-    await appendEvents(db, [statusEvent('live!')]);
     await relayOnce();
-    await expect.poll(() => received.length).toBeGreaterThanOrEqual(6);
-    expect(received.at(-1)?.type).toBe('agent.status_changed');
-    socket.close();
+    await expect.poll(() => got.length).toBe(5);
+    expect(got.map((e) => e.seq)).toEqual([21, 22, 23, 24, 25]);
+    s.close();
   });
-
-  it('reprise après déconnexion : seuls les événements après afterSeq sont rejoués', async () => {
-    const all = await appendEvents(db, [statusEvent('a'), statusEvent('b')]);
-    const socket = open();
-    const received: DomainEvent[] = [];
-    socket.on('world:event', (e) => received.push(e));
-    const ack = await socket.emitWithAck('world:subscribe', {
-      companyId: DEMO_COMPANY.id,
-      afterSeq: all[0]!.seq,
+  it('refuse une reprise invalide', async () => {
+    const s = open();
+    expect(await s.emitWithAck('events:resume', { afterSeq: -1 })).toEqual({
+      accepted: false,
+      error: 'VALIDATION_ERROR',
     });
-    expect(ack).toEqual({ ok: true, replayed: 1 });
-    expect(received.map((e) => e.payload)).toMatchObject([{ activity: 'b' }]);
-    socket.close();
+    s.close();
   });
-
-  it('refuse une souscription invalide', async () => {
-    const socket = open();
-    const ack = await socket.emitWithAck('world:subscribe', {
-      companyId: '',
-      afterSeq: -1,
-    });
-    expect(ack).toEqual({ ok: false, error: 'invalid_request' });
-    socket.close();
+  it('refuse la connexion sans principal', async () => {
+    const s = open(lockedUrl);
+    const err = await new Promise<Error>((resolve) => s.on('connect_error', resolve));
+    expect(err.message).toBe('UNAUTHORIZED');
+    s.close();
   });
 });

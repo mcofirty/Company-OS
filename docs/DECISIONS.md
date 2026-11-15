@@ -57,3 +57,30 @@ Claude Code ajoute les ADR ici ou dans des fichiers `ADR-00X-*.md` au fur et à 
 
 10. **Hooks de test** `window.__officeScene` / `window.__hqSocket` exposés uniquement hors production, pour cliquer
     dans le canvas et couper le WebSocket dans les e2e.
+
+### 2026-11-15 — alignement sur le pack + M1
+
+ADR-008 — **Migration init réécrite.** Le schéma M0 ne respectait pas docs/03 ; rien n'était déployé, la migration
+`init` a été régénérée. Désormais toute évolution passe par une nouvelle migration.
+
+ADR-009 — **Sérialisation des écritures par organisation.** `withOrgTx` verrouille la ligne `organizations` (`FOR UPDATE`)
+et y tient `last_seq` : `seq` est contigu par org, dans l'ordre des commits, sans verrou consultatif. Coût : mutations d'une
+même org sérialisées (acceptable pour le MVP mono-org ; à mesurer avant 100+ agents).
+
+ADR-010 — **Identifiants.** Slugs stables pour agents/départements/outils (`sdr-01`, `sales`, `crm`), UUID pour org, tâches,
+runs, invocations, événements. Multi-tenant futur : préfixer ou passer à des PK composites (org_id, id).
+
+ADR-011 — **Déplacements = projection.** Aucun événement de mouvement. `visualIntent` déduit la cible (poste, pause café
+cosmétique de 20 s après une tâche réellement terminée) de l'état métier. Le statut métier n'est jamais modifié par l'animation.
+
+ADR-012 — **Temporal reporté à M2.** M1 utilise un worker Node déterministe (reprise après crash par étapes idempotentes).
+`runDemoTask` est écrit comme un futur Workflow et `ToolGateway.invoke` comme une future Activity.
+
+ADR-013 — **Pas d'approbation avant M3.** La gateway refuse toute action `external_write` (`APPROVAL_REQUIRED`) et
+`high_impact` (`POLICY_DENIED`) : échec fermé plutôt qu'exécution non validée.
+
+ADR-014 — **Autopilote démo.** Le worker crée périodiquement des tâches DEMO (pondérées, déterministes par `lastSeq`,
+acteur `system:demo-autopilot`, provenance `demo`) pour que le QG vive sans fausse animation. Désactivable : `DEMO_AUTOPILOT=false`.
+
+ADR-015 — **Rendu procédural.** Tuiles, mobilier et avatars sont dessinés par code (Phaser Graphics) : originaux, sans
+licence tierce. Une tilemap Tiled pourra remplacer le décor sans changer `packages/world`.

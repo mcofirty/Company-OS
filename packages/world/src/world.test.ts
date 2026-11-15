@@ -1,67 +1,290 @@
 import { describe, expect, it } from 'vitest';
-import { DomainEventSchema, type DomainEvent } from '@company-os/contracts';
-import { applyEvent, applyEvents, emptyWorld } from './index';
+import type { DomainEvent, NewEvent, WorldSnapshot } from '@company-os/contracts';
+import {
+  anchorsOfKind,
+  applyEvent,
+  applyEvents,
+  computeMetrics,
+  departmentPresence,
+  findPath,
+  HQ_MAP,
+  visualIntent,
+  BREAK_MS,
+} from './index';
 
+const ORG = '00000000-0000-4000-8000-0000000000aa';
+const T1 = '00000000-0000-4000-8000-000000000001';
+const I1 = '00000000-0000-4000-8000-000000000002';
+const R1 = '00000000-0000-4000-8000-000000000003';
+const C1 = '00000000-0000-4000-8000-000000000004';
+
+let n = 0;
+function ev(e: NewEvent, seq: number, at = '2026-01-01T10:00:00.000Z'): DomainEvent {
+  n++;
+  return {
+    ...e,
+    schemaVersion: 1,
+    eventId: `00000000-0000-4000-9000-${String(n).padStart(12, '0')}`,
+    orgId: ORG,
+    seq,
+    occurredAt: at,
+  } as DomainEvent;
+}
 const base = {
-  companyId: 'co_1',
-  mode: 'demo' as const,
-  occurredAt: '2026-01-01T00:00:00.000Z',
-  actor: { kind: 'system' as const, id: null },
-};
-const spawned: DomainEvent = {
-  ...base,
-  id: '00000000-0000-4000-8000-000000000001',
-  seq: 1,
-  type: 'agent.spawned',
-  payload: { agentId: 'ag_1', name: 'Ada', role: 'engineering', position: { x: 2, y: 3 } },
-};
-const moved: DomainEvent = {
-  ...base,
-  id: '00000000-0000-4000-8000-000000000002',
-  seq: 2,
-  type: 'agent.moved',
-  payload: { agentId: 'ag_1', from: { x: 2, y: 3 }, to: { x: 4, y: 3 } },
-};
-const working: DomainEvent = {
-  ...base,
-  id: '00000000-0000-4000-8000-000000000003',
-  seq: 3,
-  type: 'agent.status_changed',
-  payload: { agentId: 'ag_1', status: 'working', activity: 'Rédige la spec' },
+  correlationId: C1,
+  causationId: null,
+  actor: { kind: 'system', id: 'test' },
+  provenance: 'demo',
+  classification: 'internal',
+} as const;
+
+const empty: WorldSnapshot = {
+  org: { id: ORG, name: 'Test', mode: 'demo' },
+  lastSeq: 0,
+  serverTime: '2026-01-01T00:00:00.000Z',
+  worldMap: { id: 'hq-v1', version: 1 },
+  departments: [],
+  agents: [],
+  tools: [],
+  tasks: [],
+  invocations: [],
+  timeline: [],
 };
 
-describe('contracts', () => {
-  it('valide les événements fixtures', () => {
-    for (const e of [spawned, moved, working]) expect(DomainEventSchema.parse(e)).toEqual(e);
+const cycle: DomainEvent[] = [
+  ev(
+    {
+      ...base,
+      type: 'agent.created',
+      aggregateType: 'agent',
+      aggregateId: 'sales-01',
+      aggregateVersion: 1,
+      payload: {
+        agentId: 'sales-01',
+        name: 'Nora',
+        title: 'SDR',
+        role: 'specialist',
+        departmentId: 'sales',
+        managerId: null,
+        avatarId: 'avatar-01',
+        deskAnchor: 'sales-desk-01',
+      },
+    },
+    1,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'agent.activated',
+      aggregateType: 'agent',
+      aggregateId: 'sales-01',
+      aggregateVersion: 2,
+      payload: { agentId: 'sales-01', assignedAnchor: 'sales-desk-01' },
+    },
+    2,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'task.created',
+      aggregateType: 'task',
+      aggregateId: T1,
+      aggregateVersion: 1,
+      payload: { taskId: T1, agentId: 'sales-01', kind: 'qualify_lead', title: 'Qualifier' },
+    },
+    3,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'task.started',
+      aggregateType: 'task',
+      aggregateId: T1,
+      aggregateVersion: 2,
+      payload: { taskId: T1, agentId: 'sales-01', targetAnchor: 'sales-desk-01' },
+    },
+    4,
+    '2026-01-01T10:00:01.000Z',
+  ),
+  ev(
+    {
+      ...base,
+      type: 'agent.run.started',
+      aggregateType: 'agent_run',
+      aggregateId: R1,
+      aggregateVersion: 1,
+      payload: { runId: R1, agentId: 'sales-01', taskId: T1, providerClass: 'demo' },
+    },
+    5,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'tool.invocation.requested',
+      aggregateType: 'tool_invocation',
+      aggregateId: I1,
+      aggregateVersion: 1,
+      payload: {
+        invocationId: I1,
+        toolId: 'crm',
+        agentId: 'sales-01',
+        taskId: T1,
+        action: 'lookup_lead',
+        actionKind: 'read',
+        risk: 'read',
+      },
+    },
+    6,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'tool.invocation.started',
+      aggregateType: 'tool_invocation',
+      aggregateId: I1,
+      aggregateVersion: 2,
+      payload: {
+        invocationId: I1,
+        toolId: 'crm',
+        agentId: 'sales-01',
+        taskId: T1,
+        action: 'lookup_lead',
+        attempt: 1,
+      },
+    },
+    7,
+  ),
+];
+const finish: DomainEvent[] = [
+  ev(
+    {
+      ...base,
+      type: 'tool.invocation.succeeded',
+      aggregateType: 'tool_invocation',
+      aggregateId: I1,
+      aggregateVersion: 3,
+      payload: {
+        invocationId: I1,
+        toolId: 'crm',
+        agentId: 'sales-01',
+        taskId: T1,
+        durationMs: 3000,
+        safeSummary: 'Prospect trouvé',
+      },
+    },
+    8,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'agent.run.completed',
+      aggregateType: 'agent_run',
+      aggregateId: R1,
+      aggregateVersion: 2,
+      payload: { runId: R1, agentId: 'sales-01', taskId: T1, status: 'succeeded', stepCount: 1 },
+    },
+    9,
+  ),
+  ev(
+    {
+      ...base,
+      type: 'task.completed',
+      aggregateType: 'task',
+      aggregateId: T1,
+      aggregateVersion: 3,
+      payload: {
+        taskId: T1,
+        agentId: 'sales-01',
+        resultRef: 'artifact://x',
+        safeSummary: 'Qualifié',
+      },
+    },
+    10,
+    '2026-01-01T10:00:05.000Z',
+  ),
+];
+
+describe('carte hq-v1', () => {
+  it('a au moins 6 départements, une salle de réunion, un café, un accueil', () => {
+    const kinds = HQ_MAP.rooms.map((r) => r.kind);
+    expect(kinds.filter((k) => k === 'department').length).toBeGreaterThanOrEqual(6);
+    expect(kinds).toContain('meeting');
+    expect(kinds).toContain('cafe');
+    expect(kinds).toContain('entry');
+    expect(HQ_MAP.cols).toBe(36);
+    expect(HQ_MAP.rows).toBe(26);
   });
-  it('rejette un type inconnu et un payload invalide', () => {
-    expect(DomainEventSchema.safeParse({ ...spawned, type: 'agent.deleted' }).success).toBe(false);
-    expect(
-      DomainEventSchema.safeParse({ ...moved, payload: { agentId: 'ag_1', to: { x: -1, y: 0 } } })
-        .success,
-    ).toBe(false);
+  it('assez de postes pour 12 agents et de places au café', () => {
+    expect(anchorsOfKind(HQ_MAP, 'desk').length).toBeGreaterThanOrEqual(12);
+    expect(anchorsOfKind(HQ_MAP, 'cafe').length).toBeGreaterThanOrEqual(12);
+    expect(anchorsOfKind(HQ_MAP, 'meeting_seat').length).toBe(8);
+  });
+  it('chaque ancre est praticable et accessible depuis l’accueil (pas de collision mobilier)', () => {
+    const spawn = HQ_MAP.anchors['entry-spawn']!;
+    for (const a of Object.values(HQ_MAP.anchors)) {
+      expect(HQ_MAP.isWalkable(a), a.id).toBe(true);
+      expect(findPath(spawn, a, HQ_MAP.isWalkable), a.id).not.toBeNull();
+    }
   });
 });
 
-describe('projection monde', () => {
-  it('applique spawn, déplacement et statut', () => {
-    const w = applyEvents(emptyWorld('co_1', 'demo'), [working, spawned, moved]);
-    expect(w.lastSeq).toBe(3);
-    expect(w.agents).toHaveLength(1);
-    expect(w.agents[0]).toMatchObject({
-      position: { x: 4, y: 3 },
-      status: 'working',
-      activity: 'Rédige la spec',
-      mode: 'demo',
+describe('A*', () => {
+  it('contourne un obstacle et ne traverse jamais une cloison ou un meuble', () => {
+    const from = HQ_MAP.anchors['entry-spawn']!;
+    const to = HQ_MAP.anchors['finance-desk-01']!;
+    const path = findPath(from, to, HQ_MAP.isWalkable)!;
+    expect(path.at(-1)).toEqual({ x: to.x, y: to.y });
+    for (const t of path) expect(HQ_MAP.isWalkable(t)).toBe(true);
+    for (let i = 1; i < path.length; i++) {
+      const d = Math.abs(path[i]!.x - path[i - 1]!.x) + Math.abs(path[i]!.y - path[i - 1]!.y);
+      expect(d).toBe(1);
+    }
+  });
+  it('retourne null pour une cible bloquée', () => {
+    expect(findPath({ x: 0, y: 0 }, { x: 1, y: 1 }, (t) => !(t.x === 1 && t.y === 1))).toBeNull();
+  });
+});
+
+describe('réducteur', () => {
+  it('applique le cycle tâche -> outil -> fin', () => {
+    const mid = applyEvents(empty, cycle);
+    expect(mid.agents[0]).toMatchObject({
+      status: 'active',
+      activity: 'using_tool',
+      currentTaskId: T1,
     });
+    expect(mid.tasks[0]?.status).toBe('running');
+    expect(mid.invocations[0]).toMatchObject({ status: 'running', actionKind: 'read' });
+    expect(computeMetrics(mid)).toMatchObject({
+      activeInvocations: 1,
+      activeToolIds: ['crm'],
+      busyAgents: 1,
+    });
+
+    const end = applyEvents(mid, finish);
+    expect(end.agents[0]).toMatchObject({ activity: 'idle', currentTaskId: null });
+    expect(end.tasks[0]).toMatchObject({ status: 'succeeded', resultSummary: 'Qualifié' });
+    expect(end.invocations[0]).toMatchObject({ status: 'succeeded', durationMs: 3000 });
+    expect(end.timeline[0]?.type).toBe('task.completed');
+    expect(computeMetrics(end).activeInvocations).toBe(0);
   });
-  it('est idempotente au rejeu', () => {
-    const once = applyEvents(emptyWorld('co_1', 'demo'), [spawned, moved]);
-    expect(applyEvent(once, moved)).toBe(once);
-    expect(applyEvent(once, spawned)).toBe(once);
+  it('ignore les doublons et signale les trous', () => {
+    const w = applyEvents(empty, cycle.slice(0, 3));
+    expect(applyEvent(w, cycle[1]!).outcome).toBe('duplicate');
+    expect(applyEvent(w, cycle[5]!).outcome).toBe('gap');
+    expect(applyEvent(w, cycle[3]!).outcome).toBe('applied');
   });
-  it("ignore les événements d'une autre entreprise", () => {
-    const w = emptyWorld('co_2', 'demo');
-    expect(applyEvent(w, spawned)).toBe(w);
+});
+
+describe('projection visuelle', () => {
+  it('desk pendant le travail, pause café juste après, puis retour au poste', () => {
+    const working = applyEvents(empty, cycle).agents[0]!;
+    expect(visualIntent(working, 0, Date.now())).toMatchObject({ mode: 'desk', pose: 'tool' });
+    const done = applyEvents(empty, [...cycle, ...finish]);
+    const idle = done.agents[0]!;
+    const end = Date.parse(idle.lastTaskEndedAt!);
+    expect(visualIntent(idle, 0, end + 1000)?.mode).toBe('break');
+    expect(visualIntent(idle, 0, end + BREAK_MS + 1)?.mode).toBe('desk');
+    expect(departmentPresence(done.agents, 'sales', end + 1000)).toEqual({ atDesk: 0, total: 1 });
   });
 });
