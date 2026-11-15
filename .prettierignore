@@ -4,3 +4,8 @@ packages/db/prisma/migrations/
 .next/
 dist/
 CLAUDE.md
+docs/
+specs/
+examples/
+references/
+*.md

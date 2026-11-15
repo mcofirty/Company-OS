@@ -1,6 +1,6 @@
 # AI COMPANY OS — Living Headquarters
 
-**Statut initial du pack : spécifications à implémenter.** Ce dépôt contient le cahier des charges et les instructions de réalisation pour Claude Code / Claude Fable 5.2. À réception, il **ne contient pas encore l'application exécutable** ; c'est Claude Code qui doit la construire.
+**Statut :** application en construction par jalons (voir `docs/PROGRESS.md`). Le pack de spécifications d'origine est dans `docs/`, `specs/` et `examples/`.
 
 **Référence visuelle privée :** `references/REFERENCE-UI-ISOMETRIQUE.jpeg`, à utiliser comme inspiration uniquement et à retirer avant tout dépôt public si droits de redistribution absents.
 
@@ -44,3 +44,36 @@ L'**orchestration d'agents** et la **visualisation d'agents** sont des systèmes
 
 ## Évolutivité
 Le MVP vise un seul tenant et 8-12 agents de démo, sans difficulté structurelle pour évoluer ensuite vers multi-tenant et 100+ agents. La sécurité multi-tenant doit exister dans le schéma de données dès l'origine.
+
+## Démarrage
+
+Prérequis : Node ≥ 22.12, pnpm 10, Docker.
+
+```bash
+cp .env.example .env
+pnpm install
+docker compose up -d --wait
+pnpm db:migrate && pnpm db:seed
+pnpm dev            # API :4000, worker demo, web :3000
+```
+
+Ouvrir http://localhost:3000. Le badge **MODE DÉMO** signale une simulation déterministe, sans aucun appel externe.
+
+## Vérifications
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test   # tests unitaires + intégration (base companyos_test)
+pnpm e2e                                    # Playwright (lance pnpm dev si besoin)
+pnpm build
+```
+
+## Structure
+
+| Dossier              | Rôle                                                                |
+| -------------------- | ------------------------------------------------------------------- |
+| `packages/contracts` | Schémas Zod : événements, snapshot du monde, protocole Socket.IO    |
+| `packages/world`     | Projection pure événements → état du monde (idempotente)            |
+| `packages/db`        | Prisma/PostgreSQL : EventLog, outbox transactionnelle, état courant |
+| `apps/api`           | Fastify + Socket.IO : snapshot, rejeu, relais outbox → temps réel   |
+| `apps/worker`        | Simulateur demo déterministe (Temporal prévu, cf. DECISIONS)        |
+| `apps/web`           | Next.js + Phaser : QG isométrique, inspecteur, journal              |

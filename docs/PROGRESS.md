@@ -1,4 +1,7 @@
-# Progression
+# PROGRESS — registre de reprise
+
+## Convention de mise à jour
+Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
 ## Session 2026-11-15 — M0 (fondations)
 
