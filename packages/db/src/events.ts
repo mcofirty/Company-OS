@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DomainEventSchema, type DomainEvent, type NewEvent } from '@company-os/contracts';
+import { alertFromEvent } from '@company-os/world';
 import type { Db, Tx } from './client';
 import type { Prisma } from './generated/prisma/client';
 import { DomainError } from './errors';
@@ -108,6 +109,22 @@ export async function withOrgTx<T>(
         },
       });
       await tx.outbox.create({ data: { orgId, eventId: id } });
+      // Alerte dérivée, écrite dans la même transaction (même règle que le client).
+      const alert = alertFromEvent(event);
+      if (alert) {
+        await tx.alert.create({
+          data: {
+            id: alert.id,
+            orgId,
+            level: alert.level,
+            title: alert.title.slice(0, 200),
+            resourceType: alert.resourceType,
+            resourceId: alert.resourceId,
+            eventSeq: BigInt(alert.eventSeq),
+            createdAt: now,
+          },
+        });
+      }
       out.push(event);
     }
     if (pending.length > 0) {

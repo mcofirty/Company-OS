@@ -136,6 +136,22 @@ export const MeetingViewSchema = z.object({
 });
 export type MeetingView = z.infer<typeof MeetingViewSchema>;
 
+export const AlertLevelSchema = z.enum(['info', 'warning', 'error', 'critical']);
+export type AlertLevel = z.infer<typeof AlertLevelSchema>;
+/** Alerte persistée (docs/10 §5). Une alerte par événement source : id = eventId. */
+export const AlertViewSchema = z.object({
+  id: z.string(),
+  level: AlertLevelSchema,
+  title: z.string(),
+  resourceType: z.string(),
+  resourceId: z.string(),
+  eventSeq: z.number().int(),
+  createdAt: z.iso.datetime(),
+  ackedAt: z.iso.datetime().nullable(),
+  ackedBy: z.string().nullable(),
+});
+export type AlertView = z.infer<typeof AlertViewSchema>;
+
 export const WorldSnapshotSchema = z.object({
   org: z.object({ id: z.uuid(), name: z.string(), mode: ModeSchema }),
   lastSeq: z.number().int().min(0),
@@ -172,6 +188,8 @@ export const WorldSnapshotSchema = z.object({
   approvals: z.array(ApprovalViewSchema),
   /** Réunions en cours + dernières terminées (bornées). */
   meetings: z.array(MeetingViewSchema),
+  /** Alertes non acquittées + dernières acquittées (bornées). */
+  alerts: z.array(AlertViewSchema),
   /** Derniers événements (plus récents en premier). */
   timeline: z.array(DomainEventSchema),
 });
@@ -183,4 +201,5 @@ export const LIMITS = {
   timeline: 80,
   approvals: 30,
   meetings: 20,
+  alerts: 40,
 } as const;

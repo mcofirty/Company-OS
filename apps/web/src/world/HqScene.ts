@@ -423,7 +423,7 @@ export class HqScene extends Phaser.Scene {
   // ---------- caméra ----------
   private mapBounds(): Phaser.Geom.Rectangle {
     const left = this.P(0, ROWS).x - 40;
-    const right = this.P(COLS, 0).x + 40;
+    const right = this.P(COLS + 3, 0).x + 40; // inclut le dock d'outils
     const top = this.P(0, 0).y - WALL_H - 50;
     const bottom = this.P(COLS, ROWS).y + 50;
     return new Phaser.Geom.Rectangle(left, top, right - left, bottom - top);
@@ -492,6 +492,8 @@ export class HqScene extends Phaser.Scene {
       return;
     }
     this.selection = sel;
+    this.lastWorld = world;
+    this.ensureDock(world);
     const animateSpawn = !this.firstSync;
     this.firstSync = false;
     const activeInv = new Map<string, InvocationView>();
@@ -516,10 +518,18 @@ export class HqScene extends Phaser.Scene {
       if (!av.walking) this.applyPose(av);
       const selected = sel?.kind === 'agent' && sel.id === agent.id;
       av.ring.setVisible(selected);
+      // Filtre de département : les autres restent visibles mais atténués (docs/12 scénario E).
+      av.container.setAlpha(
+        this.highlightDept && agent.departmentId !== this.highlightDept ? 0.3 : 1,
+      );
       av.name.setVisible(selected || av.hovered);
     });
     for (const [id, av] of this.avatars) {
       if (!world.agents.some((a) => a.id === id)) {
+        // Replay arrière : l'agent n'existe pas encore -> stopper ses animations avant destruction.
+        this.tweens.killTweensOf(av.container);
+        av.frameTimer?.remove();
+        av.frameTimer = null;
         av.container.destroy();
         av.hit.destroy();
         this.avatars.delete(id);
@@ -757,6 +767,7 @@ export class HqScene extends Phaser.Scene {
       delay: 150,
       loop: true,
       callback: () => {
+        if (!av.container.scene) return;
         frame = !frame;
         this.setFrame(av, frame ? 'walk1' : 'walk2');
       },
@@ -785,6 +796,7 @@ export class HqScene extends Phaser.Scene {
         av.walking = false;
         av.frameTimer?.remove();
         av.frameTimer = null;
+        if (!av.container.scene) return; // avatar détruit pendant la marche (replay)
         this.applyPose(av);
       },
     });
@@ -825,6 +837,128 @@ export class HqScene extends Phaser.Scene {
     text.on('pointerup', () => this.cb.onSelect({ kind: 'meeting', id: m.id }));
   }
 
+  // ---------- filtre et liens agent -> outil (docs/06 §8) ----------
+  private highlightDept: string | null = null;
+  private linksMode = false;
+  private lastWorld: WorldSnapshot | null = null;
+  private dock = new Map<string, Phaser.Math.Vector2>();
+  private linkGfx: Phaser.GameObjects.Graphics | null = null;
+  private overflowText: Phaser.GameObjects.Text | null = null;
+  private linkPhase = 0;
+  /** Liens actuellement dessinés (hook e2e). */
+  drawnLinks: { agentId: string; toolId: string }[] = [];
+  hiddenLinks = 0;
+
+  setHighlight(dept: string | null): void {
+    this.highlightDept = dept;
+    if (this.lastWorld) this.sync(this.lastWorld, this.selection, Date.now());
+  }
+  setLinksMode(on: boolean): void {
+    this.linksMode = on;
+  }
+
+  /** Dock d'outils le long du bord avant-droit de la dalle (cliquable). */
+  private ensureDock(world: WorldSnapshot): void {
+    if (this.dock.size > 0 || world.tools.length === 0) return;
+    const n = world.tools.length;
+    world.tools.forEach((tool, i) => {
+      const p = this.P(COLS + 1.9, 1.5 + (i * (ROWS - 3)) / Math.max(1, n - 1));
+      const text = this.add
+        .text(0, 0, tool.code, {
+          fontFamily: 'ui-monospace, Menlo, monospace',
+          fontSize: '18px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          padding: { x: 10, y: 6 },
+        })
+        .setOrigin(0.5)
+        .setResolution(2);
+      const b = text.getBounds();
+      const bg = this.add.graphics();
+      bg.fillStyle(hex(tool.color), 1);
+      bg.fillRoundedRect(-b.width / 2, -b.height / 2, b.width, b.height, 8);
+      bg.lineStyle(3, 0xffffff, 0.9);
+      bg.strokeRoundedRect(-b.width / 2, -b.height / 2, b.width, b.height, 8);
+      const c = this.add.container(p.x, p.y, [bg, text]).setDepth(6000);
+      text.setInteractive({ useHandCursor: true });
+      text.on('pointerup', () => {
+        if (this.dragMoved < 6) this.cb.onSelect({ kind: 'tool', id: tool.id });
+      });
+      void c;
+      this.dock.set(tool.id, p);
+    });
+    this.linkGfx = this.add.graphics().setDepth(5900);
+  }
+
+  override update(_time: number, delta: number): void {
+    if (!this.linkGfx || !this.lastWorld) return;
+    this.linkPhase = (this.linkPhase + delta * 0.05) % 20;
+    this.drawLinks(this.lastWorld);
+  }
+
+  private drawLinks(world: WorldSnapshot): void {
+    const g = this.linkGfx!;
+    g.clear();
+    const active = world.invocations
+      .filter((i) => ['requested', 'authorized', 'running', 'waiting_approval'].includes(i.status))
+      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
+    const sel = this.selection?.kind === 'agent' ? this.selection.id : null;
+    const shown = sel ? active.filter((i) => i.agentId === sel) : this.linksMode ? active : [];
+    const MAX = 5;
+    const drawn = shown.slice(0, MAX);
+    this.drawnLinks = drawn.map((i) => ({ agentId: i.agentId, toolId: i.toolId }));
+    this.hiddenLinks = Math.max(0, shown.length - MAX);
+    for (const inv of drawn) {
+      const av = this.avatars.get(inv.agentId);
+      const to = this.dock.get(inv.toolId);
+      if (!av || !to) continue;
+      const tool = world.tools.find((t) => t.id === inv.toolId);
+      const from = new Phaser.Math.Vector2(av.container.x, av.container.y - 40);
+      const color =
+        inv.status === 'waiting_approval' ? 0xd49c30 : tool ? hex(tool.color) : 0x7c60c9;
+      this.dashed(g, from, to, color);
+    }
+    if (this.hiddenLinks > 0) {
+      const anchor = this.dock.values().next().value as Phaser.Math.Vector2 | undefined;
+      if (anchor && !this.overflowText) {
+        this.overflowText = this.add
+          .text(anchor.x, anchor.y - 40, '', {
+            fontFamily: 'Inter, sans-serif',
+            fontSize: '18px',
+            fontStyle: 'bold',
+            color: '#222035',
+            backgroundColor: '#ffffffdd',
+            padding: { x: 8, y: 4 },
+          })
+          .setOrigin(0.5)
+          .setResolution(2)
+          .setDepth(6001);
+      }
+      this.overflowText?.setText(`+${this.hiddenLinks} liens regroupés`).setVisible(true);
+    } else {
+      this.overflowText?.setVisible(false);
+    }
+  }
+
+  private dashed(
+    g: Phaser.GameObjects.Graphics,
+    a: Phaser.Math.Vector2,
+    b: Phaser.Math.Vector2,
+    color: number,
+  ): void {
+    const len = Phaser.Math.Distance.BetweenPoints(a, b);
+    const dir = new Phaser.Math.Vector2(b.x - a.x, b.y - a.y).normalize();
+    g.lineStyle(4, color, 0.9);
+    for (let d = this.linkPhase - 20; d < len; d += 20) {
+      const s = Math.max(0, d);
+      const e = Math.min(len, d + 12);
+      if (e <= s) continue;
+      g.lineBetween(a.x + dir.x * s, a.y + dir.y * s, a.x + dir.x * e, a.y + dir.y * e);
+    }
+    g.fillStyle(color, 1);
+    g.fillCircle(a.x, a.y, 5);
+  }
+
   /** Hook e2e (hors production) : position écran (canvas) d'un avatar. */
   agentScreenPosition(id: string): { x: number; y: number } | null {
     const av = this.avatars.get(id);
@@ -834,6 +968,9 @@ export class HqScene extends Phaser.Scene {
       x: (av.hit.x - cam.worldView.x) * cam.zoom,
       y: (av.hit.y - cam.worldView.y) * cam.zoom,
     };
+  }
+  agentAlpha(id: string): number | null {
+    return this.avatars.get(id)?.container.alpha ?? null;
   }
   isWalking(id: string): boolean {
     return this.avatars.get(id)?.walking ?? false;

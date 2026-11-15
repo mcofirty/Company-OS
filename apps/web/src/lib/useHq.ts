@@ -11,6 +11,7 @@ import {
   type TaskKind,
   type TaskView,
   type WorldSnapshot,
+  type AlertView,
 } from '@company-os/contracts';
 import { applyEvent } from '@company-os/world';
 import { api, getBackend } from './api';
@@ -56,9 +57,14 @@ export function useHq() {
     setWorld(w);
   };
 
+  const [me, setMe] = useState<Me | null>(null);
+
   const loadSnapshot = useCallback(async () => {
     const { data } = await api<unknown>('/v1/bootstrap');
     commit(WorldSnapshotSchema.parse(data));
+    api<Me>('/v1/me')
+      .then((r) => setMe(r.data))
+      .catch(() => setMe(null));
   }, []);
 
   const catchUp = useCallback(async () => {
@@ -202,15 +208,57 @@ export function useHq() {
     [],
   );
 
+  /** Acquittement : appel API puis mise à jour locale (l'acquittement n'est pas un événement). */
+  const ackAlert = useCallback(async (alertId: string): Promise<void> => {
+    const { data } = await api<AlertView>(`/v1/alerts/${alertId}/ack`, {
+      method: 'POST',
+      body: '{}',
+    });
+    const w = worldRef.current;
+    if (w) commit({ ...w, alerts: w.alerts.map((a) => (a.id === alertId ? data : a)) });
+  }, []);
+
+  const agentLifecycle = useCallback(
+    async (
+      agentId: string,
+      action: 'pause' | 'resume' | 'deactivate',
+      reason: string,
+    ): Promise<void> => {
+      await api(`/v1/agents/${agentId}/${action}`, {
+        method: 'POST',
+        headers: { 'idempotency-key': crypto.randomUUID() },
+        body: JSON.stringify({ reason }),
+      });
+    },
+    [],
+  );
+
   return {
     world,
     connection,
     error,
     toasts,
     now,
+    me,
     createTask,
     toast,
     setSystemPaused,
     decideApproval,
+    ackAlert,
+    agentLifecycle,
+  };
+}
+
+export interface Me {
+  userId: string;
+  role: 'admin' | 'operator' | 'viewer';
+  displayName: string;
+  capabilities: {
+    createTask: boolean;
+    pauseAgent: boolean;
+    deactivateAgent: boolean;
+    decideApproval: boolean;
+    systemControl: boolean;
+    ackAlert: boolean;
   };
 }

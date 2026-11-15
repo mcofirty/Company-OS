@@ -22,6 +22,10 @@ import {
   type Db,
   setSystemPaused,
   decideApproval,
+  setAgentLifecycle,
+  ackAlert,
+  alertView,
+  metricsSummary,
   approvalView,
   meetingView,
 } from '@company-os/db';
@@ -51,7 +55,23 @@ export function registerV1(
 
   app.get('/v1/me', async (req) => {
     const p = principalOf(req, auth);
-    return { data: { ...p, capabilities: { createTask: p.role !== 'viewer' } }, meta };
+    const operator = p.role !== 'viewer';
+    const admin = p.role === 'admin';
+    return {
+      data: {
+        ...p,
+        // Indicatif pour l'UI : le serveur revérifie chaque action.
+        capabilities: {
+          createTask: operator,
+          pauseAgent: operator,
+          deactivateAgent: admin,
+          decideApproval: admin,
+          systemControl: admin,
+          ackAlert: operator,
+        },
+      },
+      meta,
+    };
   });
 
   app.get('/v1/bootstrap', async (req) => {
@@ -411,6 +431,61 @@ export function registerV1(
     return {
       data: { meeting: meetingView(m), events, tasksCreated: children.map(taskView) },
       meta,
+    };
+  });
+
+  // ---------- Cycle de vie des agents ----------
+  const LifecycleBody = z.object({ reason: z.string().min(3).max(200) }).strict();
+  for (const action of ['pause', 'resume', 'deactivate'] as const) {
+    app.post(`/v1/agents/:id/${action}`, async (req) => {
+      const p = principalOf(req, auth);
+      requireRole(p, action === 'deactivate' ? 'admin' : 'operator');
+      const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+      if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+      const { id } = SlugParam.parse(req.params);
+      const body = LifecycleBody.parse(req.body);
+      const r = await setAgentLifecycle(db, {
+        orgId: p.orgId,
+        agentId: id,
+        action,
+        reason: body.reason,
+        actor: { kind: 'user', id: p.userId },
+      });
+      return { data: r, meta };
+    });
+  }
+
+  // ---------- Alertes ----------
+  app.get('/v1/alerts', async (req) => {
+    const p = principalOf(req, auth);
+    const q = z
+      .object({ unacked: z.enum(['true', 'false']).optional(), limit: Limit })
+      .parse(req.query);
+    const rows = await db.alert.findMany({
+      where: { orgId: p.orgId, ...(q.unacked === 'true' ? { ackedAt: null } : {}) },
+      orderBy: { eventSeq: 'desc' },
+      take: q.limit,
+    });
+    return { data: rows.map(alertView), meta };
+  });
+
+  app.post('/v1/alerts/:id/ack', async (req) => {
+    const p = principalOf(req, auth);
+    requireRole(p, 'operator');
+    const { id } = Id.parse(req.params);
+    return {
+      data: alertView(await ackAlert(db, { orgId: p.orgId, alertId: id, userId: p.userId })),
+      meta,
+    };
+  });
+
+  // ---------- KPI par fenêtre et santé des outils ----------
+  app.get('/v1/metrics/summary', async (req) => {
+    const p = principalOf(req, auth);
+    const q = z.object({ window: z.enum(['1h', '24h', '7d']).default('24h') }).parse(req.query);
+    return {
+      data: await metricsSummary(db, p.orgId, q.window),
+      meta: { ...meta, measured: 'tokens mesurés ; coûts estimés (grille versionnée)' },
     };
   });
 }

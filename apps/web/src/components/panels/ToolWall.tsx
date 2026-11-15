@@ -20,13 +20,18 @@ export function ToolWall({
   world,
   now,
   onSelect,
+  dept,
 }: {
   world: WorldSnapshot | null;
   now: number;
   onSelect: (s: Selection) => void;
+  dept?: string | null;
 }) {
   const [tab, setTab] = useState<'active' | 'recent'>('active');
-  const invs = world?.invocations ?? [];
+  const deptAgents = dept
+    ? new Set(world?.agents.filter((a) => a.departmentId === dept).map((a) => a.id))
+    : null;
+  const invs = (world?.invocations ?? []).filter((i) => !deptAgents || deptAgents.has(i.agentId));
   const active = invs
     .filter((i) => ACTIVE_INVOCATION_STATUSES.includes(i.status))
     .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));

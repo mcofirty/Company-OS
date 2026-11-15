@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { DEMO_TASK_CATALOG, type TaskKind, type WorldSnapshot } from '@company-os/contracts';
 import { computeMetrics } from '@company-os/world';
 import type { ConnectionState } from '../../lib/useHq';
 import { usd } from '../../lib/format';
+import { useControls } from '../../lib/controls';
+import type { MetricsSummary, MetricsWindow } from '../../lib/useMetrics';
 
 const CONN: Record<ConnectionState, string> = {
   connecting: 'Connexion…',
@@ -17,14 +19,25 @@ const CONN: Record<ConnectionState, string> = {
 export function Topbar({
   world,
   connection,
+  metrics,
+  metricsWindow,
+  onMetricsWindow,
   onCreateTask,
   onSystem,
+  alerts,
+  onSearch,
 }: {
   world: WorldSnapshot | null;
   connection: ConnectionState;
+  metrics: MetricsSummary | null;
+  metricsWindow: MetricsWindow;
+  onMetricsWindow: (w: MetricsWindow) => void;
   onCreateTask: (kind: TaskKind) => Promise<void>;
   onSystem: (pause: boolean) => Promise<void>;
+  alerts: ReactNode;
+  onSearch: () => void;
 }) {
+  const { caps, readOnly } = useControls();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const m = world ? computeMetrics(world) : null;
@@ -103,35 +116,75 @@ export function Topbar({
           tone={m && m.incidents > 0 ? 'danger' : undefined}
           testId="kpi-incidents"
         />
+        <div className="kpi kpi-window" data-testid="kpi-success">
+          <span className="kpi-value">
+            {metrics?.tasks.successRate == null
+              ? '—'
+              : `${Math.round(metrics.tasks.successRate * 100)} %`}
+          </span>
+          <span className="kpi-label">
+            Succès{' '}
+            <select
+              value={metricsWindow}
+              onChange={(e) => onMetricsWindow(e.target.value as MetricsWindow)}
+              aria-label="Fenêtre des indicateurs"
+              data-testid="kpi-window"
+            >
+              <option value="1h">1 h</option>
+              <option value="24h">24 h</option>
+              <option value="7d">7 j</option>
+            </select>
+          </span>
+          <span className="kpi-sub">
+            {metrics
+              ? metrics.tasks.sample === 0
+                ? 'aucune tâche terminée'
+                : `${metrics.tasks.sample} terminée(s)`
+              : readOnly
+                ? 'replay'
+                : ''}
+          </span>
+        </div>
       </div>
       <div className="topbar-actions">
-        <div className="menu">
-          <button
-            className="btn primary"
-            onClick={() => setOpen((o) => !o)}
-            aria-expanded={open}
-            data-testid="new-task"
-          >
-            + Nouvelle tâche
-          </button>
-          {open && (
-            <div className="menu-pop" role="menu">
-              {(Object.keys(DEMO_TASK_CATALOG) as TaskKind[]).map((k) => (
-                <button
-                  key={k}
-                  role="menuitem"
-                  disabled={busy}
-                  onClick={() => void run(k)}
-                  data-testid={`task-${k}`}
-                >
-                  <strong>{DEMO_TASK_CATALOG[k].title}</strong>
-                  <span>{DEMO_TASK_CATALOG[k].description}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {world && (
+        <button
+          className="btn ghost"
+          onClick={onSearch}
+          title="Rechercher (Ctrl/Cmd+K)"
+          data-testid="open-search"
+        >
+          ⌕ <kbd>Ctrl K</kbd>
+        </button>
+        {alerts}
+        {caps.createTask && (
+          <div className="menu">
+            <button
+              className="btn primary"
+              onClick={() => setOpen((o) => !o)}
+              aria-expanded={open}
+              data-testid="new-task"
+            >
+              + Nouvelle tâche
+            </button>
+            {open && (
+              <div className="menu-pop" role="menu">
+                {(Object.keys(DEMO_TASK_CATALOG) as TaskKind[]).map((k) => (
+                  <button
+                    key={k}
+                    role="menuitem"
+                    disabled={busy}
+                    onClick={() => void run(k)}
+                    data-testid={`task-${k}`}
+                  >
+                    <strong>{DEMO_TASK_CATALOG[k].title}</strong>
+                    <span>{DEMO_TASK_CATALOG[k].description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {world && caps.systemControl && (
           <button
             className={`btn ${world.system.paused ? 'primary' : 'danger'}`}
             data-testid="kill-switch"
@@ -148,8 +201,12 @@ export function Topbar({
             {world.system.paused ? '▶ Reprendre' : '■ Pause système'}
           </button>
         )}
-        <span className={`conn conn-${connection}`} data-testid="connection">
-          <span className="dot" /> {CONN[connection]}
+        <span
+          className={`conn conn-${connection}`}
+          data-testid="connection"
+          title={CONN[connection]}
+        >
+          <span className="dot" /> <span className="conn-label">{CONN[connection]}</span>
         </span>
       </div>
     </header>

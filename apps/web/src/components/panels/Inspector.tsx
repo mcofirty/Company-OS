@@ -24,6 +24,8 @@ import {
   usd,
 } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
+import { useControls } from '../../lib/controls';
+import type { MetricsSummary } from '../../lib/useMetrics';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 
@@ -35,6 +37,12 @@ interface Props {
   onCreateTask: (kind: TaskKind, agentId?: string) => Promise<void>;
   onFocus: (agentId: string) => void;
   onDecide: DecideFn;
+  onLifecycle: (
+    agentId: string,
+    action: 'pause' | 'resume' | 'deactivate',
+    reason: string,
+  ) => Promise<void>;
+  metrics: MetricsSummary | null;
 }
 
 /** Inspecteur universel (docs/01 §6) : provenance, état réel, horodatages, identifiants. */
@@ -103,7 +111,9 @@ function AgentInspector({
   onSelect,
   onCreateTask,
   onFocus,
+  onLifecycle,
 }: Props & { id: string }) {
+  const { caps } = useControls();
   const agent = world.agents.find((a) => a.id === id);
   const remote = useRemote<{ grants: { toolId: string; actions: string[] }[] }>(
     `/v1/agents/${id}`,
@@ -159,7 +169,10 @@ function AgentInspector({
             ),
           ],
           ['Rôle', agent.role],
-          ['Poste', agent.deskAnchor],
+          [
+            'Poste',
+            agent.deskAnchor.startsWith('retired:') ? 'libéré (agent désactivé)' : agent.deskAnchor,
+          ],
           ['Identifiant', <code key="id">{agent.id}</code>],
           [
             'Budget IA',
@@ -211,24 +224,68 @@ function AgentInspector({
         </ol>
       </Section>
       <div className="actions">
-        {kinds.map((k) => (
-          <button
-            key={k}
-            className="btn"
-            disabled={busy || agent.status !== 'active'}
-            onClick={() => {
-              setBusy(true);
-              void onCreateTask(k, agent.id).finally(() => setBusy(false));
-            }}
-            data-testid={`assign-${k}`}
-          >
-            Assigner : {DEMO_TASK_CATALOG[k].title}
-          </button>
-        ))}
+        {caps.createTask &&
+          kinds.map((k) => (
+            <button
+              key={k}
+              className="btn"
+              disabled={busy || agent.status !== 'active'}
+              onClick={() => {
+                setBusy(true);
+                void onCreateTask(k, agent.id).finally(() => setBusy(false));
+              }}
+              data-testid={`assign-${k}`}
+            >
+              Assigner : {DEMO_TASK_CATALOG[k].title}
+            </button>
+          ))}
         <button className="btn ghost" onClick={() => onFocus(agent.id)}>
           Centrer sur l’avatar
         </button>
       </div>
+      {(caps.pauseAgent || caps.deactivateAgent) && agent.status !== 'deactivated' && (
+        <div className="actions row lifecycle">
+          {caps.pauseAgent && (
+            <button
+              className="btn"
+              disabled={busy}
+              data-testid={agent.status === 'paused' ? 'agent-resume' : 'agent-pause'}
+              onClick={() => {
+                const action = agent.status === 'paused' ? 'resume' : 'pause';
+                const reason = window.prompt(
+                  action === 'pause'
+                    ? 'Motif de la suspension (la tâche en cours se termine, aucune nouvelle ne démarre) :'
+                    : 'Motif de la reprise :',
+                );
+                if (!reason || reason.trim().length < 3) return;
+                setBusy(true);
+                void onLifecycle(agent.id, action, reason.trim()).finally(() => setBusy(false));
+              }}
+            >
+              {agent.status === 'paused' ? '▶ Reprendre l’agent' : '❚❚ Suspendre l’agent'}
+            </button>
+          )}
+          {caps.deactivateAgent && (
+            <button
+              className="btn danger"
+              disabled={busy}
+              data-testid="agent-deactivate"
+              onClick={() => {
+                const reason = window.prompt(
+                  'Motif de la désactivation (définitive ; refusée si des tâches sont ouvertes) :',
+                );
+                if (!reason || reason.trim().length < 3) return;
+                setBusy(true);
+                void onLifecycle(agent.id, 'deactivate', reason.trim()).finally(() =>
+                  setBusy(false),
+                );
+              }}
+            >
+              ✕ Désactiver
+            </button>
+          )}
+        </div>
+      )}
       <p className="hint">
         Index visuel #{index + 1} · les déplacements sont une projection locale, sans effet métier.
       </p>
@@ -554,9 +611,10 @@ function DepartmentInspector({ world, id, now, onSelect }: Props & { id: string 
   );
 }
 
-function ToolInspector({ world, id, onSelect, now }: Props & { id: string }) {
+function ToolInspector({ world, id, onSelect, now, metrics }: Props & { id: string }) {
   const tool = world.tools.find((t) => t.id === id);
   if (!tool) return <Empty>Outil introuvable.</Empty>;
+  const h = metrics?.tools.find((t) => t.toolId === id);
   const invs = world.invocations.filter((i) => i.toolId === id).slice(0, 10);
   return (
     <>
@@ -569,6 +627,20 @@ function ToolInspector({ world, id, onSelect, now }: Props & { id: string }) {
           </p>
         </div>
       </header>
+      <Section title={`Santé (${metrics?.window ?? '—'})`}>
+        {h ? (
+          <p className="small" data-testid="tool-health">
+            <Badge tone={h.health === 'healthy' ? 'success' : 'danger'}>
+              {h.health === 'healthy' ? 'sain' : 'dégradé'}
+            </Badge>{' '}
+            {h.calls} appel(s) · {h.failures} échec(s)
+            {h.errorRate != null ? ` · ${Math.round(h.errorRate * 100)} % d’erreurs` : ''}
+            {h.p95Ms != null ? ` · p95 ${Math.round(h.p95Ms)} ms` : ''}
+          </p>
+        ) : (
+          <Empty>Aucune invocation sur la fenêtre (ou indicateurs indisponibles en replay).</Empty>
+        )}
+      </Section>
       <Section title="Actions">
         {tool.actions.map((a) => (
           <p key={a.action} className="small">

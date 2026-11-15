@@ -22,7 +22,7 @@ export async function resetAndSeed(
   now = new Date('2026-01-01T09:00:00.000Z'),
 ): Promise<void> {
   await db.$executeRawUnsafe(
-    `TRUNCATE outbox, event_log, llm_usage, meeting_participants, meetings, approval_requests,
+    `TRUNCATE outbox, event_log, alerts, llm_usage, meeting_participants, meetings, approval_requests,
      tool_invocations, agent_runs, tasks, agent_tool_grants,
      agent_versions, budgets, agents, departments, tools, memberships, users, idempotency_keys,
      organizations CASCADE`,
@@ -41,6 +41,7 @@ export function emptySnapshot(base: WorldSnapshot): WorldSnapshot {
     timeline: [],
     approvals: [],
     meetings: [],
+    alerts: [],
     costs: { llmCalls: 0, inputTokens: 0, outputTokens: 0, costMicros: 0, estimated: false },
     budgets: base.budgets.map((b) => ({ ...b, usedMicros: 0 })),
     system: { paused: false },
@@ -64,6 +65,7 @@ export function comparable(w: WorldSnapshot) {
     budgets: w.budgets.map((b) => [b.scopeType, b.scopeId, b.usedMicros]),
     approvals: [...w.approvals].sort((a, b) => a.id.localeCompare(b.id)),
     meetings: [...w.meetings].sort((a, b) => a.id.localeCompare(b.id)),
+    alerts: w.alerts,
   };
 }
 

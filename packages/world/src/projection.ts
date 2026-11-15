@@ -1,3 +1,4 @@
+import { alertFromEvent } from './alerts';
 import {
   LIMITS,
   OPEN_TASK_STATUSES,
@@ -5,12 +6,16 @@ import {
   toolAction,
   type AgentView,
   type ApprovalView,
+  type AlertView,
   type MeetingView,
   type DomainEvent,
   type InvocationView,
   type TaskView,
   type WorldSnapshot,
 } from '@company-os/contracts';
+
+/** Ancrage fictif d'un agent désactivé : son poste redevient attribuable (ADR-030). */
+export const retiredAnchor = (agentId: string): string => `retired:${agentId}`;
 
 export type ApplyOutcome = 'applied' | 'duplicate' | 'gap';
 
@@ -196,6 +201,26 @@ export function applyEvent(
         w = patchAgent(w, id, () => ({ activity: 'in_meeting' }));
       break;
     }
+    case 'agent.paused':
+      w = patchAgent(w, e.payload.agentId, (a) => ({
+        status: 'paused',
+        activity: a.currentTaskId ? a.activity : 'paused',
+      }));
+      break;
+    case 'agent.resumed':
+      w = patchAgent(w, e.payload.agentId, (a) => ({
+        status: 'active',
+        activity: a.activity === 'paused' ? activityAtRest(w.tasks, a) : a.activity,
+      }));
+      break;
+    case 'agent.deactivated':
+      // Libère le poste (contrainte unique org+poste) ; le poste d'origine reste dans agent.created.
+      w = patchAgent(w, e.payload.agentId, () => ({
+        status: 'deactivated',
+        activity: 'offline',
+        deskAnchor: retiredAnchor(e.payload.agentId),
+      }));
+      break;
     case 'meeting.completed': {
       const p = e.payload;
       const m = w.meetings.find((x) => x.id === p.meetingId);
@@ -307,7 +332,19 @@ export function applyEvent(
       w = { ...w, tasks: trimTasks(w.tasks) };
       break;
   }
+  const alert = alertFromEvent(e);
+  if (alert) w = { ...w, alerts: trimAlerts([alert, ...w.alerts]) };
   return { world: w, outcome: 'applied' };
+}
+
+/** Garde les alertes non acquittées + les plus récentes acquittées (même règle serveur). */
+export function trimAlerts(list: AlertView[]): AlertView[] {
+  const open = list.filter((a) => a.ackedAt === null);
+  const done = list
+    .filter((a) => a.ackedAt !== null)
+    .sort((a, b) => b.eventSeq - a.eventSeq)
+    .slice(0, Math.max(0, LIMITS.alerts - open.length));
+  return [...open, ...done].sort((a, b) => b.eventSeq - a.eventSeq);
 }
 
 export function applyEvents(world: WorldSnapshot, events: readonly DomainEvent[]): WorldSnapshot {

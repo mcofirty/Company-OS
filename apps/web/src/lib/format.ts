@@ -190,6 +190,24 @@ export function describe(
         tone: 'success',
         icon: '◎',
       };
+    case 'agent.paused':
+      return {
+        text: `${agentName(e.payload.agentId)} suspendu · ${e.payload.reason}`,
+        tone: 'warning',
+        icon: '❚❚',
+      };
+    case 'agent.resumed':
+      return {
+        text: `${agentName(e.payload.agentId)} repris · ${e.payload.reason}`,
+        tone: 'success',
+        icon: '▶',
+      };
+    case 'agent.deactivated':
+      return {
+        text: `${agentName(e.payload.agentId)} désactivé · ${e.payload.reason}`,
+        tone: 'neutral',
+        icon: '✕',
+      };
   }
 }
 

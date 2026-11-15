@@ -138,3 +138,19 @@ désactivé et seules les requêtes portant ce jeton (HTTP `Authorization: Beare
 comparées en temps constant ; un en-tête de proxy (`cf-connecting-ip`, `x-forwarded-for`…) refuse aussi le
 principal dev. Le cockpit permet de choisir l'API et le jeton par navigateur (localStorage), sans redéploiement
 Vercel. Auth locale simple en attendant OIDC (M5).
+
+ADR-030 — **Désactiver un agent libère son poste.** La contrainte unique (org, poste) est conservée ; à la désactivation,
+`deskAnchor` devient `retired:<agentId>`, dans le service comme dans le réducteur partagé (snapshot = rejeu). Le poste
+d'origine reste dans l'historique (`agent.created`). Réversible : une contrainte partielle SQL pourrait la remplacer.
+
+ADR-031 — **Alertes dérivées des événements, acquittement hors journal.** Une alerte est calculée par `alertFromEvent`
+(partagé client/serveur) et insérée dans la transaction de l'événement ; son id est l'eventId (idempotence naturelle).
+L'acquittement est un état opérateur, pas un fait métier : il ne crée pas d'événement.
+
+ADR-032 — **Replay calculé dans le navigateur.** Le client relit `/v1/events` et applique le même réducteur, avec points
+de contrôle. Aucun appel mutateur ni KPI « présent » pendant le replay. Un replay serveur paginé sera nécessaire au-delà
+de quelques milliers d'événements.
+
+ADR-033 — **Capacités UI venant du serveur.** `/v1/me` renvoie rôle et capacités ; l'UI masque les actions non permises
+(viewer : aucune), le serveur reste seul juge (403).
+

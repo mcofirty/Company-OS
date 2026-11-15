@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import type { ApprovalView, MeetingView, TaskView, WorldSnapshot } from '@company-os/contracts';
 import { api } from '../../lib/api';
+import { useControls } from '../../lib/controls';
 import { duration, TASK_STATUS_LABEL, time } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { Badge, Empty, Section } from '../common';
@@ -93,6 +94,7 @@ export function ApprovalInspector({
 }) {
   const a = world.approvals.find((x) => x.id === id);
   const [busy, setBusy] = useState(false);
+  const { caps } = useControls();
   if (!a) return <Empty>Demande introuvable (hors de la fenêtre récente).</Empty>;
   const requester = world.agents.find((x) => x.id === a.agentId);
   const decide = (decision: 'approve' | 'reject'): void => {
@@ -184,7 +186,7 @@ export function ApprovalInspector({
           )}
         </dl>
       </Section>
-      {a.status === 'pending' && (
+      {a.status === 'pending' && caps.decideApproval && (
         <div className="actions row">
           <button
             className="btn approve"

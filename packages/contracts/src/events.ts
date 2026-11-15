@@ -212,6 +212,9 @@ export const Payloads = {
       .max(10),
     taskIdsCreated: z.array(Uuid).max(5),
   }),
+  'agent.paused': z.object({ agentId: SlugIdSchema, reason: z.string().min(1).max(200) }),
+  'agent.resumed': z.object({ agentId: SlugIdSchema, reason: z.string().min(1).max(200) }),
+  'agent.deactivated': z.object({ agentId: SlugIdSchema, reason: z.string().min(1).max(200) }),
   'system.paused': z.object({ reason: z.string().min(1).max(200) }),
   'system.resumed': z.object({ reason: z.string().min(1).max(200) }),
   'tool.invocation.rejected': z.object({
@@ -268,6 +271,9 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('approval.decided'),
   variant('meeting.started'),
   variant('meeting.completed'),
+  variant('agent.paused'),
+  variant('agent.resumed'),
+  variant('agent.deactivated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

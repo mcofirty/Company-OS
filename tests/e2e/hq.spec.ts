@@ -212,6 +212,13 @@ test('S05 — RH propose un agent, l’admin approuve depuis le cockpit, l’age
 }) => {
   await open(page);
   page.on('dialog', (d) => void d.accept('Capacité Support validée (e2e)'));
+  const agentIds = async (): Promise<string[]> =>
+    (
+      (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
+        data: { agents: { id: string }[] };
+      }
+    ).data.agents.map((a) => a.id);
+  const beforeIds = new Set(await agentIds());
   const before = await page.getByTestId('team-list').locator('li').count();
   await createViaUi(page, 'propose_hire');
   await page.keyboard.press('Escape');
@@ -231,6 +238,15 @@ test('S05 — RH propose un agent, l’admin approuve depuis le cockpit, l’age
   await expect(page.getByTestId('connection')).toContainText('Temps réel', { timeout: 20_000 });
   await expect(page.getByTestId('team-list').locator('li')).toHaveCount(before + 1);
   await expect(page.locator('.toast').filter({ hasText: 'Nouvel agent' })).toHaveCount(0);
+
+  // Nettoyage : désactiver la recrue libère son poste (sinon les exécutions répétées remplissent le QG).
+  const hired = (await agentIds()).filter((id) => !beforeIds.has(id));
+  expect(hired).toHaveLength(1);
+  const res = await page.request.post(`${API}/v1/agents/${hired[0]}/deactivate`, {
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    data: { reason: 'Nettoyage e2e S05' },
+  });
+  expect(res.status()).toBe(200);
 });
 
 test('S06 — réunion réelle : participants, décisions et tâche déléguée visibles', async ({
@@ -268,4 +284,122 @@ test('validation d’un envoi d’email : en attente, puis approuvé depuis l’
     .toBe('succeeded');
   const d = await taskDetail(page, id);
   expect(d.invocations.map((i) => i.status)).toEqual(['succeeded']);
+});
+
+test('M4 — recherche Ctrl+K : trouver un agent et ouvrir son inspecteur', async ({ page }) => {
+  await open(page);
+  await page.keyboard.press('Control+k');
+  await page.getByTestId('search-input').fill('sdr');
+  await expect(page.getByTestId('search-result').first()).toBeVisible();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('inspector')).toBeVisible();
+});
+
+test('M4 — filtre département : avatars estompés, liste et outils filtrés', async ({ page }) => {
+  await open(page);
+  const total = await page.getByTestId('team-list').locator('li').count();
+  await page.getByTestId('filter-sales').click();
+  const filtered = await page.getByTestId('team-list').locator('li').count();
+  expect(filtered).toBeGreaterThan(0);
+  expect(filtered).toBeLessThan(total);
+  const alpha = await page.evaluate(() => ({
+    sales: window.__hqScene?.agentAlpha('sdr-01'),
+    other: window.__hqScene?.agentAlpha('billing-01'),
+  }));
+  expect(alpha.sales).toBe(1);
+  expect(alpha.other).toBeLessThan(1);
+  await page.getByTestId('filter-sales').click();
+  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(total);
+});
+
+test('S13 — liens agent→outil : au plus 5 tracés, uniquement pour des invocations actives', async ({
+  page,
+}) => {
+  await open(page);
+  for (let i = 0; i < 3; i++) await createViaUi(page, 'qualify_lead');
+  await page.getByTestId('toggle-links').click();
+  await expect(page.getByTestId('toggle-links')).toHaveAttribute('aria-pressed', 'true');
+  await page.waitForTimeout(800);
+  const links = await page.evaluate(() => ({
+    drawn: window.__hqScene?.drawnLinks ?? [],
+  }));
+  expect(links.drawn.length).toBeLessThanOrEqual(5);
+  const boot = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
+    data: { invocations: { agentId: string; toolId: string; status: string }[] };
+  };
+  // Chaque lien tracé correspond à une invocation qui existe côté serveur (jamais inventé).
+  for (const l of links.drawn) {
+    expect(
+      boot.data.invocations.some((i) => i.agentId === l.agentId && i.toolId === l.toolId),
+    ).toBe(true);
+  }
+});
+
+test('M4 — replay : bandeau REPLAY, lecture seule, aucune requête mutatrice', async ({ page }) => {
+  await open(page);
+  const mutations: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() !== 'GET') mutations.push(`${r.method()} ${r.url()}`);
+  });
+  await page.getByTestId('toggle-replay').click();
+  await expect(page.getByTestId('replay-bar')).toContainText('REPLAY');
+  await expect(page.getByTestId('replay-slider')).toBeEnabled({ timeout: 15_000 });
+  await expect(page.getByTestId('new-task')).toHaveCount(0);
+  await expect(page.getByTestId('kill-switch')).toHaveCount(0);
+  await page.getByTestId('replay-slider').fill('5');
+  await expect(page.getByTestId('replay-time')).not.toHaveText('—');
+  await page.getByTestId('replay-play').click();
+  await page.waitForTimeout(1000);
+  await page.getByTestId('replay-exit').click();
+  await expect(page.getByTestId('replay-bar')).toHaveCount(0);
+  await expect(page.getByTestId('new-task')).toBeVisible();
+  expect(mutations).toEqual([]);
+});
+
+test('M4 — suspendre puis reprendre un agent ; alerte acquittée', async ({ page }) => {
+  await open(page);
+  page.on('dialog', (d) => void d.accept('Contrôle e2e M4'));
+  await page.getByTestId('team-list').locator('li', { hasText: 'Nora' }).first().click();
+  await expect(page.getByTestId('agent-pause')).toBeVisible();
+  await page.getByTestId('agent-pause').click();
+  await expect(page.getByTestId('agent-resume')).toBeVisible();
+  await expect(page.getByTestId('timeline')).toContainText('suspendu');
+  await page.getByTestId('agent-resume').click();
+  await expect(page.getByTestId('agent-pause')).toBeVisible();
+
+  // Une alerte (validation d'email en attente) apparaît dans le centre d'alertes et s'acquitte.
+  const taskId = await createViaUi(page, 'send_followup');
+  await page.getByTestId('alerts-button').click();
+  const row = page
+    .getByTestId('alert-row')
+    .filter({ has: page.getByTestId('alert-ack') })
+    .first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  const before = await page.getByTestId('alert-ack').count();
+  await row.getByTestId('alert-ack').click();
+  await expect(page.getByTestId('alert-ack')).toHaveCount(before - 1);
+
+  // Nettoyage : refuser la validation créée pour ne pas bloquer l'agent dans les scénarios suivants.
+  await expect
+    .poll(
+      async () => {
+        const b = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
+          data: { approvals: { id: string; taskId: string | null; status: string }[] };
+        };
+        return (
+          b.data.approvals.find((a) => a.taskId === taskId && a.status === 'pending')?.id ?? ''
+        );
+      },
+      { timeout: 30_000 },
+    )
+    .not.toBe('');
+  const b = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
+    data: { approvals: { id: string; taskId: string | null; status: string }[] };
+  };
+  const pending = b.data.approvals.find((a) => a.taskId === taskId && a.status === 'pending')!;
+  const res = await page.request.post(`${API}/v1/approvals/${pending.id}/decide`, {
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    data: { decision: 'reject', reason: 'Nettoyage e2e M4' },
+  });
+  expect(res.status()).toBe(200);
 });

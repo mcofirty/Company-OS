@@ -4,11 +4,26 @@ import {
   OPEN_TASK_STATUSES,
   type WorldSnapshot,
 } from '@company-os/contracts';
-import { HQ_MAP, trimApprovals, trimInvocations, trimMeetings, trimTasks } from '@company-os/world';
+import {
+  HQ_MAP,
+  trimAlerts,
+  trimApprovals,
+  trimInvocations,
+  trimMeetings,
+  trimTasks,
+} from '@company-os/world';
 import type { Db } from './client';
 import { Prisma } from './generated/prisma/client';
 import { rowToEvent } from './events';
-import { agentView, approvalView, invocationView, meetingView, taskView, toolView } from './views';
+import {
+  agentView,
+  alertView,
+  approvalView,
+  invocationView,
+  meetingView,
+  taskView,
+  toolView,
+} from './views';
 
 /**
  * Snapshot cohérent : toutes les lectures dans une transaction REPEATABLE READ, donc
@@ -64,6 +79,14 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
           include: { participants: true },
         }),
       ]);
+      const [alertsOpen, alertsDone] = await Promise.all([
+        tx.alert.findMany({ where: { orgId, ackedAt: null } }),
+        tx.alert.findMany({
+          where: { orgId, ackedAt: { not: null } },
+          orderBy: { eventSeq: 'desc' },
+          take: LIMITS.alerts,
+        }),
+      ]);
       const [costAgg, estimatedRuns, budgets] = await Promise.all([
         tx.agentRun.aggregate({
           where: { orgId, status: { not: 'running' } },
@@ -112,6 +135,7 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
         system: { paused: org.killSwitch },
         approvals: trimApprovals([...approvalsOpen, ...approvalsDone].map(approvalView)),
         meetings: trimMeetings([...meetingsOpen, ...meetingsDone].map(meetingView)),
+        alerts: trimAlerts([...alertsOpen, ...alertsDone].map(alertView)),
         timeline: events.map(rowToEvent),
       };
     },

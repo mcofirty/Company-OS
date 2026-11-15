@@ -3,6 +3,66 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (5) — M4 : Command Center (alertes, santé outils, replay, recherche, rôles)
+
+**Milestone courant : M4 terminé (hors éléments listés en écarts). Prochain : M5.**
+
+### Réalisé
+- **Cycle de vie d'agent** : `agent.paused` / `agent.resumed` / `agent.deactivated` (motif obligatoire ≥ 3 car.,
+  Idempotency-Key). Pause : la tâche en cours se termine, aucune nouvelle ne démarre. Désactivation (admin) refusée s'il
+  reste des tâches ouvertes ; elle **libère le poste** (`deskAnchor = retired:<id>`, même règle dans le réducteur).
+- **Alertes persistées** (migration `m4_alerts`) : dérivées des événements dans la même transaction que `event_log`
+  (`alertFromEvent`, partagé client/serveur ; id = eventId). Niveaux info/warning/error/critical. Acquittement idempotent
+  (operator+), qui n'est pas un événement métier. `GET /v1/alerts`, `POST /v1/alerts/:id/ack`.
+- **Indicateurs serveur** `GET /v1/metrics/summary?window=1h|24h|7d` : taux de succès sur échantillon réel (« — » sans
+  échantillon), appels/coût LLM, santé par outil (appels, échecs, taux d'erreur, p95, dégradé si ≥ 50 % d'erreurs sur ≥ 2
+  appels). `GET /v1/me` : rôle + capacités.
+- **Cockpit** : recherche globale Ctrl/Cmd+K (agents, tâches, outils, départements, validations) ; filtres de département
+  (avatars des autres départements estompés, liste équipe, mur d'outils et timeline filtrés) ; filtre de type de timeline ;
+  overlay de liens agent→outil animés (uniquement invocations actives, ≤ 5 tracés + « +N regroupés ») et dock d'outils
+  cliquable sur la carte ; centre d'alertes (tiroir, niveaux, acquittement) ; KPI « Succès » avec fenêtre 1 h/24 h/7 j ;
+  santé dans l'inspecteur d'outil ; boutons Suspendre/Reprendre/Désactiver dans l'inspecteur d'agent.
+- **Replay** : reconstruction côté navigateur à partir du journal (`/v1/events`, points de contrôle tous les 200
+  événements, même réducteur), lecture 0,5–4×, curseur, bandeau REPLAY permanent ; toute l'UI passe en lecture seule
+  (aucun bouton mutateur, KPI serveur masqués) ; vérifié en e2e : **aucune requête non-GET** pendant le replay.
+- **Rôles dans l'UI** : boutons mutateurs affichés selon les capacités de `/v1/me` (viewer : aucun) ; le serveur revérifie.
+- **Corrections** : hook React appelé après un retour anticipé (inspecteur de validation) + règle ESLint
+  `react-hooks/rules-of-hooks` ajoutée ; animations d'avatar arrêtées avant destruction (crash en replay arrière) ;
+  barre supérieure compacte à 1440 px ; débordement horizontal du panneau latéral ; tests e2e S05/M4 désormais
+  autonettoyants (recrue désactivée, validation refusée) donc rejouables sur la même base.
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK · `pnpm --filter @company-os/web build` OK.
+- `pnpm test` : **93 tests passés** (10 fichiers) dont M4 : pause/reprise/désactivation (viewer 403, operator 403 pour
+  désactiver, 409 si tâches ouvertes, poste libéré), alertes (même transaction, acquittement idempotent, viewer 403,
+  cohérence projection serveur = rejeu client), seed sans alerte, métriques (succès, outil dégradé, null sans
+  échantillon), isolation entre organisations (API + temps réel, S10).
+- `pnpm e2e` : **15 tests passés**, exécuté deux fois de suite sur la même base. Nouveaux : recherche Ctrl+K, filtre de
+  département, S13 (≤ 5 liens, chacun adossé à une invocation serveur), replay sans requête mutatrice, pause/reprise
+  d'agent + acquittement d'alerte.
+- Captures : `docs/screenshots/m4-cockpit-1440.png`, `docs/screenshots/m4-cockpit-1920.png`.
+
+### Écarts connus
+- Timeline non virtualisée : elle affiche la fenêtre récente du snapshot ; l'historique complet passe par le replay.
+- Pas de stockage d'artefacts S3 ni de rétention configurable des événements/alertes.
+- Rôles : en local, seul le principal dev (admin) ou l'en-tête de test `x-dev-role` ; vrais comptes = OIDC (M5).
+- Le replay charge tout le journal dans le navigateur (adapté à quelques milliers d'événements, pas plus).
+- Un défaut de composition a été observé en Chromium headless quand un panneau défilant court recouvre le canvas WebGL ;
+  contourné (centre d'alertes en tiroir pleine hauteur), non reproduit hors headless faute de navigateur réel ici.
+
+### Prochaine tâche exacte
+M5 : authentification OIDC + cookies/CSRF/CSP, secrets hors `.env`, images Docker de prod, sauvegarde/restauration
+PostgreSQL testée, OpenTelemetry, test de charge 50+ avatars, CI complète (lint/typecheck/test/e2e/build), runbooks.
+
+### Commandes de reprise
+```bash
+cp .env.example .env && pnpm install
+docker compose up -d --wait
+pnpm db:migrate && pnpm db:seed
+pnpm dev
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm build
+```
+
 ## Session 2026-11-15 (4) — M3 : entreprise organisée (validations, recrutement, réunions, délégation)
 
 **Milestone courant : M3 terminé. Prochain : M4.**

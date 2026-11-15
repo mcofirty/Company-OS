@@ -8,6 +8,8 @@ import {
   ToolActionKindSchema,
   ToolRiskSchema,
   ToolViewSchema,
+  AlertLevelSchema,
+  type AlertView,
   ApprovalKindSchema,
   ApprovalStatusSchema,
   MeetingStatusSchema,
@@ -134,4 +136,18 @@ export function toolView(t: Prisma.ToolGetPayload<object>): ToolView {
     status: t.status,
     actions: t.actions,
   });
+}
+
+export function alertView(a: Prisma.AlertGetPayload<object>): AlertView {
+  return {
+    id: a.id,
+    level: AlertLevelSchema.parse(a.level),
+    title: a.title,
+    resourceType: a.resourceType,
+    resourceId: a.resourceId,
+    eventSeq: Number(a.eventSeq),
+    createdAt: a.createdAt.toISOString(),
+    ackedAt: iso(a.ackedAt),
+    ackedBy: a.ackedBy,
+  };
 }

@@ -53,6 +53,7 @@ const empty: WorldSnapshot = {
   system: { paused: false },
   approvals: [],
   meetings: [],
+  alerts: [],
   timeline: [],
 };
 
