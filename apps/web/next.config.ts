@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 /**
@@ -27,6 +28,13 @@ const config: NextConfig = {
   devIndicators: false,
   agentRules: false,
   poweredByHeader: false,
+  // Image Docker : sortie autonome (Vercel n'en a pas besoin et garde son mode par défaut).
+  ...(process.env.NEXT_OUTPUT === 'standalone'
+    ? {
+        output: 'standalone' as const,
+        outputFileTracingRoot: path.join(import.meta.dirname, '../..'),
+      }
+    : {}),
   async headers() {
     if (process.env.NODE_ENV !== 'production') return [];
     return [

@@ -91,17 +91,28 @@ export function startDispatcher(
         await launcher.launch(run.id, t.id);
       }
     }
+    // Erreurs répétées (base non initialisée, coupure) : attente exponentielle bornée à 30 s et
+    // journalisation au changement de cause seulement, pour ne pas noyer les logs d'exploitation.
+    let failures = 0;
+    let lastError = '';
     while (!stopped) {
       try {
         const started = await startNextTask(db, opts.orgId);
+        if (failures > 0) log('poll recovered', { afterFailures: failures });
+        failures = 0;
+        lastError = '';
         if (started) {
           await launcher.launch(started.runId, started.task.id);
           continue;
         }
       } catch (err) {
-        log('poll error', { err: String(err) });
+        failures++;
+        const msg = String(err);
+        if (msg !== lastError) log('poll error', { err: msg, retryingWithBackoff: true });
+        lastError = msg;
       }
-      await new Promise((r) => setTimeout(r, pollMs));
+      const wait = failures === 0 ? pollMs : Math.min(30_000, pollMs * 2 ** Math.min(failures, 7));
+      await new Promise((r) => setTimeout(r, wait));
     }
   };
 

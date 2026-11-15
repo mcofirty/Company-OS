@@ -1,0 +1,104 @@
+# Pile de production autonome (docs/11 §2) : Postgres, Temporal, migrations, API, worker, cockpit.
+#   cp infra/prod.env.example .env.production   # puis renseigner les valeurs (jamais versionné)
+#   docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build
+#   (démonstration : ajouter `--profile demo` pour charger l'organisation fictive)
+# Placer un reverse proxy TLS (Caddy, Traefik, Cloudflare Tunnel…) devant `web` et `api`.
+# Temporal : serveur de développement (SQLite) ici ; en production réelle, préférer Temporal Cloud
+# ou un cluster Temporal avec base dédiée, et pointer TEMPORAL_ADDRESS dessus.
+name: company-os-prod
+
+x-server: &server
+  image: company-os-server:${IMAGE_TAG:-latest}
+  build: { context: .., dockerfile: infra/docker/server.Dockerfile }
+  restart: unless-stopped
+  environment: &server-env
+    NODE_ENV: production
+    APP_MODE: demo
+    DATABASE_URL: postgresql://companyos:${POSTGRES_PASSWORD:?}@postgres:5432/companyos
+    TEMPORAL_ADDRESS: temporal:7233
+    WEB_ORIGIN: ${WEB_ORIGIN:?}
+    OIDC_ISSUER: ${OIDC_ISSUER:-}
+    OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
+    OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+    API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:-}
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    LOG_LEVEL: ${LOG_LEVEL:-info}
+  depends_on:
+    migrate: { condition: service_completed_successfully }
+    temporal: { condition: service_healthy }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: companyos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: companyos
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U companyos']
+      interval: 3s
+      retries: 30
+
+  temporal:
+    image: temporalio/temporal:1.5.1
+    restart: unless-stopped
+    user: '0:0'
+    command:
+      ['server', 'start-dev', '--ip', '0.0.0.0', '--db-filename', '/data/temporal.db', '--headless']
+    volumes: [temporaldata:/data]
+    healthcheck:
+      test: ['CMD', 'temporal', 'operator', 'cluster', 'health', '--address', '127.0.0.1:7233']
+      interval: 3s
+      retries: 40
+
+  # Migrations versionnées appliquées une fois avant API/worker (déploiement contrôlé).
+  migrate:
+    image: company-os-migrate:${IMAGE_TAG:-latest}
+    build: { context: .., dockerfile: infra/docker/server.Dockerfile, target: migrate }
+    environment:
+      DATABASE_URL: postgresql://companyos:${POSTGRES_PASSWORD:?}@postgres:5432/companyos
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  # Données de démonstration (profil explicite : `--profile demo`), jamais en mode live.
+  seed:
+    image: company-os-migrate:${IMAGE_TAG:-latest}
+    profiles: [demo]
+    command: ['/app/node_modules/.bin/tsx', 'src/seed-cli.ts']
+    environment:
+      APP_MODE: demo
+      DATABASE_URL: postgresql://companyos:${POSTGRES_PASSWORD:?}@postgres:5432/companyos
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  api:
+    <<: *server
+    environment:
+      <<: *server-env
+      API_HOST: 0.0.0.0
+      API_PORT: '4000'
+    ports: ['${API_PUBLISH:-127.0.0.1:4000}:4000']
+
+  worker:
+    <<: *server
+    command: ['apps/worker/node_modules/.bin/tsx', 'apps/worker/src/main.ts']
+    environment:
+      <<: *server-env
+      DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-false}
+    healthcheck: { disable: true }
+
+  web:
+    image: company-os-web:${IMAGE_TAG:-latest}
+    build:
+      context: ..
+      dockerfile: infra/docker/web.Dockerfile
+      args: { NEXT_PUBLIC_API_BASE_URL: '${PUBLIC_API_URL:?}' }
+    restart: unless-stopped
+    ports: ['${WEB_PUBLISH:-127.0.0.1:3000}:3000']
+    depends_on: [api]
+
+volumes:
+  pgdata:
+  temporaldata:

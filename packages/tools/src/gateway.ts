@@ -9,7 +9,7 @@ import {
   startInvocation,
   type Db,
 } from '@company-os/db';
-import { redactJson, redactText } from '@company-os/policies';
+import { redactJson, redactText, withSpan } from '@company-os/policies';
 import { findAdapter, ToolError, type ToolAdapter } from './adapters';
 import { findPlatformAdapter } from './platform';
 
@@ -76,7 +76,40 @@ export class ToolGateway {
     this.now = opts.now ?? (() => new Date());
   }
 
+  /** Span `tool.invoke` (docs/10 §2) : identifiants et statut seulement, jamais les arguments. */
   async invoke(req: InvokeRequest): Promise<InvokeResult> {
+    return withSpan(
+      'tool.invoke',
+      {
+        'org.id': req.orgId,
+        'run.id': req.runId,
+        'agent.id': req.agentId,
+        'tool.id': req.toolId,
+        'tool.action': req.action,
+        'tool.risk': toolAction(req.toolId, req.action)?.risk ?? 'unknown',
+      },
+      async (span) => {
+        const r = await this.invokeInner(req);
+        span.set({
+          'tool.status': r.status,
+          'tool.invocation_id': r.invocation.id,
+          'tool.attempts': r.invocation.attempt,
+          'tool.reason_code':
+            r.status === 'rejected'
+              ? r.reasonCode
+              : r.status === 'failed'
+                ? r.errorCode
+                : undefined,
+        });
+        if (r.status === 'failed' || r.status === 'rejected') {
+          span.fail(r.status === 'failed' ? r.errorCode : r.reasonCode);
+        }
+        return r;
+      },
+    );
+  }
+
+  private async invokeInner(req: InvokeRequest): Promise<InvokeResult> {
     const spec = toolAction(req.toolId, req.action);
     const platform = findPlatformAdapter(req.toolId, req.action);
     const adapter = platform ?? findAdapter(req.toolId, req.action);

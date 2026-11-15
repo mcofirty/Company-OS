@@ -22,3 +22,6 @@ references/*.jpg
 references/*.jpeg
 references/*.png
 references/*.webp
+
+# Sauvegardes locales de la base (données métier : jamais versionnées)
+backups/

@@ -13,3 +13,4 @@ export * from './services/approvals';
 export * from './services/meetings';
 export * from './services/governance';
 export * from './services/users';
+export * from './ops/backup';

@@ -4,6 +4,7 @@ import { createDb } from '@company-os/db';
 import { Client, Connection } from '@temporalio/client';
 import { buildApp } from './app';
 import { loadConfig, type ApiConfig } from './config';
+import { initTelemetry } from './telemetry';
 import type { ApprovalSignaler } from './routes/v1';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
@@ -16,6 +17,7 @@ try {
   process.exit(1);
 }
 const { env } = cfg;
+const stopTelemetry = initTelemetry(process.env);
 
 const db = createDb(env.DATABASE_URL);
 
@@ -58,6 +60,7 @@ const shutdown = async (): Promise<void> => {
   stopped = true;
   await app.close();
   await db.$disconnect();
+  await stopTelemetry?.();
   process.exit(0);
 };
 process.on('SIGINT', () => void shutdown());

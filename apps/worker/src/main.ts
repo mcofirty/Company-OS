@@ -6,6 +6,7 @@ import { loadPricing } from '@company-os/policies';
 import { ToolGateway } from '@company-os/tools';
 import { createActivities, liveProviderFromEnv } from './activities';
 import { createTemporalWorker, temporalLauncher } from './temporal';
+import { initTelemetry } from './telemetry';
 import { inlineLauncher, startDispatcher, type RunLauncher } from './worker';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
@@ -30,6 +31,7 @@ if (env.APP_MODE !== 'demo') {
 const log = (msg: string, extra: Record<string, unknown> = {}): void =>
   console.log(JSON.stringify({ time: new Date().toISOString(), service: 'worker', msg, ...extra }));
 
+initTelemetry(process.env);
 const db = createDb(env.DATABASE_URL);
 const activities = createActivities({
   db,

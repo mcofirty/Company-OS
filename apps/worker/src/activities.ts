@@ -26,7 +26,7 @@ import {
   type Db,
   type TaskOutcome,
 } from '@company-os/db';
-import { costMicros, maxCallCostMicros, type Pricing } from '@company-os/policies';
+import { costMicros, maxCallCostMicros, withSpan, type Pricing } from '@company-os/policies';
 import type { ToolGateway } from '@company-os/tools';
 
 export interface ActivityDeps {
@@ -60,6 +60,107 @@ export function createActivities(deps: ActivityDeps) {
     // Échec fermé : en démo, jamais de fournisseur réel.
     mode === 'demo' ? demoProvider : deps.liveProvider;
 
+  const modelStepInner = async (input: {
+    runId: string;
+    step: number;
+    messages: LlmMessage[];
+  }): Promise<ModelStepResult> => {
+    const ctx = await loadRunContext(db, input.runId);
+    if (ctx.org.killSwitch)
+      return { kind: 'denied', code: 'KILL_SWITCH', message: 'Système en pause (kill switch).' };
+    const provider = providerFor(ctx.org.mode);
+    if (!provider) {
+      return {
+        kind: 'denied',
+        code: 'PROVIDER_UNAVAILABLE',
+        message: 'Aucun fournisseur LLM configuré pour le mode live.',
+      };
+    }
+    const policy = ctx.version.modelPolicy;
+    const system = buildSystemPrompt({
+      orgName: ctx.org.name,
+      agentName: ctx.agent.name,
+      role: `${ctx.agent.title} (${ctx.agent.role})`,
+      manager: ctx.manager ? `${ctx.manager.name}, ${ctx.manager.title}` : 'administrateur humain',
+      goal: ctx.version.goal,
+      taskId: ctx.task.id,
+      instructions: ctx.version.instructions,
+    });
+    const tools = buildToolDefs(ctx.grants);
+    const request = {
+      model: provider.providerClass === 'demo' ? null : policy.model,
+      system,
+      messages: input.messages,
+      tools,
+      maxTokens: policy.maxTokens,
+      effort: policy.effort,
+    };
+
+    if (provider.providerClass === 'demo') {
+      const response = await provider.complete(request);
+      return { kind: 'ok', response, costMicros: 0 };
+    }
+
+    // Réserve budgétaire avant l'appel (estimation : ~3 caractères par token en entrée).
+    const estInput = Math.ceil(
+      (system.length + JSON.stringify(input.messages).length + JSON.stringify(tools).length) / 3,
+    );
+    const reserve = maxCallCostMicros(pricing, policy.model, estInput, policy.maxTokens) ?? 0;
+    const remainingRun = ctx.version.limits.maxCostMicros - ctx.run.costMicros;
+    if (reserve > remainingRun) {
+      return {
+        kind: 'denied',
+        code: 'BUDGET_EXCEEDED',
+        message: 'Plafond de coût du run insuffisant pour un nouvel appel.',
+      };
+    }
+    const r = await reserveBudget(db, {
+      orgId: ctx.org.id,
+      agentId: ctx.agent.id,
+      amountMicros: reserve,
+    });
+    if (!r.ok)
+      return {
+        kind: 'denied',
+        code: 'BUDGET_EXCEEDED',
+        message: `Budget ${r.scope} épuisé (plafond dur).`,
+      };
+
+    let response;
+    try {
+      response = await provider.complete(request);
+    } catch (err) {
+      await releaseBudget(db, {
+        orgId: ctx.org.id,
+        agentId: ctx.agent.id,
+        amountMicros: reserve,
+      });
+      // Erreur transitoire : on laisse Temporal réessayer l'activité (backoff + jitter).
+      if (err instanceof ProviderError && err.retryable) throw err;
+      return {
+        kind: 'denied',
+        code: 'PROVIDER_ERROR',
+        message: err instanceof Error ? err.message : 'Erreur fournisseur',
+      };
+    }
+    const cost = costMicros(pricing, response.model, response.usage);
+    await recordLlmCall(db, {
+      orgId: ctx.org.id,
+      runId: input.runId,
+      agentId: ctx.agent.id,
+      step: input.step,
+      provider: provider.name,
+      model: response.model,
+      ...response.usage,
+      costMicros: cost,
+      reservedMicros: reserve,
+      pricingVersion: pricing.version,
+      stopReason: response.stopReason,
+      correlationId: ctx.task.correlationId,
+    });
+    return { kind: 'ok', response, costMicros: cost ?? 0 };
+  };
+
   return {
     async prepareRun(input: { runId: string }): Promise<PreparedRun> {
       const ctx = await loadRunContext(db, input.runId);
@@ -79,107 +180,32 @@ export function createActivities(deps: ActivityDeps) {
       };
     },
 
+    /** Span `llm.invoke` : fournisseur, modèle, tokens, coût. Jamais le prompt ni la réponse. */
     async modelStep(input: {
       runId: string;
       step: number;
       messages: LlmMessage[];
     }): Promise<ModelStepResult> {
-      const ctx = await loadRunContext(db, input.runId);
-      if (ctx.org.killSwitch)
-        return { kind: 'denied', code: 'KILL_SWITCH', message: 'Système en pause (kill switch).' };
-      const provider = providerFor(ctx.org.mode);
-      if (!provider) {
-        return {
-          kind: 'denied',
-          code: 'PROVIDER_UNAVAILABLE',
-          message: 'Aucun fournisseur LLM configuré pour le mode live.',
-        };
-      }
-      const policy = ctx.version.modelPolicy;
-      const system = buildSystemPrompt({
-        orgName: ctx.org.name,
-        agentName: ctx.agent.name,
-        role: `${ctx.agent.title} (${ctx.agent.role})`,
-        manager: ctx.manager
-          ? `${ctx.manager.name}, ${ctx.manager.title}`
-          : 'administrateur humain',
-        goal: ctx.version.goal,
-        taskId: ctx.task.id,
-        instructions: ctx.version.instructions,
-      });
-      const tools = buildToolDefs(ctx.grants);
-      const request = {
-        model: provider.providerClass === 'demo' ? null : policy.model,
-        system,
-        messages: input.messages,
-        tools,
-        maxTokens: policy.maxTokens,
-        effort: policy.effort,
-      };
-
-      if (provider.providerClass === 'demo') {
-        const response = await provider.complete(request);
-        return { kind: 'ok', response, costMicros: 0 };
-      }
-
-      // Réserve budgétaire avant l'appel (estimation : ~3 caractères par token en entrée).
-      const estInput = Math.ceil(
-        (system.length + JSON.stringify(input.messages).length + JSON.stringify(tools).length) / 3,
+      return withSpan(
+        'llm.invoke',
+        { 'run.id': input.runId, 'run.step': input.step },
+        async (span) => {
+          const r = await modelStepInner(input);
+          span.set({
+            'llm.outcome': r.kind === 'ok' ? 'ok' : r.code,
+            ...(r.kind === 'ok'
+              ? {
+                  'llm.model': r.response.model ?? 'demo',
+                  'llm.input_tokens': r.response.usage.inputTokens,
+                  'llm.output_tokens': r.response.usage.outputTokens,
+                  'llm.cost_micros': r.costMicros,
+                }
+              : {}),
+          });
+          if (r.kind !== 'ok') span.fail(r.code);
+          return r;
+        },
       );
-      const reserve = maxCallCostMicros(pricing, policy.model, estInput, policy.maxTokens) ?? 0;
-      const remainingRun = ctx.version.limits.maxCostMicros - ctx.run.costMicros;
-      if (reserve > remainingRun) {
-        return {
-          kind: 'denied',
-          code: 'BUDGET_EXCEEDED',
-          message: 'Plafond de coût du run insuffisant pour un nouvel appel.',
-        };
-      }
-      const r = await reserveBudget(db, {
-        orgId: ctx.org.id,
-        agentId: ctx.agent.id,
-        amountMicros: reserve,
-      });
-      if (!r.ok)
-        return {
-          kind: 'denied',
-          code: 'BUDGET_EXCEEDED',
-          message: `Budget ${r.scope} épuisé (plafond dur).`,
-        };
-
-      let response;
-      try {
-        response = await provider.complete(request);
-      } catch (err) {
-        await releaseBudget(db, {
-          orgId: ctx.org.id,
-          agentId: ctx.agent.id,
-          amountMicros: reserve,
-        });
-        // Erreur transitoire : on laisse Temporal réessayer l'activité (backoff + jitter).
-        if (err instanceof ProviderError && err.retryable) throw err;
-        return {
-          kind: 'denied',
-          code: 'PROVIDER_ERROR',
-          message: err instanceof Error ? err.message : 'Erreur fournisseur',
-        };
-      }
-      const cost = costMicros(pricing, response.model, response.usage);
-      await recordLlmCall(db, {
-        orgId: ctx.org.id,
-        runId: input.runId,
-        agentId: ctx.agent.id,
-        step: input.step,
-        provider: provider.name,
-        model: response.model,
-        ...response.usage,
-        costMicros: cost,
-        reservedMicros: reserve,
-        pricingVersion: pricing.version,
-        stopReason: response.stopReason,
-        correlationId: ctx.task.correlationId,
-      });
-      return { kind: 'ok', response, costMicros: cost ?? 0 };
     },
 
     async toolStep(input: {

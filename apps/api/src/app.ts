@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import type { ErrorCode } from '@company-os/contracts';
 import { DomainError, relayOutbox, type Db } from '@company-os/db';
+import { startSpan } from '@company-os/policies';
 import { registerAuth, type AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
 import { registerV1, type ApprovalSignaler } from './routes/v1';
@@ -74,6 +75,23 @@ export async function buildApp(
   registerAuth(app, db, opts.auth);
   app.addHook('onSend', async (req, reply) => {
     reply.header('x-request-id', req.id);
+  });
+  // Span `http.request` : méthode, route paramétrée (jamais l'URL brute ni la query), statut.
+  const spans = new WeakMap<object, ReturnType<typeof startSpan>>();
+  app.addHook('onRequest', async (req) => {
+    spans.set(req, startSpan('http.request', { 'http.method': req.method, 'request.id': req.id }));
+  });
+  app.addHook('onResponse', async (req, reply) => {
+    const span = spans.get(req);
+    if (!span) return;
+    const p = req.authResult?.ok ? req.authResult.principal : null;
+    span.set({
+      'http.route': req.routeOptions.url ?? 'unknown',
+      'http.status_code': reply.statusCode,
+      ...(p ? { 'org.id': p.orgId } : {}),
+    });
+    if (reply.statusCode >= 500) span.fail(`HTTP_${reply.statusCode}`);
+    span.end();
   });
 
   app.setErrorHandler((err, req, reply) => {
