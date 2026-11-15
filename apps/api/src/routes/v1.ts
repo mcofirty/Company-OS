@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  CancelTaskRequestSchema,
   CreateAgentRequestSchema,
   CreateTaskRequestSchema,
   IdempotencyKeySchema,
@@ -31,6 +32,8 @@ import {
   meetingView,
   createAgentByAdmin,
   orgsOfUser,
+  cancelTask,
+  retryTask,
 } from '@company-os/db';
 import { principalOf, requireRole } from '../auth';
 
@@ -200,6 +203,40 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
     return reply
       .status(created ? 201 : 200)
       .send({ data: task, meta: { ...meta, idempotentReplay: !created } });
+  });
+
+  /** Annulation humaine (tâche en file ou bloquée), motif obligatoire. */
+  app.post('/v1/tasks/:id/cancel', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    if (!IdempotencyKeySchema.safeParse(req.headers['idempotency-key']).success) {
+      throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+    }
+    const { id } = Id.parse(req.params);
+    const { reason } = CancelTaskRequestSchema.parse(req.body);
+    const task = await cancelTask(db, {
+      orgId: p.orgId,
+      taskId: id,
+      reason,
+      actor: { kind: 'user', id: p.userId },
+    });
+    return { data: task, meta };
+  });
+
+  /** Relance : nouvelle tâche identique ; la tâche bloquée est annulée et reliée à la nouvelle. */
+  app.post('/v1/tasks/:id/retry', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    if (!IdempotencyKeySchema.safeParse(req.headers['idempotency-key']).success) {
+      throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+    }
+    const { id } = Id.parse(req.params);
+    const r = await retryTask(db, {
+      orgId: p.orgId,
+      taskId: id,
+      actor: { kind: 'user', id: p.userId },
+    });
+    return reply.status(201).send({ data: r, meta });
   });
 
   app.get('/v1/tasks/:id', async (req) => {

@@ -309,6 +309,23 @@ export function Cockpit() {
                 onDecide={onDecide}
                 onLifecycle={onLifecycle}
                 onMission={(agentId) => setMissionFor(agentId)}
+                onCancelTask={async (taskId, reason) => {
+                  try {
+                    await hq.cancelTask(taskId, reason);
+                    toast({ text: 'Tâche annulée', tone: 'success' });
+                  } catch (err) {
+                    fail(err);
+                  }
+                }}
+                onRetryTask={async (taskId) => {
+                  try {
+                    const task = await hq.retryTask(taskId);
+                    toast({ text: `Relancée : ${task.title}`, tone: 'success' });
+                    setSelection({ kind: 'task', id: task.id });
+                  } catch (err) {
+                    fail(err);
+                  }
+                }}
               />
             ) : (
               <section className="panel" aria-label="Équipe">

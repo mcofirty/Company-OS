@@ -202,6 +202,12 @@ export function describe(
         tone: 'success',
         icon: '▶',
       };
+    case 'task.cancelled':
+      return {
+        text: `${agentName(e.payload.agentId)} · tâche annulée${e.payload.retriedAs ? ' et relancée' : ''} · ${e.payload.reason}`,
+        tone: 'neutral',
+        icon: '⊘',
+      };
     case 'agent.deactivated':
       return {
         text: `${agentName(e.payload.agentId)} désactivé · ${e.payload.reason}`,

@@ -131,6 +131,8 @@ docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d
    boîte « À valider ». En cas de doute : *Suspendre* l'agent ou *Pause système*.
 
 Sans clé, les missions live sont bloquées `PROVIDER_UNAVAILABLE` : c'est voulu (rien n'est simulé).
+Après l'ajout de la clé, ouvrir la mission bloquée et cliquer « ↻ Relancer » ; « ⊘ Annuler » (motif
+obligatoire) retire une mission en file ou bloquée.
 Les outils restent en mode démo (aucun effet externe) tant qu'aucun connecteur réel n'est livré.
 
 ## 9. Charge

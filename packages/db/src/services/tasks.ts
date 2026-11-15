@@ -5,12 +5,13 @@ import {
   DELEGATION_LIMITS,
   isDemoTaskKind,
   type Actor,
+  type AgentActivity,
   type Mission,
   type TaskKind,
   type TaskStatus,
   type TaskView,
 } from '@company-os/contracts';
-import { activityAfterTask } from '@company-os/world';
+import { activityAfterCancel, activityAfterTask } from '@company-os/world';
 import type { Db, Tx } from '../client';
 import { DomainError } from '../errors';
 import { withOrgTx, type OrgTxContext } from '../events';
@@ -472,4 +473,106 @@ export async function listRunningTasks(db: Db, orgId: string) {
     include: { runs: { where: { status: 'running' }, orderBy: { startedAt: 'desc' }, take: 1 } },
     orderBy: { startedAt: 'asc' },
   });
+}
+
+/**
+ * Annulation humaine d'une tâche EN FILE ou BLOQUÉE (une tâche en cours ou en attente de
+ * validation suit son workflow ; elle n'est pas interrompue ici). Émet `task.cancelled`.
+ */
+async function cancelTaskInTx(
+  ctx: OrgTxContext,
+  input: { taskId: string; reason: string; actor: Actor; retriedAs: string | null },
+): Promise<TaskView> {
+  const { tx, orgId, now } = ctx;
+  const task = await tx.task.findFirst({ where: { id: input.taskId, orgId } });
+  if (!task) throw new DomainError('NOT_FOUND', 'Tâche introuvable');
+  if (task.status !== 'queued' && task.status !== 'blocked') {
+    throw new DomainError(
+      'CONFLICT',
+      `Annulation possible seulement en file ou bloquée (statut : ${task.status})`,
+    );
+  }
+  const reason = input.reason.trim().slice(0, 200);
+  const updated = await transitionTask(ctx, task.id, 'cancelled', {
+    endedAt: now,
+    resultSummary: `Annulée : ${reason}`,
+  });
+  // Même règle que le réducteur client (activityAfterCancel).
+  const agent = await tx.agent.findUniqueOrThrow({ where: { id: task.agentId } });
+  const remaining = await tx.task.findMany({
+    where: { orgId, agentId: task.agentId, status: { in: ['queued', 'blocked'] } },
+    select: { agentId: true, status: true },
+  });
+  const activity = activityAfterCancel(
+    agent.activity as AgentActivity,
+    remaining.map((t) => ({ agentId: t.agentId, status: t.status as TaskStatus })),
+    agent.id,
+  );
+  if (activity !== agent.activity) {
+    await tx.agent.update({
+      where: { id: agent.id },
+      data: { activity, version: { increment: 1 } },
+    });
+  }
+  ctx.emit({
+    ...base,
+    type: 'task.cancelled',
+    aggregateType: 'task',
+    aggregateId: task.id,
+    aggregateVersion: updated.version,
+    correlationId: task.correlationId,
+    causationId: null,
+    actor: input.actor,
+    provenance: task.provenance,
+    payload: { taskId: task.id, agentId: task.agentId, reason, retriedAs: input.retriedAs },
+  });
+  return taskView(updated);
+}
+
+export async function cancelTask(
+  db: Db,
+  input: { orgId: string; taskId: string; reason: string; actor: Actor; now?: Date },
+): Promise<TaskView> {
+  const { result } = await withOrgTx(db, input.orgId, input.now ?? new Date(), (ctx) =>
+    cancelTaskInTx(ctx, { ...input, retriedAs: null }),
+  );
+  return result;
+}
+
+/**
+ * Relance d'une tâche bloquée ou en échec : nouvelle tâche identique (même agent, même mission),
+ * puis annulation de la tâche bloquée en la reliant à sa remplaçante. Une tâche en échec reste
+ * telle quelle (historique). Utile après l'ajout d'une clé ou la levée d'un blocage.
+ */
+export async function retryTask(
+  db: Db,
+  input: { orgId: string; taskId: string; actor: Actor; now?: Date },
+): Promise<{ task: TaskView; replaced: TaskView }> {
+  const { result } = await withOrgTx(db, input.orgId, input.now ?? new Date(), async (ctx) => {
+    const old = await ctx.tx.task.findFirst({ where: { id: input.taskId, orgId: ctx.orgId } });
+    if (!old) throw new DomainError('NOT_FOUND', 'Tâche introuvable');
+    if (old.status !== 'blocked' && old.status !== 'failed') {
+      throw new DomainError('CONFLICT', `Relance possible seulement si bloquée ou en échec`);
+    }
+    const kind = old.kind as TaskKind;
+    const { task } = await createTaskInTx(ctx, {
+      kind,
+      agentId: old.agentId,
+      requester: input.actor,
+      ...(kind === 'custom'
+        ? { mission: { title: old.title, instructions: old.description } }
+        : {}),
+    });
+    const replaced =
+      old.status === 'blocked'
+        ? await cancelTaskInTx(ctx, {
+            taskId: old.id,
+            reason: 'Relancée',
+            actor: input.actor,
+            retriedAs: task.id,
+          })
+        : taskView(old);
+    return { task, replaced };
+  });
+  return result;
 }

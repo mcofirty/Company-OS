@@ -68,6 +68,21 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.getByTestId('timeline')).toContainText('PROVIDER_UNAVAILABLE');
   await page.screenshot({ path: 'docs/screenshots/live-mission-1440.png' });
 
+  // Relancer (ex. après ajout d'une clé) : nouvelle tâche, l'ancienne est annulée et reliée.
+  const firstTitle = await page.getByTestId('inspector-title').innerText();
+  await page.getByTestId('task-retry').click();
+  await expect(page.getByTestId('inspector')).toContainText('PROVIDER_UNAVAILABLE', {
+    timeout: 30_000,
+  });
+  await expect(page.getByTestId('inspector-title')).toHaveText(firstTitle);
+  await expect(page.getByTestId('timeline')).toContainText('tâche annulée et relancée');
+  // Annuler la nouvelle tâche bloquée (motif obligatoire) : statut « Annulée », agent libéré.
+  page.once('dialog', (d) => void d.accept('Abandon de la mission (e2e)'));
+  await page.getByTestId('task-cancel').click();
+  await expect(page.getByTestId('inspector')).toContainText('Annulée', { timeout: 15_000 });
+  await expect(page.getByTestId('task-cancel')).toHaveCount(0);
+  await expect(page.getByTestId('timeline')).toContainText('Abandon de la mission (e2e)');
+
   // Retour à la démo : l'agent live n'y apparaît pas.
   await page.getByTestId('org-switcher').selectOption({ label: 'DEMO · Living HQ — démo' });
   await expect(page.getByTestId('mode-badge')).toContainText('DEMO', { timeout: 20_000 });

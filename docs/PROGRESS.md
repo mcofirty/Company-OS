@@ -3,6 +3,35 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (8) — Annulation et relance des missions
+
+### Réalisé
+- Nouvel événement **`task.cancelled`** (`reason`, `retriedAs`) dans les contrats Zod et
+  `specs/events.schema.json`, appliqué par le réducteur partagé.
+- **Annuler** une tâche en file ou bloquée (`POST /v1/tasks/:id/cancel`, motif obligatoire,
+  opérateur+) : l'agent au repos est libéré (règle `activityAfterCancel` identique serveur/client).
+  Une tâche en cours ou en attente de validation n'est pas interrompue (son workflow suit son cours).
+- **Relancer** une tâche bloquée ou en échec (`POST /v1/tasks/:id/retry`) : nouvelle tâche
+  identique (même agent, même mission) ; la bloquée est annulée et reliée (« voir la nouvelle
+  tâche »). Cas d'usage : missions bloquées faute de clé, relancées après son ajout.
+- Cockpit : boutons « ↻ Relancer » et « ⊘ Annuler » dans l'inspecteur de tâche (selon les droits),
+  événement lisible dans la timeline ; libellés KPI sur deux lignes au lieu d'être tronqués à 1440 px.
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK · `pnpm test` : **129 tests passés** (17 fichiers), dont
+  annulation (file, bloquée, double annulation, motif, tâche en cours refusée), relance (liaison,
+  agent en file, refus après annulation), viewer 403, projection serveur = rejeu client.
+- `pnpm e2e` : **21 tests passés** ; le scénario live inclut désormais relance puis annulation.
+
+### Écarts connus
+- Toujours aucun appel réel à Claude vérifié (pas de clé dans cet environnement).
+- Annulation d'une tâche en cours / en attente de validation non proposée (nécessite l'arrêt
+  propre du workflow Temporal et l'expiration de la validation).
+
+### Prochaine tâche exacte
+Avec une clé : vérification réelle (`pnpm live:init`, agent, mission, coût). Ensuite : annulation
+des tâches en cours via signal Temporal, puis premier connecteur réel en lecture seule.
+
 ## Session 2026-11-15 (7) — Live encadré (sans clé Anthropic)
 
 **État : organisations LIVE opérationnelles de bout en bout ; seul l'appel réel à Claude reste à

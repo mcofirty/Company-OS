@@ -76,3 +76,8 @@ export interface ClientToServerEvents {
 export const MAX_REPLAY_EVENTS = 1000;
 
 export const SystemControlRequestSchema = z.object({ reason: z.string().min(3).max(200) }).strict();
+
+/** Annulation (tâche en file ou bloquée) : motif obligatoire, conservé dans le journal. */
+export const CancelTaskRequestSchema = z
+  .object({ reason: z.string().trim().min(3).max(200) })
+  .strict();

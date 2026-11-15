@@ -47,6 +47,8 @@ interface Props {
   metrics: MetricsSummary | null;
   /** Organisation live : confier une mission libre à cet agent. */
   onMission: (agentId: string) => void;
+  onCancelTask: (taskId: string, reason: string) => Promise<void>;
+  onRetryTask: (taskId: string) => Promise<void>;
 }
 
 /** Inspecteur universel (docs/01 §6) : provenance, état réel, horodatages, identifiants. */
@@ -372,10 +374,17 @@ interface TaskDetail {
   events: DomainEvent[];
 }
 
-function TaskInspector({ world, id, onSelect }: Props & { id: string }) {
+function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props & { id: string }) {
+  const { caps } = useControls();
+  const [busy, setBusy] = useState(false);
   const local = world.tasks.find((t) => t.id === id);
   const detail = useRemote<TaskDetail>(`/v1/tasks/${id}`, `${local?.status}-${world.lastSeq}`);
   const task = local ?? detail?.task;
+  const retriedAs =
+    world.timeline.find(
+      (e): e is Extract<DomainEvent, { type: 'task.cancelled' }> =>
+        e.type === 'task.cancelled' && e.payload.taskId === id,
+    )?.payload.retriedAs ?? null;
   if (!task) return <Empty>Chargement de la tâche…</Empty>;
   const agent = world.agents.find((a) => a.id === task.agentId);
   return (
@@ -437,6 +446,50 @@ function TaskInspector({ world, id, onSelect }: Props & { id: string }) {
           ['Correlation', <code key="c">{task.correlationId}</code>],
         ]}
       />
+      {retriedAs && (
+        <p className="small">
+          Relancée :{' '}
+          <a onClick={() => onSelect({ kind: 'task', id: retriedAs })} data-testid="retried-link">
+            voir la nouvelle tâche
+          </a>
+        </p>
+      )}
+      {caps.createTask &&
+        (task.status === 'blocked' || task.status === 'failed' || task.status === 'queued') && (
+          <div className="actions row">
+            {(task.status === 'blocked' || task.status === 'failed') && (
+              <button
+                className="btn primary"
+                disabled={busy}
+                data-testid="task-retry"
+                title="Crée une tâche identique ; la tâche bloquée est annulée et reliée à la nouvelle"
+                onClick={() => {
+                  setBusy(true);
+                  void onRetryTask(task.id).finally(() => setBusy(false));
+                }}
+              >
+                ↻ Relancer
+              </button>
+            )}
+            {(task.status === 'blocked' || task.status === 'queued') && (
+              <button
+                className="btn danger"
+                disabled={busy}
+                data-testid="task-cancel"
+                onClick={() => {
+                  const reason = window.prompt(
+                    'Motif de l’annulation (conservé dans le journal) :',
+                  );
+                  if (!reason || reason.trim().length < 3) return;
+                  setBusy(true);
+                  void onCancelTask(task.id, reason.trim()).finally(() => setBusy(false));
+                }}
+              >
+                ⊘ Annuler
+              </button>
+            )}
+          </div>
+        )}
       <Section title="Exécution (run)">
         {detail?.runs.map((r) => (
           <div key={r.id} className="run-card" data-testid="run-card">

@@ -320,6 +320,19 @@ export function applyEvent(
       w = finishAgentTask(w, e.payload.agentId, e.payload.taskId, at, false);
       w = { ...w, tasks: trimTasks(w.tasks) };
       break;
+    case 'task.cancelled': {
+      const p = e.payload;
+      w = patchTask(w, p.taskId, () => ({
+        status: 'cancelled',
+        endedAt: at,
+        resultSummary: `Annulée : ${p.reason}`,
+      }));
+      w = patchAgent(w, p.agentId, (a) => ({
+        activity: activityAfterCancel(a.activity, w.tasks, p.agentId),
+      }));
+      w = { ...w, tasks: trimTasks(w.tasks) };
+      break;
+    }
     case 'task.failed':
     case 'task.blocked':
       w = patchTask(w, e.payload.taskId, () => ({
@@ -378,6 +391,21 @@ export function activityAfterTask(
 ): AgentView['activity'] {
   if (blocked) return 'blocked';
   return tasks.some((t) => t.agentId === agentId && t.status === 'queued') ? 'queued' : 'idle';
+}
+
+/**
+ * Activité d'un agent après l'annulation d'une de ses tâches (même règle serveur et client) :
+ * seul un agent au repos (en file, bloqué, disponible) change d'état ; un agent occupé, en
+ * réunion ou suspendu n'est pas touché. `tasks` = état APRÈS annulation.
+ */
+export function activityAfterCancel(
+  current: AgentView['activity'],
+  tasks: readonly Pick<TaskView, 'agentId' | 'status'>[],
+  agentId: string,
+): AgentView['activity'] {
+  if (!['blocked', 'queued', 'idle'].includes(current)) return current;
+  if (tasks.some((t) => t.agentId === agentId && t.status === 'blocked')) return 'blocked';
+  return activityAfterTask(tasks, agentId, false);
 }
 
 function finishAgentTask(

@@ -1470,3 +1470,15 @@ kbd {
     font-size: 10.5px;
   }
 }
+@media (max-width: 1700px) {
+  /* Libellés sur deux lignes plutôt que tronqués (sélecteur d'organisation + KPI à 1440 px). */
+  .kpi-label {
+    white-space: normal;
+    line-height: 1.1;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .kpi.kpi-window .kpi-label {
+    white-space: nowrap;
+  }
+}

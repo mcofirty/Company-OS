@@ -201,3 +201,8 @@ ADR-045 — **Choix d'organisation par `X-Org-Id`, adhésion vérifiée.** L'adm
 les comptes OIDC choisissent l'organisation parmi leurs adhésions ; tout autre identifiant renvoie 403. Le
 rôle effectif ne dépasse jamais celui de l'adhésion.
 
+ADR-046 — **Annulation limitée aux tâches au repos ; relance = nouvelle tâche.** On n'annule ici qu'une tâche
+en file ou bloquée : interrompre un workflow en cours exige un signal Temporal et l'expiration des validations
+(reporté). Relancer ne réécrit pas l'histoire : une nouvelle tâche est créée et l'ancienne, annulée, pointe vers
+elle (`retriedAs`), ce qui garde le journal append-only lisible.
+

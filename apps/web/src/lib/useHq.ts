@@ -254,6 +254,22 @@ export function useHq() {
     if (w) commit({ ...w, alerts: w.alerts.map((a) => (a.id === alertId ? data : a)) });
   }, []);
 
+  const cancelTask = useCallback(async (taskId: string, reason: string): Promise<void> => {
+    await api(`/v1/tasks/${taskId}/cancel`, {
+      method: 'POST',
+      headers: { 'idempotency-key': crypto.randomUUID() },
+      body: JSON.stringify({ reason }),
+    });
+  }, []);
+  const retryTask = useCallback(async (taskId: string): Promise<TaskView> => {
+    const { data } = await api<{ task: TaskView }>(`/v1/tasks/${taskId}/retry`, {
+      method: 'POST',
+      headers: { 'idempotency-key': crypto.randomUUID() },
+      body: '{}',
+    });
+    return data.task;
+  }, []);
+
   /** Mission libre confiée à un agent (organisation live). */
   const createMission = useCallback(
     async (
@@ -314,6 +330,8 @@ export function useHq() {
     agentLifecycle,
     createMission,
     createAgent,
+    cancelTask,
+    retryTask,
   };
 }
 

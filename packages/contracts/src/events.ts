@@ -23,6 +23,7 @@ export const ALL_EVENT_TYPES = [
   'task.completed',
   'task.failed',
   'task.blocked',
+  'task.cancelled',
   'agent.run.started',
   'agent.run.completed',
   'tool.invocation.requested',
@@ -103,6 +104,13 @@ export const Payloads = {
     agentId: SlugIdSchema,
     reasonCode: z.string().max(64),
     safeSummary: SafeText,
+  }),
+  /** Annulation humaine d'une tâche en file ou bloquée ; `retriedAs` = tâche qui la remplace. */
+  'task.cancelled': z.object({
+    taskId: Uuid,
+    agentId: SlugIdSchema,
+    reason: z.string().min(3).max(200),
+    retriedAs: Uuid.nullable(),
   }),
   'agent.run.started': z.object({
     runId: Uuid,
@@ -274,6 +282,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.paused'),
   variant('agent.resumed'),
   variant('agent.deactivated'),
+  variant('task.cancelled'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];
