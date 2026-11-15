@@ -1369,3 +1369,17 @@ kbd {
   font-size: 13px;
   color: var(--ink-soft);
 }
+.bench {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  height: 100vh;
+}
+.bench-head {
+  padding: 8px 14px;
+  background: #2a2140;
+  color: white;
+  font-size: 13px;
+}
+.bench-world {
+  position: relative;
+}

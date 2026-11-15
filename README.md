@@ -67,9 +67,20 @@ pnpm lint && pnpm typecheck
 pnpm test                 # unitaires + intégration (base companyos_test)
 pnpm test:contracts       # contrats Zod <-> specs/events.schema.json, projection
 pnpm test:integration     # PostgreSQL réel : DB, gateway, worker, API
-pnpm e2e                  # Playwright (lance pnpm dev si besoin)
+pnpm e2e                  # Playwright (lance pnpm dev si besoin) ; inclut connexion OIDC et banc 50 avatars
 pnpm build
 ```
+
+## Exploitation (M5)
+
+```bash
+pnpm users grant --sub <sub OIDC> --name "Nom" --role admin   # accès humains (OIDC)
+pnpm db:backup && pnpm db:verify                             # sauvegarde + intégrité du journal
+docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+Procédures complètes (incidents, OIDC, restauration, déploiement, observabilité, ajout d'outil ou
+d'agent) : `docs/RUNBOOKS.md`. Banc de rendu : `http://localhost:3000/bench?agents=50`.
 
 ## Code
 
@@ -79,10 +90,11 @@ pnpm build
 | `packages/world`     | Carte hq-v1, A*, réducteur idempotent, KPI, projection visuelle             |
 | `packages/db`        | Prisma/PostgreSQL : event_log + outbox, services métier, seed               |
 | `packages/agents`    | Fournisseurs LLM (Anthropic, démo scripté, mock), prompts versionnés, boucle bornée |
-| `packages/policies`  | Rédaction, budgets, tarification versionnée                                 |
+| `packages/policies`  | Rédaction, budgets, tarification versionnée, traces (liste blanche)         |
 | `packages/tools`     | ToolGateway (politique, retries, timeout) + adaptateurs démo                |
 | `apps/api`           | Fastify `/v1` + Socket.IO (`events:resume`, `domain:event`), relais outbox |
 | `apps/worker`        | Workflow Temporal `agentTask` + activities, dispatcher, autopilote démo     |
-| `apps/web`           | Cockpit Next.js + monde Phaser isométrique                                  |
+| `apps/web`           | Cockpit Next.js + monde Phaser isométrique, connexion OIDC (PKCE)           |
+| `infra`              | Images Docker (API/worker, migrations, web), compose de production          |
 
 État d'avancement et prochaines étapes : `docs/PROGRESS.md`. Décisions : `docs/DECISIONS.md`.

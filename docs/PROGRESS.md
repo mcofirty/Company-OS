@@ -3,6 +3,84 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-15 (6) — M5 : durcissement et déploiement
+
+**Milestone courant : M5 livré (hors écarts listés). Le plan M0–M5 est parcouru.**
+
+### Réalisé
+- **Authentification de production (OIDC)** : l'API vérifie des jetons d'accès JWT (découverte,
+  JWKS en cache, `iss`, `aud`, `exp`, algorithmes autorisés). Utilisateurs et rôles lus en base à
+  chaque requête ; identité inconnue => 403, aucun compte créé implicitement ; révocation immédiate.
+  `pnpm users grant|revoke|list`. Socket.IO authentifié de la même façon.
+- **Cockpit** : connexion Authorization Code + PKCE (client public, jeton en sessionStorage
+  uniquement), écrans « Connexion requise » / « Accès non autorisé », déconnexion.
+- **Sécurité HTTP** : helmet (CSP `default-src 'none'` sur l'API), CORS restreint sans cookies
+  (pas de CSRF possible), limitation de débit (`RATE_LIMITED`), CSP de production du cockpit
+  (vérifiée sans violation, carte et WebSocket fonctionnels).
+- **Configuration validée au démarrage** : en production, refus sans authentification, avec des
+  origines ou un émetteur HTTP, ou avec un OIDC partiel ; `APP_MODE=live` toujours refusé.
+- **Sauvegarde / restauration** : `pnpm db:backup`, `db:restore` (à côté de la base en service,
+  confirmation, mot de passe hors ligne de commande), `db:verify` (séquence contiguë, `last_seq`).
+  Restauration testée en CI et via la CLI réelle (1 824 événements restaurés, intégrité OK).
+- **OpenTelemetry** : spans `http.request`, `tool.invoke`, `llm.invoke` ; export OTLP seulement si
+  configuré ; liste blanche d'attributs (aucun prompt, PII ou contenu injecté — testé).
+- **Images Docker** : API + worker (dépendances de production, non-root, healthcheck, aucun
+  gestionnaire de paquets au démarrage, 1,24 Go contre 2,65 Go initialement), cible `migrate`,
+  cockpit Next standalone (411 Mo). `infra/docker-compose.prod.yml` vérifié de bout en bout :
+  migrations, seed démo optionnel, API, worker, cockpit ; une tâche créée via l'API a été exécutée
+  par le worker conteneurisé via Temporal.
+- **Charge** : `/v1/bootstrap` p95 = 164 ms (p50 124 ms) avec 200 tâches et 10 clients
+  concurrents (cible < 500 ms). Banc de rendu `/bench?agents=N` (monde synthétique local).
+- **CI** : audit des dépendances de production, construction des trois images, contrôle du refus de
+  démarrage sans authentification.
+- **Runbooks** : `docs/RUNBOOKS.md` (incident, accès, sauvegarde, déploiement, observabilité,
+  ajout d'outil et d'agent, charge).
+- **Corrections** : boucle du worker avec attente exponentielle (plus d'erreur toutes les 300 ms sur
+  base vide) ; variante d'avatar inconnue => avatar neutre au lieu d'un carré noir ; replay :
+  curseur désactivé pendant le chargement et erreur de chargement affichée ; échange OIDC unique
+  même si l'effet React est rejoué.
+
+### Tests (exécutés le 2026-11-15)
+- `pnpm lint` OK · `pnpm typecheck` OK · `pnpm build` OK · `pnpm audit --prod` : aucune vulnérabilité.
+- `pnpm test` : **113 tests passés** (14 fichiers) dont M5 : OIDC (jeton valide, expiré, mauvaise
+  audience/émetteur/signature, identité non accordée, viewer, révocation, Socket.IO), en-têtes, CORS,
+  limitation de débit, validation de configuration, sauvegarde/restauration/intégrité, traces sans
+  données sensibles, charge bootstrap.
+- `pnpm e2e` : **20 tests passés** — scénarios M1–M4 + connexion PKCE réelle contre un fournisseur OIDC factice (admin,
+  viewer en lecture seule, identité refusée) + banc 50 avatars.
+- Images construites et démarrées localement ; pile de production complète démarrée puis détruite.
+
+### Mesures de rendu (honnêtes)
+Rendu logiciel (Chromium sans GPU, 4 vCPU) : 1 avatar ≈ 35 img/s, 12 ≈ 30–32, **50 ≈ 21–24**
+(23–42 selon le mode de lancement du navigateur), 100 ≈ 15–19, 200 ≈ 9–15. Le plafond est fixé par
+le rendu logiciel lui-même (≈ 35 img/s à 1 avatar). Les cibles de docs/08 (60 img/s à 12, > 30 à
+50) concernent une machine de bureau avec GPU : **non vérifiées ici**. Une optimisation (sol et murs
+précalculés en texture) a été essayée puis retirée : aucun gain mesurable dans cet environnement.
+
+### Écarts connus
+- Cibles d'images/s non vérifiables sans GPU ; à mesurer sur le poste de référence (`/bench`).
+- Pas de jeton de rafraîchissement OIDC : reconnexion à l'expiration du jeton d'accès.
+- Coffre de secrets : variables d'environnement du service (pas de Vault/KMS intégré) ; les images
+  n'embarquent aucun secret.
+- Temporal de développement dans le compose de production : Temporal Cloud/cluster recommandé.
+- Mode `live` (connecteurs réels, organisation live) toujours refusé au démarrage.
+- Les tests e2e ne sont pas vérifiés par `tsc` (transpilés par Playwright).
+- Accorder/révoquer un accès humain passe par la CLI (journal d'exploitation), pas encore par un
+  événement métier visible dans la timeline.
+
+### Prochaine tâche exacte
+Au-delà de M5 : mode live encadré (organisation live, premier connecteur réel en lecture seule,
+identité de service, validation humaine), puis mesure de rendu sur poste avec GPU.
+
+### Commandes de reprise
+```bash
+cp .env.example .env && pnpm install
+docker compose up -d --wait
+pnpm db:migrate && pnpm db:seed
+pnpm dev
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm build
+```
+
 ## Session 2026-11-15 (5) — M4 : Command Center (alertes, santé outils, replay, recherche, rôles)
 
 **Milestone courant : M4 terminé (hors éléments listés en écarts). Prochain : M5.**

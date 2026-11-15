@@ -40,6 +40,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # Vulnérabilités connues des dépendances de production (docs/11 §6).
+      - run: pnpm audit --prod --audit-level high
 
   e2e:
     runs-on: ubuntu-latest
@@ -70,3 +72,41 @@ jobs:
           for i in $(seq 1 40); do docker exec temporal temporal operator cluster health --address 127.0.0.1:7233 && break; sleep 2; done
       - run: pnpm db:migrate && pnpm db:seed
       - run: pnpm e2e
+
+  images:
+    runs-on: ubuntu-latest
+    needs: checks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Image API + worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/server.Dockerfile
+          tags: company-os-server:ci
+          load: true
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+      - name: Image migrations
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/server.Dockerfile
+          target: migrate
+          tags: company-os-migrate:ci
+          cache-from: type=gha,scope=server
+      - name: Image cockpit
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/docker/web.Dockerfile
+          tags: company-os-web:ci
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+      - name: Refus de démarrer sans authentification en production
+        run: |
+          out=$(docker run --rm -e NODE_ENV=production -e DATABASE_URL=postgresql://x@localhost/x \
+            -e WEB_ORIGIN=https://hq.example.com company-os-server:ci 2>&1 || true)
+          echo "$out"
+          echo "$out" | grep -q "Configuration refusée"

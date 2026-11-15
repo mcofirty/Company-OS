@@ -154,3 +154,31 @@ de quelques milliers d'événements.
 ADR-033 — **Capacités UI venant du serveur.** `/v1/me` renvoie rôle et capacités ; l'UI masque les actions non permises
 (viewer : aucune), le serveur reste seul juge (403).
 
+ADR-034 — **L'API est un « resource server » OIDC.** Elle vérifie des jetons d'accès JWT (JWKS découverts,
+`iss`/`aud`/`exp`, algorithmes asymétriques) ; les jetons opaques sont refusés. L'identité vaut `iss#sub` et
+n'ouvre un accès que si un administrateur l'a accordée (`pnpm users grant`) ; le rôle est relu à chaque requête.
+Le jeton unique `API_ACCESS_TOKEN` reste disponible pour un usage personnel.
+
+ADR-035 — **Jetons Bearer explicites, pas de cookies.** Le cockpit (client public PKCE) garde le jeton en
+sessionStorage et l'envoie dans `Authorization` / `auth.token`. Sans cookie ambiant, pas de CSRF ; CORS sans
+`credentials`. Pas de jeton de rafraîchissement : nouvelle connexion à expiration (moins de surface).
+
+ADR-036 — **CSP du cockpit avec `'unsafe-inline'` pour les scripts.** Les pages Next statiques ont des scripts
+d'amorçage inline ; sans nonce (rendu dynamique), `'unsafe-inline'` est nécessaire. Pas de `'unsafe-eval'`,
+`connect-src` limité à HTTPS/WSS (+ localhost), `frame-ancestors 'none'`.
+
+ADR-037 — **Images Docker exécutant le TypeScript via tsx.** Pas d'étape de compilation séparée : tsx est une
+dépendance d'exécution déclarée, aucune commande de gestionnaire de paquets au démarrage. Une cible `migrate`
+porte la CLI Prisma ; l'image d'exécution n'a que les dépendances de production.
+
+ADR-038 — **Traces : liste blanche d'attributs.** Les spans ne portent que des identifiants et mesures
+(`SPAN_ATTRIBUTE_ALLOWLIST`) ; tout autre attribut est ignoré à la source. Export OTLP uniquement si
+`OTEL_EXPORTER_OTLP_ENDPOINT` est défini.
+
+ADR-039 — **Restauration à côté, jamais en place.** `db:restore` refuse la base en service et exige `--yes` ;
+la vérification d'intégrité du journal suit automatiquement.
+
+ADR-040 — **Banc de rendu synthétique.** La carte hq-v1 n'a que 22 postes : 50 agents réels ne tiennent pas dans
+l'organisation démo. `/bench` génère un monde synthétique local (étiqueté, sans réseau) passant par les mêmes
+règles visuelles, pour mesurer le rendu.
+

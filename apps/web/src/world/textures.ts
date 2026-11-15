@@ -86,8 +86,9 @@ export const AVATAR_VARIANTS: Record<string, Variant> = {
 
 export type AvatarView = 'front' | 'back';
 export type AvatarFrame = 'idle' | 'walk1' | 'walk2' | 'work1' | 'work2';
+/** Variante inconnue (ex. avatar ajouté côté serveur avant le client) => variante neutre, jamais un carré noir. */
 export const avatarKey = (id: string, view: AvatarView, frame: AvatarFrame): string =>
-  `${id}:${view}:${frame}`;
+  `${id in AVATAR_VARIANTS ? id : 'avatar-01'}:${view}:${frame}`;
 
 const darken = (c: number, f: number): number => {
   const r = Math.max(0, Math.round(((c >> 16) & 255) * f));
