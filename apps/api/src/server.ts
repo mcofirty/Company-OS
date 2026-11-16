@@ -38,6 +38,7 @@ const { app, relayOnce } = await buildApp({
   signalApproval,
   corsOrigin: cfg.corsOrigin,
   auth: cfg.auth,
+  connectors: cfg.connectors,
   rateLimitPerMinute: env.RATE_LIMIT_PER_MIN,
   logger: true,
 });

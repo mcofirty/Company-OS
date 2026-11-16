@@ -214,6 +214,31 @@ export function describe(
         tone: 'neutral',
         icon: '✕',
       };
+    case 'tool.connector.updated': {
+      const what = {
+        added: 'ajouté',
+        synced: 'synchronisé',
+        policy: 'politique modifiée',
+        removed: 'retiré',
+        error: 'injoignable',
+      }[e.payload.change];
+      return {
+        text: `Connecteur ${e.payload.name} ${what} · ${e.payload.actions.length} outil(s) actif(s)`,
+        tone:
+          e.payload.change === 'error'
+            ? 'danger'
+            : e.payload.change === 'removed'
+              ? 'neutral'
+              : 'accent',
+        icon: '⇄',
+      };
+    }
+    case 'agent.grants.updated':
+      return {
+        text: `Droits de ${agentName(e.payload.agentId)} modifiés par un administrateur · ${Object.keys(e.payload.grants).length} outil(s)`,
+        tone: 'warning',
+        icon: '⚿',
+      };
   }
 }
 

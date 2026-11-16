@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import {
   canTransitionInvocation,
   toolAction,
+  type ToolActionKind,
+  type ToolRisk,
   type InvocationStatus,
   type InvocationView,
 } from '@company-os/contracts';
@@ -23,6 +25,8 @@ export interface RequestInvocationInput {
   idempotencyKey: string;
   causationId: string | null;
   now?: Date;
+  /** Nature/risque d'une action de connecteur (hors catalogue statique). */
+  spec?: { kind: ToolActionKind; risk: ToolRisk };
 }
 
 /** tool.invocation.requested (idempotent par clé logique). */
@@ -31,7 +35,8 @@ export async function requestInvocation(
   input: RequestInvocationInput,
 ): Promise<{ invocation: InvocationView; eventId: string | null; existing: boolean }> {
   const now = input.now ?? new Date();
-  const spec = toolAction(input.toolId, input.action);
+  // Connecteurs MCP : nature et risque résolus en base par la passerelle (politique de l'admin).
+  const spec = input.spec ?? toolAction(input.toolId, input.action);
   if (!spec)
     throw new DomainError('VALIDATION_ERROR', `Action inconnue ${input.toolId}.${input.action}`);
   const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {

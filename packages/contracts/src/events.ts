@@ -39,6 +39,8 @@ export const ALL_EVENT_TYPES = [
   'system.paused',
   'system.resumed',
   'world.layout.updated',
+  'tool.connector.updated',
+  'agent.grants.updated',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -232,6 +234,34 @@ export const Payloads = {
     taskId: Uuid,
     reasonCode: z.string().max(64),
   }),
+  /**
+   * Connecteur MCP ajouté, synchronisé, modifié ou retiré par un administrateur : la machine-outil
+   * correspondante apparaît, change ou disparaît du QG. Aucun secret, aucune URL complète.
+   */
+  'tool.connector.updated': z.object({
+    toolId: SlugIdSchema,
+    name: z.string().min(1).max(60),
+    code: z.string().min(1).max(4),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    status: z.enum(['healthy', 'degraded', 'down']),
+    removed: z.boolean(),
+    actions: z
+      .array(
+        z.object({
+          action: z.string().min(1).max(64),
+          kind: ToolActionKindSchema,
+          risk: ToolRiskSchema,
+          label: z.string().min(1).max(80),
+        }),
+      )
+      .max(200),
+    change: z.enum(['added', 'synced', 'policy', 'removed', 'error']),
+  }),
+  /** Droits d'outils d'un agent remplacés par un administrateur humain (jamais par un agent). */
+  'agent.grants.updated': z.object({
+    agentId: SlugIdSchema,
+    grants: z.record(z.string().max(64), z.array(z.string().max(64)).max(200)),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -283,6 +313,8 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.resumed'),
   variant('agent.deactivated'),
   variant('task.cancelled'),
+  variant('tool.connector.updated'),
+  variant('agent.grants.updated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

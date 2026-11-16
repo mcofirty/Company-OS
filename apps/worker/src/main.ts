@@ -2,7 +2,7 @@ import path from 'node:path';
 import { config } from 'dotenv';
 import { z } from 'zod';
 import { createDb } from '@company-os/db';
-import { loadPricing } from '@company-os/policies';
+import { loadPricing, parseSecretKey } from '@company-os/policies';
 import { ToolGateway } from '@company-os/tools';
 import { createActivities, liveProviderFromEnv } from './activities';
 import { createTemporalWorker, temporalLauncher } from './temporal';
@@ -18,6 +18,10 @@ const Env = z.object({
   TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
   DEMO_AUTOPILOT: z.enum(['true', 'false']).default('true'),
   DEMO_AUTOPILOT_INTERVAL_MS: z.coerce.number().int().min(1000).default(7000),
+  /** Clé AES-256 (base64, 32 octets) des jetons de connecteurs MCP. */
+  CONNECTOR_SECRET_KEY: z.string().optional(),
+  /** Serveurs MCP en http:// ou sur réseau privé (développement uniquement). */
+  CONNECTOR_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
 });
 const env = Env.parse(process.env);
 if (env.APP_MODE !== 'demo') {
@@ -35,7 +39,10 @@ const db = createDb(env.DATABASE_URL);
 const liveProvider = liveProviderFromEnv(process.env);
 const activities = createActivities({
   db,
-  gateway: new ToolGateway(db),
+  gateway: new ToolGateway(db, {
+    connectorKey: parseSecretKey(env.CONNECTOR_SECRET_KEY || undefined),
+    allowPrivateNetwork: env.CONNECTOR_ALLOW_PRIVATE_NETWORK === 'true',
+  }),
   pricing: loadPricing(),
   liveProvider,
 });

@@ -3,6 +3,31 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-16 (11) — Connecteurs MCP en libre-service (Phase B) + refonte graphique
+
+### Réalisé
+- Connecteurs MCP (docs/05 §11, ADR-051) : migration `20261116120000_mcp_connectors` (`connectors`,
+  `connector_tools`, `tools.archived_at`), client MCP (SDK officiel, anti-SSRF), jetons chiffrés
+  AES-256-GCM, politiques par outil (lecture / validation / désactivé), gateway dynamique, définitions
+  d'outils transmises au modèle, événements `tool.connector.updated` et `agent.grants.updated`.
+- API : `GET/POST /v1/connectors`, `/sync`, `/tools/:action/policy`, `/remove`, `POST /v1/agents/:id/grants`.
+- Cockpit : panneau « Connecteurs » (⇄), « Modifier les outils » sur la fiche agent, timeline.
+- Correctif : `HIDE_DEMO_ORG` n'était pas transmis à l'authentification (désormais appliqué).
+- Refonte graphique (avatars détaillés, décor de bureau, ADR-050), FPS −7 % sur /bench.
+- Production : `CONNECTOR_SECRET_KEY` générée par install.sh / update.sh, passée à l'API et au worker.
+
+### Tests (exécutés le 2026-11-16)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 143/143 (dont 6 API + 3 worker connecteurs contre un
+  vrai serveur MCP local). `pnpm e2e` : 22/22 (dont `connectors.spec.ts`).
+
+### Écarts connus
+- OAuth MCP (connexion « Se connecter avec… ») non géré : jeton d'accès uniquement.
+- Le DNS est vérifié avant l'appel ; un changement DNS entre vérification et connexion (rebinding)
+  reste théoriquement possible.
+
+### Prochaine tâche exacte
+OAuth pour les serveurs MCP qui l'exigent ; rapports périodiques du DG.
+
 ## Session 2026-11-16 (10) — Outils réels en LIVE, démo masquée (Phase A)
 
 ### Réalisé

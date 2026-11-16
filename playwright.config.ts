@@ -16,7 +16,12 @@ export default defineConfig({
   // Démarre API + worker démo + web si besoin. Prérequis : docker compose up -d, pnpm db:migrate, pnpm db:seed.
   webServer: {
     command: 'pnpm dev',
-    env: { DEMO_AUTOPILOT: process.env.DEMO_AUTOPILOT ?? 'true' },
+    env: {
+      DEMO_AUTOPILOT: process.env.DEMO_AUTOPILOT ?? 'true',
+      // Connecteurs e2e : serveur MCP de test local (http, 127.0.0.1) et clé de test non secrète.
+      CONNECTOR_ALLOW_PRIVATE_NETWORK: 'true',
+      CONNECTOR_SECRET_KEY: Buffer.alloc(32, 9).toString('base64'),
+    },
     url: 'http://localhost:3000',
     reuseExistingServer: true,
     timeout: 120_000,

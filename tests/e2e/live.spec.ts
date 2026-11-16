@@ -36,7 +36,7 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.getByTestId('connection')).toContainText('Temps réel', { timeout: 20_000 });
   await page.getByTestId('org-switcher').selectOption(orgId);
   await expect(page.getByTestId('mode-badge')).toContainText('LIVE', { timeout: 20_000 });
-  await expect(page.getByTestId('mode-badge')).toContainText('outils sans effet externe');
+  await expect(page.getByTestId('mode-badge')).toContainText('outils réels sous vos règles');
   await expect(page.getByTestId('live-empty')).toBeVisible();
   // Rien de la démo ne fuit dans l'org live.
   await expect(page.getByTestId('team-list').locator('li')).toHaveCount(0);

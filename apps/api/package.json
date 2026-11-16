@@ -13,6 +13,7 @@
     "@company-os/contracts": "workspace:*",
     "@company-os/db": "workspace:*",
     "@company-os/policies": "workspace:*",
+    "@company-os/tools": "workspace:*",
     "@company-os/world": "workspace:*",
     "@fastify/cors": "^11.4.3",
     "@fastify/helmet": "^13.2.0",

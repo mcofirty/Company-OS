@@ -7,11 +7,73 @@ import { ApiFailure } from '../../lib/api';
 const RISK_LABEL: Record<string, string> = {
   read: 'lecture',
   internal_write: 'écriture interne',
-  external_write: 'envoi externe · validation humaine à chaque fois',
+  external_write: 'action externe · validation humaine à chaque fois',
 };
 const AVATARS = Array.from({ length: 8 }, (_, i) => `avatar-${String(i + 1).padStart(2, '0')}`);
 const errorText = (err: unknown): string =>
   err instanceof ApiFailure ? `${err.code} · ${err.message}` : 'Erreur inattendue';
+
+/** Coche/décoche une action ; les outils sans action disparaissent (aucun droit implicite). */
+export function toggleGrant(
+  g: Record<string, string[]>,
+  toolId: string,
+  action: string,
+): Record<string, string[]> {
+  const cur = new Set(g[toolId] ?? []);
+  if (cur.has(action)) cur.delete(action);
+  else cur.add(action);
+  return Object.fromEntries(
+    Object.entries({ ...g, [toolId]: [...cur] }).filter(([, acts]) => acts.length > 0),
+  );
+}
+
+/**
+ * Choix des droits : outils réels de l'organisation (dont connecteurs MCP actifs). Les actions à
+ * fort impact et les actions de plateforme ne sont pas proposées (le serveur les refuse aussi).
+ */
+export function GrantPicker({
+  world,
+  grants,
+  onToggle,
+}: {
+  world: WorldSnapshot;
+  grants: Record<string, string[]>;
+  onToggle: (toolId: string, action: string) => void;
+}) {
+  const offer = useMemo(
+    () =>
+      world.tools
+        .filter((t) => t.id !== 'platform')
+        .map((t) => ({ ...t, actions: t.actions.filter((a) => a.risk !== 'high_impact') }))
+        .filter((t) => t.actions.length > 0),
+    [world.tools],
+  );
+  return (
+    <fieldset className="grant-picker">
+      <legend>Outils autorisés</legend>
+      {offer.length === 0 && <p className="muted small">Aucun outil disponible.</p>}
+      {offer.map((t) => (
+        <div key={t.id} className="grant-tool">
+          <strong>
+            {t.name}
+            {t.category === 'connector' && <span className="muted small"> · connecteur</span>}
+          </strong>
+          {t.actions.map((a) => (
+            <label key={a.action} className="check">
+              <input
+                type="checkbox"
+                checked={grants[t.id]?.includes(a.action) ?? false}
+                onChange={() => onToggle(t.id, a.action)}
+                data-testid={`grant-${t.id}-${a.action}`}
+              />
+              {a.label} <span className="muted">· {RISK_LABEL[a.risk] ?? a.risk}</span>
+            </label>
+          ))}
+        </div>
+      ))}
+    </fieldset>
+  );
+}
 
 /**
  * Création d'un agent par l'administrateur (organisation live). Les droits sont cochés un par
@@ -40,24 +102,8 @@ export function AgentForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const offer = useMemo(
-    () =>
-      world.tools
-        .filter((t) => t.id !== 'platform')
-        .map((t) => ({ ...t, actions: t.actions.filter((a) => a.risk !== 'high_impact') }))
-        .filter((t) => t.actions.length > 0),
-    [world.tools],
-  );
   const toggle = (toolId: string, action: string): void =>
-    setGrants((g) => {
-      const cur = new Set(g[toolId] ?? []);
-      if (cur.has(action)) cur.delete(action);
-      else cur.add(action);
-      // Reconstruit l'objet sans les outils vides (aucun droit implicite).
-      return Object.fromEntries(
-        Object.entries({ ...g, [toolId]: [...cur] }).filter(([, acts]) => acts.length > 0),
-      );
-    });
+    setGrants((g) => toggleGrant(g, toolId, action));
 
   const submit = async (): Promise<void> => {
     setBusy(true);
@@ -195,25 +241,7 @@ export function AgentForm({
             data-testid="agent-instructions"
           />
         </label>
-        <fieldset className="grant-picker">
-          <legend>Outils autorisés</legend>
-          {offer.map((t) => (
-            <div key={t.id} className="grant-tool">
-              <strong>{t.name}</strong>
-              {t.actions.map((a) => (
-                <label key={a.action} className="check">
-                  <input
-                    type="checkbox"
-                    checked={grants[t.id]?.includes(a.action) ?? false}
-                    onChange={() => toggle(t.id, a.action)}
-                    data-testid={`grant-${t.id}-${a.action}`}
-                  />
-                  {a.label} <span className="muted">· {RISK_LABEL[a.risk] ?? a.risk}</span>
-                </label>
-              ))}
-            </div>
-          ))}
-        </fieldset>
+        <GrantPicker world={world} grants={grants} onToggle={toggle} />
         {error && <p className="form-error">{error}</p>}
         <div className="actions row">
           <button type="submit" className="btn primary" disabled={busy} data-testid="agent-submit">

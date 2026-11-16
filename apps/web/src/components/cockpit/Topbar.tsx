@@ -83,7 +83,7 @@ export function Topbar({
           <span>
             {world.org.mode === 'demo'
               ? 'activité simulée · aucun effet réel'
-              : 'modèle réel · outils sans effet externe'}
+              : 'modèle réel · outils réels sous vos règles'}
           </span>
         </div>
       )}

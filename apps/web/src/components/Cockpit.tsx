@@ -17,6 +17,7 @@ import { SearchPalette } from './cockpit/SearchPalette';
 import { Timeline } from './cockpit/Timeline';
 import { OrgSwitcher, Topbar } from './cockpit/Topbar';
 import { AgentForm, MissionForm } from './cockpit/LiveForms';
+import { ConnectorsPanel } from './cockpit/Connectors';
 import { ApprovalsInbox } from './panels/Governance';
 import { Inspector, TeamRows } from './panels/Inspector';
 import { ToolWall } from './panels/ToolWall';
@@ -41,6 +42,7 @@ export function Cockpit() {
   const [links, setLinks] = useState(false);
   const [metricsWindow, setMetricsWindow] = useState<MetricsWindow>('24h');
   const [agentFormOpen, setAgentFormOpen] = useState(false);
+  const [connectorsOpen, setConnectorsOpen] = useState(false);
   /** undefined = fermé ; '' = mission sans agent présélectionné. */
   const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
   const scene = useRef<HqScene | null>(null);
@@ -219,6 +221,16 @@ export function Cockpit() {
           >
             ☰
           </button>
+          {world?.org.mode === 'live' && (
+            <button
+              onClick={() => setConnectorsOpen(true)}
+              title="Connecteurs (vos outils réels)"
+              aria-label="Connecteurs"
+              data-testid="open-connectors"
+            >
+              ⇄
+            </button>
+          )}
           <button
             onClick={() => setSettingsOpen(true)}
             title="Connexion au backend"
@@ -371,6 +383,13 @@ export function Cockpit() {
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}
         {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
+        {connectorsOpen && (
+          <ConnectorsPanel
+            canManage={controls.caps.manageConnectors ?? false}
+            onClose={() => setConnectorsOpen(false)}
+            onDone={(text, tone) => toast({ text, tone })}
+          />
+        )}
         {agentFormOpen && world && (
           <AgentForm
             world={world}

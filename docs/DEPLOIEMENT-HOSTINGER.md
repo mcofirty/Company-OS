@@ -114,6 +114,14 @@ cd /opt/company-os && docker compose -f infra/docker-compose.prod.yml -f infra/d
 **Sauvegardes** : chaque nuit à 03:30 dans `/opt/company-os/backups` (14 jours). Pour une copie
 hors du serveur, téléchargez-les régulièrement (ou activez les sauvegardes Hostinger du VPS).
 
+### Brancher vos outils (connecteurs)
+Dans le cockpit : bouton **⇄ Connecteurs** → nom, adresse MCP (HTTPS) de l'outil, jeton d'accès →
+« Connecter et découvrir les outils ». Choisissez pour chaque outil : *Lecture directe*, *Validation à
+chaque appel* (défaut) ou *Désactivé*. Puis, sur la fiche d'un agent : **Modifier les outils**.
+La clé qui chiffre les jetons (`CONNECTOR_SECRET_KEY`) est créée automatiquement dans
+`/opt/company-os/.env.production` par `update.sh` : **ne la changez jamais** et gardez une copie de ce
+fichier hors du serveur (sans elle, les jetons enregistrés sont illisibles).
+
 ## 7. Restaurer après un incident
 
 ⚠️ Remplace la base actuelle par la sauvegarde choisie. Faites d'abord une sauvegarde de l'état

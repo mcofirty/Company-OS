@@ -70,3 +70,24 @@ Rôles initiaux : `admin`, `operator`, `viewer`. `viewer` ne peut ni déclencher
 
 ## 10. Protection produit
 L'univers virtuel ne sert pas à contourner l'auth : cliquer sur « lancer une réunion », « recruter » ou « connecter un outil » déclenche les mêmes contrôles que l'API. Les usages critiques disposent de confirmations dans l'UI et d'indications explicites « action réelle ». Un utilisateur ne peut pas manipuler les coordonnées de l'avatar pour obtenir l'accès à une salle/ressource protégée.
+
+## 11. Connecteurs MCP en libre-service (implémenté)
+Un administrateur d'une organisation live branche ses propres outils via un serveur **MCP**
+(Streamable HTTP) depuis le cockpit (bouton ⇄ « Connecteurs »).
+- **Ajout** : URL HTTPS + jeton facultatif (en-tête `Authorization: Bearer` ou `x-api-key`). Le serveur
+  est contacté immédiatement (découverte `tools/list`) ; rien n'est enregistré si la connexion échoue.
+- **Jeton** : chiffré AES-256-GCM (`CONNECTOR_SECRET_KEY`, 32 octets base64), jamais renvoyé par l'API,
+  jamais dans les événements, effacé au retrait. Sans clé, seuls les connecteurs sans jeton sont permis.
+- **Anti-SSRF** : HTTPS obligatoire, adresses privées/locales/métadonnées refusées (résolution DNS
+  vérifiée), redirections refusées, identifiants dans l'URL refusés. `CONNECTOR_ALLOW_PRIVATE_NETWORK`
+  (développement) est refusé en production.
+- **Politique par outil**, choisie par l'humain : `approval` (défaut, validation humaine à CHAQUE appel,
+  même si le serveur annonce « lecture » : l'annotation n'est pas une garantie), `read` (exécution
+  directe), `disabled`. La passerelle relit la politique à chaque invocation.
+- **Droits** : outils accordés par un administrateur à la création de l'agent ou via « Modifier les
+  outils » (`agent.grants.updated`, audité). Un agent ne peut jamais s'accorder un connecteur.
+- **Exécution** : appel MCP réel, délai 35 s, aucune nouvelle tentative automatique pour une action non
+  « lecture » (risque de double effet), sortie tronquée à 20 000 caractères, secrets rédigés, transmise au
+  modèle comme donnée non fiable. Chaque appel est une invocation visible (machine-outil dans le QG).
+- **Événements** : `tool.connector.updated` (ajout, synchro, politique, erreur, retrait ; sans URL ni
+  jeton) fait apparaître/disparaître la machine-outil en temps réel.

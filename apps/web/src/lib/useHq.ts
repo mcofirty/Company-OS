@@ -356,5 +356,6 @@ export interface Me {
     decideApproval: boolean;
     systemControl: boolean;
     ackAlert: boolean;
+    manageConnectors?: boolean;
   };
 }

@@ -16,7 +16,9 @@ import {
   type ToolStepResult,
 } from '@company-os/agents';
 import {
+  connectorToolsForGrants,
   expireApprovalIfDue,
+  isConnectorToolId,
   getApprovalStatus,
   finishTask,
   loadRunContext,
@@ -93,7 +95,10 @@ export function createActivities(deps: ActivityDeps) {
       taskId: ctx.task.id,
       instructions: ctx.version.instructions,
     });
-    const tools = buildToolDefs(ctx.grants);
+    const tools = buildToolDefs(
+      ctx.grants,
+      ctx.org.mode === 'live' ? await connectorToolsForGrants(db, ctx.org.id, ctx.grants) : [],
+    );
     // Outils web (exécutés par Anthropic) seulement s'ils sont explicitement accordés à l'agent.
     const web = ctx.grants.find((g) => g.toolId === 'web');
     const webTools = {
@@ -246,15 +251,22 @@ export function createActivities(deps: ActivityDeps) {
     }): Promise<ToolStepResult> {
       const ctx = await loadRunContext(db, input.runId);
       const parsed = parseToolName(input.name);
-      const args =
+      const raw =
         input.input && typeof input.input === 'object' && !Array.isArray(input.input)
-          ? Object.fromEntries(
-              Object.entries(input.input).map(([k, v]) => [
-                k,
-                typeof v === 'string' ? v : JSON.stringify(v),
-              ]),
-            )
+          ? (input.input as Record<string, unknown>)
           : {};
+      // Connecteur MCP : arguments JSON transmis tels quels (le serveur valide son schéma).
+      const args: Record<string, unknown> =
+        parsed && isConnectorToolId(parsed.toolId)
+          ? raw
+          : Object.keys(raw).length > 0
+            ? Object.fromEntries(
+                Object.entries(raw).map(([k, v]) => [
+                  k,
+                  typeof v === 'string' ? v : JSON.stringify(v),
+                ]),
+              )
+            : {};
       if (!parsed) {
         return {
           content: `Outil inconnu « ${input.name} ». Utilise uniquement les outils fournis.`,

@@ -68,7 +68,11 @@ const submitResultDef: LlmToolDef = {
  * Outils exposés au modèle : uniquement les actions explicitement autorisées à l'agent.
  * (La gateway revérifie de toute façon chaque appel.)
  */
-export function buildToolDefs(grants: { toolId: string; actions: string[] }[]): LlmToolDef[] {
+export function buildToolDefs(
+  grants: { toolId: string; actions: string[] }[],
+  /** Outils de connecteurs MCP accordés (schéma fourni par le serveur, validé par lui). */
+  connectorTools: ConnectorToolDefInput[] = [],
+): LlmToolDef[] {
   const defs: LlmToolDef[] = [];
   for (const g of [...grants].sort((a, b) => a.toolId.localeCompare(b.toolId))) {
     for (const action of [...g.actions].sort()) {
@@ -90,6 +94,39 @@ export function buildToolDefs(grants: { toolId: string; actions: string[] }[]): 
       });
     }
   }
+  for (const t of [...connectorTools].sort((a, b) =>
+    toolName(a.toolId, a.action).localeCompare(toolName(b.toolId, b.action)),
+  )) {
+    const schema = t.inputSchema;
+    defs.push({
+      name: toolName(t.toolId, t.action),
+      description:
+        `[Connecteur ${t.connectorName}${t.policy === 'read' ? '' : ' · chaque appel exige une validation humaine'}] ${t.description}`.slice(
+          0,
+          1024,
+        ),
+      input_schema: {
+        type: 'object',
+        properties:
+          schema['properties'] && typeof schema['properties'] === 'object'
+            ? (schema['properties'] as Record<string, unknown>)
+            : {},
+        required: Array.isArray(schema['required'])
+          ? (schema['required'] as unknown[]).filter((x): x is string => typeof x === 'string')
+          : [],
+        additionalProperties: false,
+      },
+    });
+  }
   defs.push(submitResultDef);
   return defs;
+}
+
+export interface ConnectorToolDefInput {
+  toolId: string;
+  action: string;
+  connectorName: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  policy: 'read' | 'approval' | 'disabled';
 }

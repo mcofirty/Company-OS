@@ -29,17 +29,17 @@ enum MemberRole {
 }
 
 model Organization {
-  id         String   @id @db.Uuid
-  name       String
-  mode       Mode
-  timezone   String   @default("Europe/Paris")
-  currency   String   @default("USD")
+  id             String   @id @db.Uuid
+  name           String
+  mode           Mode
+  timezone       String   @default("Europe/Paris")
+  currency       String   @default("USD")
   /// Dernier numéro de séquence attribué : sert de compteur ET de verrou de ligne par org.
-  lastSeq    BigInt   @default(0) @map("last_seq")
-  killSwitch Boolean  @default(false) @map("kill_switch")
+  lastSeq        BigInt   @default(0) @map("last_seq")
+  killSwitch     Boolean  @default(false) @map("kill_switch")
   /// Organisation live : outils de démonstration (données fictives) autorisés ? Non par défaut.
-  allowDemoTools Boolean @default(false) @map("allow_demo_tools")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  allowDemoTools Boolean  @default(false) @map("allow_demo_tools")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   memberships Membership[]
   departments Department[]
@@ -165,8 +165,13 @@ model Tool {
   color       String
   actions     Json
   status      String           @default("healthy")
+  /**
+   * Connecteur retiré : la ligne reste (historique des invocations), la machine disparaît.
+   */
+  archivedAt  DateTime?        @map("archived_at") @db.Timestamptz(3)
   grants      AgentToolGrant[]
   invocations ToolInvocation[]
+  connector   Connector?
 
   @@map("tools")
 }
@@ -242,31 +247,31 @@ model AgentRun {
 }
 
 model ToolInvocation {
-  id               String     @id @db.Uuid
-  orgId            String     @map("org_id") @db.Uuid
-  toolId           String     @map("tool_id")
-  tool             Tool       @relation(fields: [toolId], references: [id])
-  agentRunId       String     @map("agent_run_id") @db.Uuid
-  agentRun         AgentRun   @relation(fields: [agentRunId], references: [id])
-  agentId          String     @map("agent_id")
-  agent            Agent      @relation(fields: [agentId], references: [id])
-  taskId           String     @map("task_id") @db.Uuid
-  task             Task       @relation(fields: [taskId], references: [id])
-  action           String
-  actionKind       String     @map("action_kind")
-  risk             String
-  status           String
-  redactedInput    Json       @map("redacted_input")
-  safeSummary      String?    @map("safe_summary")
-  durationMs       Int?       @map("duration_ms")
-  idempotencyKey   String     @map("idempotency_key")
-  attempt          Int        @default(1)
-  correlationId    String     @map("correlation_id") @db.Uuid
-  provenance       Provenance
-  requestedAt      DateTime   @map("requested_at") @db.Timestamptz(3)
-  startedAt        DateTime?  @map("started_at") @db.Timestamptz(3)
-  endedAt          DateTime?  @map("ended_at") @db.Timestamptz(3)
-  errorCode        String?    @map("error_code")
+  id             String     @id @db.Uuid
+  orgId          String     @map("org_id") @db.Uuid
+  toolId         String     @map("tool_id")
+  tool           Tool       @relation(fields: [toolId], references: [id])
+  agentRunId     String     @map("agent_run_id") @db.Uuid
+  agentRun       AgentRun   @relation(fields: [agentRunId], references: [id])
+  agentId        String     @map("agent_id")
+  agent          Agent      @relation(fields: [agentId], references: [id])
+  taskId         String     @map("task_id") @db.Uuid
+  task           Task       @relation(fields: [taskId], references: [id])
+  action         String
+  actionKind     String     @map("action_kind")
+  risk           String
+  status         String
+  redactedInput  Json       @map("redacted_input")
+  safeSummary    String?    @map("safe_summary")
+  durationMs     Int?       @map("duration_ms")
+  idempotencyKey String     @map("idempotency_key")
+  attempt        Int        @default(1)
+  correlationId  String     @map("correlation_id") @db.Uuid
+  provenance     Provenance
+  requestedAt    DateTime   @map("requested_at") @db.Timestamptz(3)
+  startedAt      DateTime?  @map("started_at") @db.Timestamptz(3)
+  endedAt        DateTime?  @map("ended_at") @db.Timestamptz(3)
+  errorCode      String?    @map("error_code")
 
   @@unique([orgId, idempotencyKey])
   @@index([orgId, status, requestedAt])
@@ -348,19 +353,19 @@ model ApprovalRequest {
 
 /// Réunion = workflow collaboratif borné (docs/04 §7).
 model Meeting {
-  id               String    @id @db.Uuid
-  orgId            String    @map("org_id") @db.Uuid
+  id               String               @id @db.Uuid
+  orgId            String               @map("org_id") @db.Uuid
   topic            String
   status           String
-  roomId           String    @map("room_id")
-  initiatorAgentId String    @map("initiator_agent_id")
-  taskId           String?   @map("task_id") @db.Uuid
-  invocationId     String?   @unique @map("invocation_id") @db.Uuid
-  startedAt        DateTime? @map("started_at") @db.Timestamptz(3)
-  endedAt          DateTime? @map("ended_at") @db.Timestamptz(3)
+  roomId           String               @map("room_id")
+  initiatorAgentId String               @map("initiator_agent_id")
+  taskId           String?              @map("task_id") @db.Uuid
+  invocationId     String?              @unique @map("invocation_id") @db.Uuid
+  startedAt        DateTime?            @map("started_at") @db.Timestamptz(3)
+  endedAt          DateTime?            @map("ended_at") @db.Timestamptz(3)
   summary          String?
-  decisions        Json      @default("[]")
-  taskIdsCreated   String[]  @map("task_ids_created")
+  decisions        Json                 @default("[]")
+  taskIdsCreated   String[]             @map("task_ids_created")
   participants     MeetingParticipant[]
 
   @@index([orgId, status])
@@ -467,3 +472,61 @@ model Document {
   @@map("documents")
 }
 
+/// Connecteur MCP ajouté par un administrateur (docs/05 §11). Le jeton est chiffré (AES-256-GCM).
+model Connector {
+  id           String          @id @db.Uuid
+  orgId        String          @map("org_id") @db.Uuid
+  /**
+   * Machine-outil associée (`mcp-xxxxxxxx`).
+   */
+  toolId       String          @unique @map("tool_id")
+  tool         Tool            @relation(fields: [toolId], references: [id])
+  name         String
+  url          String
+  /**
+   * Jeton chiffré (v1:iv:tag:données, base64) ; jamais renvoyé par l'API.
+   */
+  secretSealed String?         @map("secret_sealed")
+  /**
+   * En-tête recevant le jeton (Authorization: Bearer par défaut).
+   */
+  authHeader   String          @default("authorization") @map("auth_header")
+  status       String          @default("healthy")
+  lastError    String?         @map("last_error")
+  lastSyncAt   DateTime?       @map("last_sync_at") @db.Timestamptz(3)
+  createdBy    String          @map("created_by")
+  createdAt    DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  removedAt    DateTime?       @map("removed_at") @db.Timestamptz(3)
+  tools        ConnectorTool[]
+
+  @@index([orgId])
+  @@map("connectors")
+}
+
+/// Outil découvert sur un serveur MCP, avec la politique choisie par l'administrateur.
+model ConnectorTool {
+  connectorId  String    @map("connector_id") @db.Uuid
+  connector    Connector @relation(fields: [connectorId], references: [id])
+  /**
+   * Nom d'action côté plateforme (assaini, ≤ 48 caractères).
+   */
+  action       String
+  /**
+   * Nom exact côté serveur MCP.
+   */
+  remoteName   String    @map("remote_name")
+  description  String
+  inputSchema  Json      @map("input_schema")
+  /**
+   * read : exécution directe ; approval : validation humaine à chaque appel ; disabled.
+   */
+  policy       String    @default("approval")
+  /**
+   * Annotation du serveur (readOnlyHint) — indicative, jamais suffisante seule.
+   */
+  readOnlyHint Boolean   @default(false) @map("read_only_hint")
+  updatedAt    DateTime  @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@id([connectorId, action])
+  @@map("connector_tools")
+}

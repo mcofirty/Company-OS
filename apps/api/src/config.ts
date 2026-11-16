@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseSecretKey } from '@company-os/policies';
 import type { AuthConfig } from './auth';
 import { createOidcVerifier, type OidcSettings } from './oidc';
 
@@ -25,13 +26,24 @@ export const EnvSchema = z.object({
   /** Masque l'organisation de démonstration (serveur de production : données réelles seulement). */
   HIDE_DEMO_ORG: z.enum(['true', 'false']).default('false'),
   TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
+  /** Clé AES-256 (base64, 32 octets) chiffrant les jetons de connecteurs MCP. */
+  CONNECTOR_SECRET_KEY: z.string().optional(),
+  /** Serveurs MCP en http:// ou sur réseau privé : développement uniquement. */
+  CONNECTOR_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
 });
 export type Env = z.infer<typeof EnvSchema>;
+
+export interface ConnectorSettings {
+  /** Sans clé : seuls les connecteurs sans jeton peuvent être ajoutés. */
+  secretKey: Buffer | null;
+  allowPrivateNetwork: boolean;
+}
 
 export interface ApiConfig {
   env: Env;
   auth: AuthConfig;
   corsOrigin: string[];
+  connectors: ConnectorSettings;
 }
 
 /**
@@ -64,6 +76,15 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
       problems.push(`Production : origines non HTTPS refusées (${insecure.join(', ')})`);
     }
   }
+  let secretKey: Buffer | null = null;
+  try {
+    secretKey = parseSecretKey(env.CONNECTOR_SECRET_KEY || undefined);
+  } catch (e) {
+    problems.push((e as Error).message);
+  }
+  if (env.NODE_ENV === 'production' && env.CONNECTOR_ALLOW_PRIVATE_NETWORK === 'true') {
+    problems.push('Production : CONNECTOR_ALLOW_PRIVATE_NETWORK interdit (protection SSRF)');
+  }
   if (env.APP_MODE === 'live') {
     problems.push('APP_MODE=live non disponible : connecteurs réels et identités non configurés');
   }
@@ -82,7 +103,12 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
   return {
     env,
     corsOrigin,
+    connectors: {
+      secretKey,
+      allowPrivateNetwork: env.CONNECTOR_ALLOW_PRIVATE_NETWORK === 'true',
+    },
     auth: {
+      hideDemoOrg: env.HIDE_DEMO_ORG === 'true',
       allowDevPrincipal:
         !authConfigured && env.NODE_ENV !== 'production' && env.APP_MODE === 'demo',
       ...(env.API_ACCESS_TOKEN ? { accessToken: env.API_ACCESS_TOKEN } : {}),

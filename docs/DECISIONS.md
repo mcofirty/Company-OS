@@ -230,3 +230,10 @@ sièges et écrans sont dessinés procéduralement (art original, `apps/web/src/
 et rognés dans un atlas unique ; les avatars (22x35 pixels d'art, 7 poses, face/dos) dans un second atlas.
 Moins de surface et de changements de texture : plus de détails pour un coût de rendu quasi identique
 (banc `/bench`, captures `docs/screenshots/graphics-before-*` / `graphics-after-*`).
+
+ADR-051 — **Connecteurs = serveurs MCP distants, politique par outil choisie par l'humain.** Plutôt que
+d'écrire un adaptateur par éditeur, la plateforme parle MCP (Streamable HTTP, SDK officiel). Chaque outil
+découvert est un `toolId` dynamique `mcp-xxxxxxxx` (ligne `tools` par organisation) ; nature et risque
+viennent de la politique (`read` => risque read ; sinon `external_write` => validation humaine). Défaut :
+validation à chaque appel. Jeton chiffré AES-256-GCM avec une clé d'environnement ; protection SSRF
+(HTTPS, IP publiques). Les droits d'un agent sont remplaçables par un admin (`agent.grants.updated`).

@@ -84,6 +84,7 @@ export function registerV1(
           ackAlert: operator,
           createAgent: admin && live,
           createMission: operator && live,
+          manageConnectors: admin && live,
         },
       },
       meta,
@@ -340,7 +341,8 @@ export function registerV1(
     // Même règle que le snapshot : une org live ne voit que les outils réels.
     const tools = allTools.filter((t) => {
       const entry = toolById(t.id);
-      return entry ? toolAvailableIn(entry, org.mode, org.allowDemoTools) : false;
+      if (entry) return toolAvailableIn(entry, org.mode, org.allowDemoTools);
+      return t.orgId === p.orgId && t.archivedAt === null && org.mode === 'live'; // connecteurs
     });
     return {
       data: tools.map((t) => ({ ...toolView(t), activeInvocations: counts.get(t.id) ?? 0 })),

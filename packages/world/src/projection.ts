@@ -344,11 +344,39 @@ export function applyEvent(
       w = finishAgentTask(w, e.payload.agentId, e.payload.taskId, at, true);
       w = { ...w, tasks: trimTasks(w.tasks) };
       break;
+    case 'tool.connector.updated': {
+      const p = e.payload;
+      const others = w.tools.filter((t) => t.id !== p.toolId);
+      w = {
+        ...w,
+        tools: p.removed
+          ? others
+          : sortTools([
+              ...others,
+              {
+                id: p.toolId,
+                name: p.name,
+                code: p.code,
+                category: 'connector',
+                color: p.color,
+                status: p.status,
+                actions: p.actions,
+              },
+            ]),
+      };
+      break;
+    }
+    case 'agent.grants.updated':
+      break; // journal / audit seulement : les droits ne font pas partie de la projection
   }
   const alert = alertFromEvent(e);
   if (alert) w = { ...w, alerts: trimAlerts([alert, ...w.alerts]) };
   return { world: w, outcome: 'applied' };
 }
+
+/** Ordre des machines-outils, identique côté serveur (snapshot) et client (fold). */
+export const sortTools = <T extends { id: string }>(list: T[]): T[] =>
+  [...list].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
 /** Garde les alertes non acquittées + les plus récentes acquittées (même règle serveur). */
 export function trimAlerts(list: AlertView[]): AlertView[] {

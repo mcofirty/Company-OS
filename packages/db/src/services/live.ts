@@ -8,6 +8,7 @@ import { withOrgTx } from '../events';
 import { DEMO_DEPARTMENTS } from '../seed-data';
 import { ensureCatalogTools } from '../seed';
 import { createAgentInTx } from './agents';
+import { isConnectorToolId, validateConnectorGrants } from './connectors';
 
 /** Modèle par défaut des agents live (tarif présent dans config/llm-pricing.json). */
 export const LIVE_DEFAULT_MODEL = 'claude-opus-5-5';
@@ -144,7 +145,15 @@ export async function createAgentByAdmin(
       );
     }
     const org = await tx.organization.findUniqueOrThrow({ where: { id: orgId } });
-    const grants = validateGrants(req.grants, { allowDemoTools: org.allowDemoTools });
+    const pick = (connector: boolean) =>
+      Object.fromEntries(
+        Object.entries(req.grants).filter(([id]) => isConnectorToolId(id) === connector),
+      );
+    const grants = {
+      ...validateGrants(pick(false), { allowDemoTools: org.allowDemoTools }),
+      // Outils de connecteurs MCP de CETTE organisation (actifs, non désactivés).
+      ...(await validateConnectorGrants(tx, orgId, pick(true))),
+    };
     const dept = await tx.department.findFirst({ where: { id: req.departmentId, orgId } });
     if (!dept) throw new DomainError('NOT_FOUND', 'Département introuvable');
     const taken = new Set(

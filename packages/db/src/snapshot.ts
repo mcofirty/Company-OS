@@ -8,6 +8,7 @@ import {
 } from '@company-os/contracts';
 import {
   HQ_MAP,
+  sortTools,
   trimAlerts,
   trimApprovals,
   trimInvocations,
@@ -117,12 +118,16 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
         })),
         agents: agents.map(agentView),
         // Seulement les outils qui existent pour ce mode : une org live ne voit aucun outil fictif.
-        tools: tools
-          .filter((t) => {
-            const entry = toolById(t.id);
-            return entry ? toolAvailableIn(entry, org.mode, org.allowDemoTools) : false;
-          })
-          .map(toolView),
+        tools: sortTools(
+          tools
+            .filter((t) => {
+              const entry = toolById(t.id);
+              if (entry) return toolAvailableIn(entry, org.mode, org.allowDemoTools);
+              // Connecteur MCP de cette organisation (live), tant qu'il n'est pas retiré.
+              return t.orgId === orgId && t.archivedAt === null && org.mode === 'live';
+            })
+            .map(toolView),
+        ),
         tasks: trimTasks([...openTasks, ...doneTasks].map(taskView)),
         invocations: trimInvocations([...activeInv, ...doneInv].map(invocationView)),
         costs: {

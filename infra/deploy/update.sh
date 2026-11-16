@@ -13,6 +13,12 @@ echo "==> Sauvegarde avant mise à jour"
 bash infra/deploy/backup.sh
 echo "==> Récupération du code (identifiants GitHub demandés si le dépôt est privé)"
 git pull --ff-only
+# Clé de chiffrement des jetons de connecteurs : créée une seule fois, jamais modifiée.
+if ! grep -q '^CONNECTOR_SECRET_KEY=.\+' "$ENV_FILE"; then
+  sed -i '/^CONNECTOR_SECRET_KEY=/d' "$ENV_FILE"
+  echo "CONNECTOR_SECRET_KEY=$(openssl rand -base64 32)" >> "$ENV_FILE"
+  echo "==> Clé de chiffrement des connecteurs créée dans $ENV_FILE (à conserver)"
+fi
 echo "==> Reconstruction et redémarrage"
 compose build
 compose up -d --wait

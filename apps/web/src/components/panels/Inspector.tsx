@@ -14,7 +14,7 @@ import {
   type WorldSnapshot,
 } from '@company-os/contracts';
 import { departmentPresence } from '@company-os/world';
-import { api } from '../../lib/api';
+import { api, ApiFailure } from '../../lib/api';
 import {
   ACTIVITY_LABEL,
   ACTIVITY_TONE,
@@ -31,6 +31,7 @@ import type { MetricsSummary } from '../../lib/useMetrics';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 import { TaskDocuments } from './Documents';
+import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
 
 interface Props {
   world: WorldSnapshot;
@@ -123,9 +124,12 @@ function AgentInspector({
 }: Props & { id: string }) {
   const { caps } = useControls();
   const agent = world.agents.find((a) => a.id === id);
+  const [grantsVersion, setGrantsVersion] = useState(0);
+  const [editGrants, setEditGrants] = useState<Record<string, string[]> | null>(null);
+  const [grantsError, setGrantsError] = useState<string | null>(null);
   const remote = useRemote<{ grants: { toolId: string; actions: string[] }[] }>(
     `/v1/agents/${id}`,
-    id,
+    `${id}-${grantsVersion}`,
   );
   const [busy, setBusy] = useState(false);
   if (!agent) return <Empty>Agent introuvable.</Empty>;
@@ -213,14 +217,70 @@ function AgentInspector({
         )}
       </Section>
       <Section title="Outils autorisés">
-        <div className="grants">
-          {remote?.grants.map((g) => (
-            <span key={g.toolId} className="grant">
-              <ToolIcon tool={world.tools.find((t) => t.id === g.toolId)} size={22} />{' '}
-              {g.actions.join(', ')}
-            </span>
-          )) ?? <span className="muted">Chargement…</span>}
-        </div>
+        {editGrants ? (
+          <div className="grant-editor" data-testid="grant-editor">
+            <GrantPicker
+              world={world}
+              grants={editGrants}
+              onToggle={(toolId, action) =>
+                setEditGrants((g) => toggleGrant(g ?? {}, toolId, action))
+              }
+            />
+            {grantsError && <p className="form-error">{grantsError}</p>}
+            <div className="actions row">
+              <button
+                className="btn primary small-btn"
+                disabled={busy}
+                data-testid="grants-save"
+                onClick={() => {
+                  setBusy(true);
+                  setGrantsError(null);
+                  api(`/v1/agents/${id}/grants`, {
+                    method: 'POST',
+                    headers: { 'idempotency-key': crypto.randomUUID() },
+                    body: JSON.stringify({ grants: editGrants }),
+                  })
+                    .then(() => {
+                      setEditGrants(null);
+                      setGrantsVersion((v) => v + 1);
+                    })
+                    .catch((e: unknown) =>
+                      setGrantsError(e instanceof ApiFailure ? e.message : 'Erreur inattendue'),
+                    )
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Enregistrer
+              </button>
+              <button className="btn ghost small-btn" onClick={() => setEditGrants(null)}>
+                Annuler
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grants">
+            {remote?.grants.map((g) => {
+              const tool = world.tools.find((t) => t.id === g.toolId);
+              return (
+                <span key={g.toolId} className="grant" title={tool?.name ?? g.toolId}>
+                  <ToolIcon tool={tool} size={22} /> {g.actions.join(', ')}
+                </span>
+              );
+            }) ?? <span className="muted">Chargement…</span>}
+            {remote && remote.grants.length === 0 && <span className="muted">Aucun outil.</span>}
+            {caps.manageConnectors && remote && (
+              <button
+                className="btn small-btn"
+                data-testid="grants-edit"
+                onClick={() =>
+                  setEditGrants(Object.fromEntries(remote.grants.map((g) => [g.toolId, g.actions])))
+                }
+              >
+                Modifier les outils
+              </button>
+            )}
+          </div>
+        )}
       </Section>
       <Section title="Dernières actions">
         <ol className="mini-log">

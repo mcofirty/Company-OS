@@ -1503,3 +1503,54 @@ kbd {
   padding: 12px 14px;
   margin: 0;
 }
+.connectors .connector {
+  border: 1px solid var(--outline);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0;
+}
+.connector-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.connector-head .actions {
+  margin-left: auto;
+}
+.connector .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #3c9d4e;
+}
+.connector .dot.status-down {
+  background: #d94f70;
+}
+.connector .dot.status-degraded {
+  background: #d49c30;
+}
+.connector-tools {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 12.5px;
+}
+.connector-tools td {
+  padding: 6px 4px;
+  border-top: 1px solid var(--outline);
+  vertical-align: top;
+}
+.connector-tools td:last-child {
+  width: 210px;
+  text-align: right;
+}
+.connector-form {
+  border-top: 1px dashed var(--outline);
+  margin-top: 12px;
+  padding-top: 8px;
+}
+.grant-editor {
+  display: grid;
+  gap: 8px;
+}

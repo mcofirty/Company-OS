@@ -10,6 +10,8 @@ import { startSpan } from '@company-os/policies';
 import { registerAuth, type AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
 import { registerV1, type ApprovalSignaler } from './routes/v1';
+import { registerConnectors } from './routes/connectors';
+import type { ConnectorSettings } from './config';
 
 const STATUS: Partial<Record<ErrorCode, number>> = {
   UNAUTHORIZED: 401,
@@ -31,6 +33,8 @@ export interface AppOptions {
   corsOrigin: string | string[];
   logger?: boolean;
   signalApproval?: ApprovalSignaler;
+  /** Connecteurs MCP : clé de chiffrement des jetons, accès réseau privé (tests). */
+  connectors?: ConnectorSettings;
   /** Requêtes /v1 par minute et par client (IP). Défaut 1200. */
   rateLimitPerMinute?: number;
 }
@@ -145,6 +149,7 @@ export async function buildApp(
   }));
 
   registerV1(app, db, opts.signalApproval, { hideDemoOrg: opts.auth.hideDemoOrg ?? false });
+  registerConnectors(app, db, opts.connectors ?? { secretKey: null, allowPrivateNetwork: false });
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
   const relayOnce = (): Promise<number> => relayOutbox(db, (events) => broadcast(io, events));
