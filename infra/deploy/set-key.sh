@@ -20,10 +20,25 @@ if [ -z "$KEY" ]; then
   echo "Rien reçu. Collage : clic droit (PowerShell), Ctrl+Maj+V (Terminal Windows), Cmd+V (Mac)." >&2
   exit 1
 fi
-if [[ "$KEY" != sk-ant-api* ]]; then
-  echo "Ce n'est pas une clé API Anthropic (attendu : sk-ant-api…). Rien n'a été modifié." >&2
-  exit 1
-fi
+# Vérification auprès d'Anthropic (liste des modèles : gratuite, aucune génération).
+# La clé passe par un fichier temporaire (jamais en argument visible dans `ps`).
+HDR="$(mktemp)"
+chmod 600 "$HDR"
+printf 'x-api-key: %s\n' "$KEY" >"$HDR"
+CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 \
+  -H @"$HDR" -H 'anthropic-version: 2023-06-01' https://api.anthropic.com/v1/models || echo 000)"
+rm -f "$HDR"
+case "$CODE" in
+  200) echo "Vérification Anthropic : clé VALIDE." ;;
+  401 | 403)
+    echo "Vérification Anthropic : clé REFUSÉE (HTTP $CODE). Rien n'a été modifié." >&2
+    echo "Créez une clé API sur console.anthropic.com → Settings → API Keys → Create Key." >&2
+    exit 1
+    ;;
+  *)
+    echo "Vérification impossible (HTTP $CODE : réseau ?). Vous pouvez enregistrer quand même." >&2
+    ;;
+esac
 read -r -p "Enregistrer cette clé ? (o/n) : " OK </dev/tty
 [ "$OK" = "o" ] || [ "$OK" = "O" ] || { echo "Annulé."; exit 0; }
 

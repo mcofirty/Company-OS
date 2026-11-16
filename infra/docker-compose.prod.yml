@@ -107,7 +107,13 @@ services:
       DEMO_AUTOPILOT: ${DEMO_AUTOPILOT:-false}
       # Seul le worker appelle Claude : la clé n'est pas transmise à l'API ni au cockpit.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-    healthcheck: { disable: true }
+    # Pas de port HTTP : « vivant » = processus principal présent. Nécessaire car
+    # `docker compose up --wait` refuse un conteneur sans healthcheck (selon la version).
+    healthcheck:
+      test: ['CMD-SHELL', 'kill -0 1']
+      interval: 15s
+      timeout: 3s
+      retries: 3
 
   web:
     image: company-os-web:${IMAGE_TAG:-latest}
