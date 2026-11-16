@@ -223,3 +223,10 @@ dans l'inspecteur de tâche).
 ADR-049 — **Démo masquée sur un serveur réel.** `HIDE_DEMO_ORG=true` (défaut du compose de production) :
 l'org démo disparaît de `/v1/me`, l'org par défaut est la première org live du membre, et une demande
 explicite de la démo reçoit 403 (jamais de substitution silencieuse). `install.sh` ne charge plus la démo.
+
+ADR-050 — **Décor et avatars pré-rendus en atlas.** Le monde (sol, murs, fenêtres, tapis) est cuit une fois
+dans une texture découpée en morceaux (les zones vides ne sont pas dessinées) ; mobilier, cloisons vitrées,
+sièges et écrans sont dessinés procéduralement (art original, `apps/web/src/world/decor.ts`) puis empaquetés
+et rognés dans un atlas unique ; les avatars (22x35 pixels d'art, 7 poses, face/dos) dans un second atlas.
+Moins de surface et de changements de texture : plus de détails pour un coût de rendu quasi identique
+(banc `/bench`, captures `docs/screenshots/graphics-before-*` / `graphics-after-*`).

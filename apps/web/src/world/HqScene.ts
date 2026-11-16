@@ -15,13 +15,25 @@ import {
 import {
   AVATAR_H,
   avatarKey,
-  darken,
+  AVATAR_TEX,
   generateTextures,
   hex,
   PX,
   type AvatarFrame,
   type AvatarView,
 } from './textures';
+import {
+  bakeStatic,
+  chairBackSprite,
+  commitDecor,
+  DECOR_TEX,
+  furnitureSprite,
+  glowSprite,
+  meetingChairSprite,
+  partitionSprite,
+  screenSprite,
+  type DecorSprite,
+} from './decor';
 
 /**
  * Projection visuelle du QG. Ne détient aucun état métier : elle reçoit le snapshot
@@ -47,7 +59,6 @@ const TH = HQ_MAP.tileHeight;
 const COLS = HQ_MAP.cols;
 const ROWS = HQ_MAP.rows;
 const WALL_H = 120;
-const PARTITION_H = 16;
 const STEP_MS = 170;
 
 interface AvatarObj {
@@ -73,7 +84,10 @@ interface AvatarObj {
 export class HqScene extends Phaser.Scene {
   private origin = { x: 0, y: 0 };
   private avatars = new Map<string, AvatarObj>();
-  private monitors = new Map<string, Phaser.GameObjects.Rectangle>();
+  private monitors = new Map<
+    string,
+    { screen: Phaser.GameObjects.Image; glow: Phaser.GameObjects.Image }
+  >();
   private labels = new Map<
     string,
     { text: Phaser.GameObjects.Text; bg: Phaser.GameObjects.Graphics; color: number }
@@ -110,10 +124,14 @@ export class HqScene extends Phaser.Scene {
     this.origin = { x: ROWS * (TW / 2) + 60, y: WALL_H + 80 };
     this.cameras.main.setBackgroundColor('#d6bde9');
     this.drawSky();
-    this.drawFloor();
-    this.drawBuildingWalls();
+    this.drawStatic();
     for (const r of HQ_MAP.rooms) this.drawPartitions(r);
     for (const f of HQ_MAP.furniture) this.drawFurniture(f);
+    this.drawSeats();
+    commitDecor(this);
+    for (const { img, d } of this.decorPending)
+      img.setTexture(DECOR_TEX, d.key).setOrigin(d.originX, d.originY);
+    this.decorPending = [];
     for (const r of HQ_MAP.rooms) this.drawRoomLabel(r);
     this.setupCamera();
     this.ready = true;
@@ -138,119 +156,19 @@ export class HqScene extends Phaser.Scene {
     }
   }
 
-  private roomFloorColor(room: Room | null, t: Tile): number {
-    if (!room) return (t.x + t.y) % 2 === 0 ? 0xf1e7d6 : 0xe9dcc6;
-    const base = hex(room.color);
-    const light = Phaser.Display.Color.IntegerToColor(base).lighten(
-      room.kind === 'entry' ? 6 : 18,
-    ).color;
-    return (t.x + t.y) % 2 === 0 ? light : darken(light, 0.95);
-  }
-
-  private drawFloor(): void {
-    const g = this.add.graphics().setDepth(-10);
-    // Épaisseur de la dalle flottante (bords avant).
-    const thick = 26;
-    const frontL = [this.P(0, ROWS), this.P(COLS, ROWS)];
-    const frontR = [this.P(COLS, 0), this.P(COLS, ROWS)];
-    g.fillStyle(0x8a6a52, 1);
-    g.fillPoints(
-      [
-        frontL[0]!,
-        frontL[1]!,
-        new Phaser.Math.Vector2(frontL[1]!.x, frontL[1]!.y + thick),
-        new Phaser.Math.Vector2(frontL[0]!.x, frontL[0]!.y + thick),
-      ],
-      true,
-    );
-    g.fillStyle(0x73563f, 1);
-    g.fillPoints(
-      [
-        frontR[0]!,
-        frontR[1]!,
-        new Phaser.Math.Vector2(frontR[1]!.x, frontR[1]!.y + thick),
-        new Phaser.Math.Vector2(frontR[0]!.x, frontR[0]!.y + thick),
-      ],
-      true,
-    );
-    g.fillStyle(0x7cc46b, 1);
-    g.fillPoints(
-      [
-        frontL[0]!,
-        frontL[1]!,
-        new Phaser.Math.Vector2(frontL[1]!.x, frontL[1]!.y + 6),
-        new Phaser.Math.Vector2(frontL[0]!.x, frontL[0]!.y + 6),
-      ],
-      true,
-    );
-    g.fillStyle(0x68ad59, 1);
-    g.fillPoints(
-      [
-        frontR[0]!,
-        frontR[1]!,
-        new Phaser.Math.Vector2(frontR[1]!.x, frontR[1]!.y + 6),
-        new Phaser.Math.Vector2(frontR[0]!.x, frontR[0]!.y + 6),
-      ],
-      true,
-    );
-
-    for (let y = 0; y < ROWS; y++) {
-      for (let x = 0; x < COLS; x++) {
-        const t = { x, y };
-        const room = HQ_MAP.roomAt(t);
-        g.fillStyle(this.roomFloorColor(room, t), 1);
-        g.fillPoints(
-          [this.P(x, y), this.P(x + 1, y), this.P(x + 1, y + 1), this.P(x, y + 1)],
-          true,
-        );
-      }
-    }
-    // Liseré d'allée
-    g.lineStyle(1, 0xffffff, 0.18);
-    for (let y = 0; y <= ROWS; y++)
-      g.lineBetween(this.P(0, y).x, this.P(0, y).y, this.P(COLS, y).x, this.P(COLS, y).y);
-    for (let x = 0; x <= COLS; x++)
-      g.lineBetween(this.P(x, 0).x, this.P(x, 0).y, this.P(x, ROWS).x, this.P(x, ROWS).y);
-  }
-
-  private drawBuildingWalls(): void {
-    const g = this.add.graphics().setDepth(-5);
-    const a = this.P(0, 0);
-    const b = this.P(COLS, 0);
-    const c = this.P(0, ROWS);
-    const up = (v: Phaser.Math.Vector2, h: number): Phaser.Math.Vector2 =>
-      new Phaser.Math.Vector2(v.x, v.y - h);
-    // Mur droit (le long de gy=0) et mur gauche (le long de gx=0)
-    g.fillStyle(0xf3ead9, 1);
-    g.fillPoints([up(a, WALL_H), up(b, WALL_H), b, a], true);
-    g.fillStyle(0xe4d8c3, 1);
-    g.fillPoints([up(a, WALL_H), up(c, WALL_H), c, a], true);
-    // Plinthes et chaperons
-    g.fillStyle(0xcdbca0, 1);
-    g.fillPoints([up(a, 8), up(b, 8), b, a], true);
-    g.fillPoints([up(a, 8), up(c, 8), c, a], true);
-    g.fillStyle(0xb9a68a, 1);
-    g.fillPoints([up(a, WALL_H + 6), up(b, WALL_H + 6), up(b, WALL_H), up(a, WALL_H)], true);
-    g.fillPoints([up(a, WALL_H + 6), up(c, WALL_H + 6), up(c, WALL_H), up(a, WALL_H)], true);
-    // Fenêtres
-    const window = (p0: Phaser.Math.Vector2, p1: Phaser.Math.Vector2): void => {
-      g.fillStyle(0x8fb7d9, 1);
-      g.fillPoints([up(p0, 92), up(p1, 92), up(p1, 34), up(p0, 34)], true);
-      g.fillStyle(0xcfe6f7, 1);
-      g.fillPoints([up(p0, 88), up(p1, 88), up(p1, 64), up(p0, 64)], true);
-      g.lineStyle(3, 0xffffff, 1);
-      g.strokePoints([up(p0, 92), up(p1, 92), up(p1, 34), up(p0, 34)], true);
-      const m0 = new Phaser.Math.Vector2((p0.x + p1.x) / 2, (p0.y + p1.y) / 2);
-      g.lineBetween(m0.x, m0.y - 92, m0.x, m0.y - 34);
-    };
-    for (let x = 2; x < COLS - 2; x += 5) window(this.P(x, 0), this.P(x + 3, 0));
-    for (let y = 12; y < ROWS - 2; y += 5) window(this.P(0, y), this.P(0, y + 3));
-    g.lineStyle(2, 0xa38f72, 1);
-    g.lineBetween(a.x, a.y, a.x, a.y - WALL_H);
+  /** Sol, tapis, lumière et murs du bâtiment : une seule image cuite au démarrage. */
+  private drawStatic(): void {
+    const bake = bakeStatic(this, this.origin);
+    for (const ch of bake.chunks)
+      this.add
+        .image(ch.x, ch.y, bake.key, ch.frame)
+        .setOrigin(0, 0)
+        .setScale(bake.scale)
+        .setDepth(-10);
     // Enseigne peinte sur le mur gauche
     const s = this.P(0, 9.5);
     this.add
-      .text(s.x, s.y - 66, 'QUARTIER GÉNÉRAL', {
+      .text(s.x, s.y - 70, 'QUARTIER GÉNÉRAL', {
         fontFamily: 'ui-monospace, Menlo, monospace',
         fontSize: '26px',
         fontStyle: 'bold',
@@ -262,120 +180,52 @@ export class HqScene extends Phaser.Scene {
       .setDepth(-4);
   }
 
-  /** Boîte isométrique : empreinte (x,y,w,d) en tuiles, hauteur h en px. */
-  private box(
-    g: Phaser.GameObjects.Graphics,
-    x: number,
-    y: number,
-    w: number,
-    d: number,
-    h: number,
-    top: number,
-    left: number,
-    right: number,
-  ): void {
-    const lift = (v: Phaser.Math.Vector2): Phaser.Math.Vector2 =>
-      new Phaser.Math.Vector2(v.x, v.y - h);
-    const p00 = this.P(x, y);
-    const p10 = this.P(x + w, y);
-    const p11 = this.P(x + w, y + d);
-    const p01 = this.P(x, y + d);
-    g.fillStyle(left, 1);
-    g.fillPoints([p01, p11, lift(p11), lift(p01)], true);
-    g.fillStyle(right, 1);
-    g.fillPoints([p10, p11, lift(p11), lift(p10)], true);
-    g.fillStyle(top, 1);
-    g.fillPoints([lift(p00), lift(p10), lift(p11), lift(p01)], true);
+  private decorPending: { img: Phaser.GameObjects.Image; d: DecorSprite }[] = [];
+  /** Image de décor ; sa frame d'atlas est attribuée après empaquetage (commitDecor). */
+  private placeDecor(
+    t: { x: number; y: number },
+    d: DecorSprite,
+    depth: number,
+  ): Phaser.GameObjects.Image {
+    const c = this.center(t);
+    const img = this.add.image(c.x, c.y, '__DEFAULT').setScale(d.scale).setDepth(depth);
+    this.decorPending.push({ img, d });
+    return img;
   }
 
   private drawPartitions(room: Room): void {
     if (!room.walls) return;
-    const base = hex(room.color);
     const { x0, y0, x1, y1 } = room.rect;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         if (HQ_MAP.tileKind({ x, y }) !== 'wall') continue;
-        const g = this.add.graphics().setDepth(x + y + 1);
-        this.box(
-          g,
-          x + 0.1,
-          y + 0.1,
-          0.8,
-          0.8,
-          PARTITION_H,
-          darken(base, 0.82),
-          darken(base, 0.62),
-          darken(base, 0.7),
-        );
-        g.fillStyle(0x2c2640, 0.35);
-        const t = this.P(x + 0.5, y + 0.5);
-        g.fillRect(t.x - 1, t.y - PARTITION_H - 2, 2, 2);
+        this.placeDecor({ x, y }, partitionSprite(this, room, { x, y }), x + y + 1);
       }
     }
   }
 
   private drawFurniture(f: Furniture): void {
-    const g = this.add.graphics().setDepth(f.x + f.y + 0.9);
-    const { x, y } = f;
-    switch (f.kind) {
-      case 'desk': {
-        this.box(g, x + 0.08, y + 0.2, 0.84, 0.6, 18, 0xfafaf7, 0xc9c6bd, 0xdedbd2);
-        const c = this.center(f);
-        const frame = this.add
-          .rectangle(c.x, c.y - 34, 26, 18, 0x2b2f3a)
-          .setDepth(f.x + f.y + 0.95);
-        const screen = this.add
-          .rectangle(c.x, c.y - 34, 22, 13, 0x4b5263)
-          .setDepth(f.x + f.y + 0.96);
-        void frame;
-        const seatKey = `${x},${y + 1}`;
-        this.monitors.set(seatKey, screen);
-        break;
-      }
-      case 'meeting_table':
-        this.box(g, x, y, 1, 1, 14, 0xa77b52, 0x7d5a3a, 0x8f6845);
-        break;
-      case 'counter':
-        this.box(g, x + 0.05, y + 0.1, 0.9, 0.8, 22, 0xd9c3a0, 0x9c7f58, 0xb69670);
-        if (x % 2 === 0)
-          this.box(g, x + 0.3, y + 0.3, 0.35, 0.35, 38, 0x4d5562, 0x2f343d, 0x3c424d);
-        break;
-      case 'cafe_table':
-        this.box(g, x + 0.2, y + 0.2, 0.6, 0.6, 14, 0xf5efe6, 0xc3b8a7, 0xd8cdbc);
-        break;
-      case 'sofa':
-        this.box(g, x, y + 0.1, 1, 0.8, 12, 0x63b7ae, 0x3f877f, 0x4f9d94);
-        this.box(g, x, y + 0.75, 1, 0.2, 22, 0x6fc4bb, 0x3f877f, 0x4f9d94);
-        break;
-      case 'whiteboard':
-        this.box(g, x + 0.1, y + 0.4, 0.8, 0.12, 40, 0xffffff, 0xe6e6ea, 0xf3f3f6);
-        g.fillStyle(0x7c60c9, 1);
-        g.fillRect(this.center(f).x - 10, this.center(f).y - 30, 14, 2);
-        g.fillStyle(0xea966c, 1);
-        g.fillRect(this.center(f).x - 6, this.center(f).y - 24, 12, 2);
-        break;
-      case 'server':
-        this.box(g, x + 0.2, y + 0.2, 0.6, 0.6, 44, 0x3b4252, 0x262b36, 0x2f3542);
-        g.fillStyle(0x4ade80, 1);
-        for (let i = 0; i < 4; i++)
-          g.fillRect(this.center(f).x + 4, this.center(f).y - 38 + i * 8, 3, 2);
-        break;
-      case 'reception':
-        this.box(g, x, y, 2, 0.8, 22, 0xe7c16a, 0xb08a3c, 0xc79d4a);
-        break;
-      case 'plant': {
-        this.box(g, x + 0.3, y + 0.3, 0.4, 0.4, 12, 0xc77d4e, 0x9b5b34, 0xb06a40);
-        const c = this.center(f);
-        for (const [dx, dy, r, col] of [
-          [0, -26, 11, 0x4f9e4a],
-          [-7, -20, 8, 0x5fb55a],
-          [7, -19, 8, 0x3f8a3d],
-          [0, -34, 7, 0x6cc466],
-        ] as const) {
-          g.fillStyle(col, 1);
-          g.fillCircle(c.x + dx, c.y + dy, r);
+    const room = f.roomId ? (HQ_MAP.rooms.find((r) => r.id === f.roomId) ?? null) : null;
+    const depth = f.x + f.y + 0.9;
+    this.placeDecor(f, furnitureSprite(this, f, room), depth);
+    if (f.kind === 'desk') {
+      const glow = this.placeDecor(f, glowSprite(this), depth + 0.04).setVisible(false);
+      const screen = this.placeDecor(f, screenSprite(this), depth + 0.06).setTint(0x4b5263);
+      this.monitors.set(`${f.x},${f.y + 1}`, { screen, glow });
+    }
+  }
+
+  /** Dossiers des postes (devant l'avatar assis) et sièges de la salle de réunion. */
+  private drawSeats(): void {
+    for (const a of Object.values(HQ_MAP.anchors)) {
+      const d = a.x + a.y;
+      if (a.kind === 'desk') this.placeDecor(a, chairBackSprite(this, false), d + 1.6);
+      if (a.kind === 'meeting_seat' && a.facing) {
+        if (a.facing.y > a.y) this.placeDecor(a, meetingChairSprite(this, true), d + 0.9);
+        else {
+          this.placeDecor(a, meetingChairSprite(this, false), d + 0.9);
+          this.placeDecor(a, chairBackSprite(this, true), d + 1.6);
         }
-        break;
       }
     }
   }
@@ -540,7 +390,7 @@ export class HqScene extends Phaser.Scene {
       }
     }
     // Écrans des postes : reflètent l'état réel de l'agent présent à son bureau.
-    for (const [seat, screen] of this.monitors) {
+    for (const [seat, { screen, glow }] of this.monitors) {
       const av = [...this.avatars.values()].find(
         (a) =>
           a.intent?.mode === 'desk' &&
@@ -550,7 +400,7 @@ export class HqScene extends Phaser.Scene {
       const act = av?.agent.activity;
       const inv = av ? activeInv.get(av.agent.id) : undefined;
       const tool = inv ? toolColor.get(inv.toolId) : undefined;
-      screen.setFillStyle(
+      const color =
         act === 'using_tool' && tool
           ? hex(tool.color)
           : act === 'working'
@@ -559,8 +409,12 @@ export class HqScene extends Phaser.Scene {
               ? 0xef5a6f
               : av
                 ? 0x9db4d8
-                : 0x4b5263,
-      );
+                : 0x4b5263;
+      screen.setTint(color);
+      glow
+        .setTint(color)
+        .setAlpha(0.35)
+        .setVisible(av !== undefined);
     }
     // Badges de département « X/Y au poste »
     for (const room of HQ_MAP.rooms) {
@@ -587,8 +441,10 @@ export class HqScene extends Phaser.Scene {
       .setStrokeStyle(4, 0x7c60c9)
       .setFillStyle(0x7c60c9, 0.18)
       .setVisible(false);
-    const shadow = this.add.ellipse(0, 0, 36, 14, 0x2a2140, 0.25);
-    const body = this.add.image(0, 4, avatarKey(agent.avatarId, 'front', 'idle')).setOrigin(0.5, 1);
+    const shadow = this.add.ellipse(0, 1, 32, 12, 0x2a2140, 0.22);
+    const body = this.add
+      .image(0, 4, AVATAR_TEX, avatarKey(agent.avatarId, 'front', 'idle'))
+      .setOrigin(0.5, 1);
     const nameText = this.add
       .text(0, 0, `${agent.name} · ${agent.title}`, {
         fontFamily: 'Inter, system-ui, sans-serif',
@@ -614,7 +470,7 @@ export class HqScene extends Phaser.Scene {
       })
       .setOrigin(0.5, 1)
       .setResolution(2);
-    const chip = this.add.container(22, -AVATAR_H * PX + 6, [chipBg, chipText]).setVisible(false);
+    const chip = this.add.container(24, -AVATAR_H * PX - 2, [chipBg, chipText]).setVisible(false);
     container.add([ring, shadow, body, chip, name]);
     container.setDepth(start.x + start.y + 1.5);
 
@@ -688,7 +544,7 @@ export class HqScene extends Phaser.Scene {
   }
 
   private setFrame(av: AvatarObj, frame: AvatarFrame): void {
-    av.body.setTexture(avatarKey(av.agent.avatarId, av.view, frame)).setFlipX(av.flip);
+    av.body.setFrame(avatarKey(av.agent.avatarId, av.view, frame)).setFlipX(av.flip);
   }
 
   private applyPose(av: AvatarObj): void {
@@ -696,7 +552,8 @@ export class HqScene extends Phaser.Scene {
     av.frameTimer = null;
     const pose = av.intent?.pose ?? 'idle';
     if (av.intent) this.faceAnchor(av, av.intent.anchor);
-    if ((pose === 'work' || pose === 'tool') && av.intent?.mode === 'desk') {
+    const mode = av.intent?.mode;
+    if ((pose === 'work' || pose === 'tool') && mode === 'desk') {
       let f = false;
       this.setFrame(av, 'work1');
       if (!this.reducedMotion) {
@@ -710,7 +567,8 @@ export class HqScene extends Phaser.Scene {
         });
       }
     } else {
-      this.setFrame(av, 'idle');
+      // Au poste sans tâche ou en réunion : assis ; ailleurs : debout.
+      this.setFrame(av, mode === 'desk' || mode === 'meeting' ? 'sit' : 'idle');
     }
   }
 
@@ -767,14 +625,17 @@ export class HqScene extends Phaser.Scene {
       return;
     }
     av.walking = true;
-    let frame = false;
+    // Cycle de marche en 4 temps : pas gauche, passage, pas droit, passage.
+    const cycle: AvatarFrame[] = ['walk1', 'walk3', 'walk2', 'walk3'];
+    let frame = 0;
+    this.setFrame(av, cycle[0]!);
     av.frameTimer = this.time.addEvent({
-      delay: 150,
+      delay: 95,
       loop: true,
       callback: () => {
         if (!av.container.scene) return;
-        frame = !frame;
-        this.setFrame(av, frame ? 'walk1' : 'walk2');
+        frame = (frame + 1) % cycle.length;
+        this.setFrame(av, cycle[frame]!);
       },
     });
     const steps = path.map((t) => {
