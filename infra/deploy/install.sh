@@ -23,6 +23,24 @@ ask() { # ask VAR "Question" "défaut"
 }
 # 48 caractères hexadécimaux (192 bits) : assez long pour API_ACCESS_TOKEN (≥ 32).
 secret() { openssl rand -hex 24; }
+# Adresse web : redemandée tant qu'elle n'est pas un nom d'hôte valide. Une clé collée ici par
+# erreur est refusée sans être réaffichée ni enregistrée.
+ask_host() {
+  local __var=$1 __q=$2 __def=$3 __v
+  while true; do
+    ask __v "$__q" "$__def"
+    if [[ "$__v" == sk-* ]]; then
+      warn "Ceci ressemble à une clé, pas à une adresse : elle n'est pas enregistrée."
+      warn "Appuyez simplement sur Entrée pour accepter l'adresse proposée."
+      continue
+    fi
+    if [[ "$__v" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; then
+      printf -v "$__var" '%s' "$__v"
+      return
+    fi
+    warn "Adresse invalide (exemple attendu : $__def)."
+  done
+}
 
 [ "$(id -u)" -eq 0 ] || die "Lancer en root (ou avec sudo)."
 . /etc/os-release 2>/dev/null || true
@@ -48,8 +66,8 @@ else
   echo
   echo "Adresses du cockpit et de l'API. Sans nom de domaine, des adresses gratuites"
   echo "basées sur l'IP du serveur sont utilisées (sslip.io), avec HTTPS automatique."
-  ask WEB_HOST "Adresse du cockpit" "hq.$DASHED.sslip.io"
-  ask API_HOST "Adresse de l'API" "api.$DASHED.sslip.io"
+  ask_host WEB_HOST "Adresse du cockpit" "hq.$DASHED.sslip.io"
+  ask_host API_HOST "Adresse de l'API" "api.$DASHED.sslip.io"
   ask ORG_NAME "Nom de votre entreprise (organisation LIVE)" "Ma Société"
   ask ORG_BUDGET "Budget mensuel Claude de l'organisation, en USD (plafond dur)" "5"
   echo
@@ -57,8 +75,8 @@ else
   echo "laisser vide pour l'ajouter plus tard (les missions LIVE seront alors refusées)."
   read -r -s -p "Clé Anthropic : " ANTHROPIC_API_KEY </dev/tty || true
   echo
-  if [ -n "$ANTHROPIC_API_KEY" ] && [[ "$ANTHROPIC_API_KEY" != sk-ant-* ]]; then
-    warn "La clé ne commence pas par sk-ant- : vérifiez-la (conservée telle quelle)."
+  if [ -n "$ANTHROPIC_API_KEY" ] && [[ "$ANTHROPIC_API_KEY" != sk-ant-api* ]]; then
+    warn "Une clé API (console.anthropic.com → API Keys) commence par sk-ant-api : vérifiez-la."
   fi
   umask 077
   cat >"$ENV_FILE" <<EOF
