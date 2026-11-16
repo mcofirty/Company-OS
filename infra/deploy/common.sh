@@ -20,3 +20,10 @@ envget() {
 # Nettoie une saisie libre avant écriture entre guillemets (pas de ", $, `, \).
 # shellcheck disable=SC1003
 clean() { printf '%s' "$1" | tr -d '"$`\\'; }
+
+# Résumé masqué d'une clé (jamais la clé entière) : début, fin et longueur.
+mask() {
+  local k=$1
+  if [ -z "$k" ]; then echo "(vide)"; return; fi
+  printf '%s…%s (%s caractères)' "${k:0:10}" "${k: -4}" "${#k}"
+}

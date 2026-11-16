@@ -75,6 +75,7 @@ else
   echo "laisser vide pour l'ajouter plus tard (les missions LIVE seront alors refusées)."
   read -r -s -p "Clé Anthropic : " ANTHROPIC_API_KEY </dev/tty || true
   echo
+  echo "Clé reçue : $(mask "$ANTHROPIC_API_KEY")"
   if [ -n "$ANTHROPIC_API_KEY" ] && [[ "$ANTHROPIC_API_KEY" != sk-ant-api* ]]; then
     warn "Une clé API (console.anthropic.com → API Keys) commence par sk-ant-api : vérifiez-la."
   fi
@@ -151,7 +152,7 @@ cat <<EOF
  prendre une à deux minutes. Journal : $(compose_cmd_text) logs caddy
 
  Mise à jour : bash $APP_DIR/infra/deploy/update.sh
- Clé Claude  : nano $ENV_FILE (ANTHROPIC_API_KEY=…), puis update.sh
+ Clé Claude  : bash $APP_DIR/infra/deploy/set-key.sh
 ────────────────────────────────────────────────────────────────────
 EOF
 [ -n "${ANTHROPIC_API_KEY:-}" ] || warn "Aucune clé Anthropic : les missions LIVE seront refusées tant qu'elle n'est pas ajoutée."

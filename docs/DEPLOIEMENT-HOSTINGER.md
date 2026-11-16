@@ -98,7 +98,7 @@ bash /opt/company-os/infra/deploy/update.sh
 ```bash
 nano /opt/company-os/.env.production
 ```
-(Ctrl+O pour enregistrer, Ctrl+X pour quitter, puis lancer `update.sh`.) Les missions bloquées
+(Ou plus simple, avec vérification du collage : `bash /opt/company-os/infra/deploy/set-key.sh`.) Les missions bloquées
 faute de clé se relancent depuis le cockpit (« ↻ Relancer »).
 
 **État des services** :
