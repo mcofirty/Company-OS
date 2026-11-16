@@ -211,3 +211,10 @@ ADR-047 — **Déploiement mono-serveur avec Caddy.** Un VPS unique (Hostinger, 
 ports. Adresses `sslip.io` par défaut (gratuites, liées à l'IP) ; un nom de domaine peut les remplacer.
 La configuration est lue clé par clé, jamais exécutée comme script.
 
+
+ADR-048 — **Décor et avatars pré-rendus en atlas.** Le monde (sol, murs, fenêtres, tapis) est cuit une fois
+dans une texture découpée en morceaux (les zones vides ne sont pas dessinées) ; mobilier, cloisons vitrées,
+sièges et écrans sont dessinés procéduralement (art original, `apps/web/src/world/decor.ts`) puis empaquetés
+et rognés dans un atlas unique ; les avatars (22x35 pixels d'art, 7 poses, face/dos) dans un second atlas.
+Moins de surface et de changements de texture : plus de détails pour un coût de rendu quasi identique
+(banc `/bench`, captures `docs/screenshots/graphics-before-*` / `graphics-after-*`).
