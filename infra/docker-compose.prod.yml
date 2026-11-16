@@ -1,7 +1,7 @@
 # Pile de production autonome (docs/11 §2) : Postgres, Temporal, migrations, API, worker, cockpit.
 #   cp infra/prod.env.example .env.production   # puis renseigner les valeurs (jamais versionné)
 #   docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d --build
-#   (démonstration : ajouter `--profile demo` pour charger l'organisation fictive)
+#   (démonstration : `--profile demo` charge l'organisation fictive, et HIDE_DEMO_ORG=false l'affiche)
 # Placer un reverse proxy TLS (Caddy, Traefik, Cloudflare Tunnel…) devant `web` et `api`.
 # Temporal : serveur de développement (SQLite) ici ; en production réelle, préférer Temporal Cloud
 # ou un cluster Temporal avec base dédiée, et pointer TEMPORAL_ADDRESS dessus.
@@ -22,6 +22,8 @@ x-server: &server
     API_ACCESS_TOKEN: ${API_ACCESS_TOKEN:-}
     OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     LOG_LEVEL: ${LOG_LEVEL:-info}
+    # Serveur réel : organisation de démonstration (données fictives) masquée et refusée.
+    HIDE_DEMO_ORG: ${HIDE_DEMO_ORG:-true}
   depends_on:
     migrate: { condition: service_completed_successfully }
     temporal: { condition: service_healthy }

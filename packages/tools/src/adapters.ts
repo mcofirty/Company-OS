@@ -21,8 +21,12 @@ export interface ToolExecutionContext {
 export interface ToolAdapter<I = unknown, O = unknown> {
   toolId: string;
   action: string;
-  /** `demo` : adaptateur fictif sans réseau. Un adaptateur `live` est refusé en mode démo. */
-  kind: 'demo' | 'live';
+  /**
+   * `demo` : données fictives, refusé dans une organisation live (sauf autorisation explicite) ;
+   * `live` : service externe réel, refusé en démo ; `internal` : action réelle sur les données de
+   * la plateforme (tâches, documents, état), permise partout.
+   */
+  kind: 'demo' | 'live' | 'internal';
   inputSchema: z.ZodType<I>;
   outputSchema: z.ZodType<O>;
   /** Latence simulée (démo) pour que l'activité soit observable ; mise à l'échelle par la gateway. */

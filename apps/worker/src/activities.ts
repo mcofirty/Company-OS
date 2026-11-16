@@ -26,7 +26,14 @@ import {
   type Db,
   type TaskOutcome,
 } from '@company-os/db';
-import { costMicros, maxCallCostMicros, withSpan, type Pricing } from '@company-os/policies';
+import {
+  costMicros,
+  maxCallCostMicros,
+  serverToolCostMicros,
+  withSpan,
+  type Pricing,
+} from '@company-os/policies';
+import { recordServerToolCalls } from './server-tools';
 import type { ToolGateway } from '@company-os/tools';
 
 export interface ActivityDeps {
@@ -87,7 +94,14 @@ export function createActivities(deps: ActivityDeps) {
       instructions: ctx.version.instructions,
     });
     const tools = buildToolDefs(ctx.grants);
+    // Outils web (exécutés par Anthropic) seulement s'ils sont explicitement accordés à l'agent.
+    const web = ctx.grants.find((g) => g.toolId === 'web');
+    const webTools = {
+      search: web?.actions.includes('search') ?? false,
+      fetch: web?.actions.includes('fetch') ?? false,
+    };
     const request = {
+      ...(webTools.search || webTools.fetch ? { webTools } : {}),
       model: provider.providerClass === 'demo' ? null : policy.model,
       system,
       messages: input.messages,
@@ -105,7 +119,11 @@ export function createActivities(deps: ActivityDeps) {
     const estInput = Math.ceil(
       (system.length + JSON.stringify(input.messages).length + JSON.stringify(tools).length) / 3,
     );
-    const reserve = maxCallCostMicros(pricing, policy.model, estInput, policy.maxTokens) ?? 0;
+    const tokenReserve = maxCallCostMicros(pricing, policy.model, estInput, policy.maxTokens) ?? 0;
+    // + recherches web possibles (max_uses = 5 par appel), pour que le plafond dur tienne.
+    const reserve =
+      tokenReserve +
+      (webTools.search ? serverToolCostMicros(pricing, { webSearchRequests: 5 }) : 0);
     const remainingRun = ctx.version.limits.maxCostMicros - ctx.run.costMicros;
     if (reserve > remainingRun) {
       return {
@@ -143,7 +161,15 @@ export function createActivities(deps: ActivityDeps) {
         message: err instanceof Error ? err.message : 'Erreur fournisseur',
       };
     }
-    const cost = costMicros(pricing, response.model, response.usage);
+    const tokenCost = costMicros(pricing, response.model, response.usage);
+    // Recherches web facturées à l'usage par Anthropic (grille versionnée), en plus des tokens.
+    const cost =
+      tokenCost === null ? null : tokenCost + serverToolCostMicros(pricing, response.usage);
+    await recordServerToolCalls(db, {
+      orgId: ctx.org.id,
+      runId: input.runId,
+      content: response.content,
+    });
     await recordLlmCall(db, {
       orgId: ctx.org.id,
       runId: input.runId,

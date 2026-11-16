@@ -2,6 +2,8 @@ import {
   ACTIVE_INVOCATION_STATUSES,
   LIMITS,
   OPEN_TASK_STATUSES,
+  toolAvailableIn,
+  toolById,
   type WorldSnapshot,
 } from '@company-os/contracts';
 import {
@@ -114,7 +116,13 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
           managerAgentId: d.managerAgentId,
         })),
         agents: agents.map(agentView),
-        tools: tools.map(toolView),
+        // Seulement les outils qui existent pour ce mode : une org live ne voit aucun outil fictif.
+        tools: tools
+          .filter((t) => {
+            const entry = toolById(t.id);
+            return entry ? toolAvailableIn(entry, org.mode, org.allowDemoTools) : false;
+          })
+          .map(toolView),
         tasks: trimTasks([...openTasks, ...doneTasks].map(taskView)),
         invocations: trimInvocations([...activeInv, ...doneInv].map(invocationView)),
         costs: {

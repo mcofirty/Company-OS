@@ -30,6 +30,7 @@ import { useControls } from '../../lib/controls';
 import type { MetricsSummary } from '../../lib/useMetrics';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
+import { TaskDocuments } from './Documents';
 
 interface Props {
   world: WorldSnapshot;
@@ -490,6 +491,7 @@ function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props
             )}
           </div>
         )}
+      <TaskDocuments taskId={task.id} version={`${task.status}-${world.lastSeq}`} />
       <Section title="Exécution (run)">
         {detail?.runs.map((r) => (
           <div key={r.id} className="run-card" data-testid="run-card">

@@ -26,6 +26,8 @@ const LIVE_ORG = {
   id: '5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d',
   name: 'Living HQ — live local (smoke)',
   mode: 'live',
+  // Test de fumée étiqueté : vrai modèle, outils de démonstration explicitement autorisés.
+  allowDemoTools: true,
 } as const;
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL manquant');
@@ -36,7 +38,11 @@ if (!provider) {
 }
 const db = createDb(url);
 
-await db.organization.upsert({ where: { id: LIVE_ORG.id }, create: LIVE_ORG, update: {} });
+await db.organization.upsert({
+  where: { id: LIVE_ORG.id },
+  create: LIVE_ORG,
+  update: { allowDemoTools: true },
+});
 await db.department.upsert({
   where: { id: 'smoke-sales' },
   create: {

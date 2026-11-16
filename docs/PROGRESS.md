@@ -3,6 +3,32 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-16 (10) — Outils réels en LIVE, démo masquée (Phase A)
+
+### Réalisé
+- Catalogue : `availability` demo/live ; outils réels `web` (recherche + lecture de pages, outils serveur
+  Anthropic `web_search`/`web_fetch`), `company` (état réel : agents, budgets, missions, validations),
+  `library` (enregistrer/lister/lire des documents). Les outils fictifs (CRM, email…) ne sont plus
+  proposés ni exécutables en LIVE (`DEMO_TOOL_DISABLED`, ADR-048).
+- Migration `20261116090000_live_real_tools` : table `documents`, `organizations.allow_demo_tools`.
+- Worker : recherches/lectures web enregistrées comme invocations (`web.search`/`web.fetch`), coût des
+  recherches (10 $/1000) ajouté au coût LLM et à la réservation de budget ; gestion de `pause_turn`.
+- API : `GET /v1/documents?taskId&query`, `GET /v1/documents/:id` ; `/v1/tools` filtré par mode ;
+  `HIDE_DEMO_ORG` (ADR-049). Cockpit : section « Documents produits » (lire, télécharger .md).
+- Production : `HIDE_DEMO_ORG=true` par défaut, `install.sh` ne charge plus la démo.
+
+### Tests (exécutés le 2026-11-16)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 134/134. `pnpm e2e` : 21/21.
+
+### Écarts connus
+- Un agent live créé avant cette version avec des outils fictifs (ex. CRM) verra ses appels refusés :
+  le recréer avec Web / Entreprise / Bibliothèque.
+- Section documents non couverte en e2e (exige un vrai appel LLM) ; couverte par les tests API/worker.
+
+### Prochaine tâche exacte
+Phase B : page « Connecteurs » en libre-service (serveurs MCP : URL + jeton, découverte des outils,
+politique par outil lecture/validation/désactivé, secrets chiffrés, droits, audit).
+
 ## Session 2026-11-15 (9) — Kit de déploiement VPS (Hostinger)
 
 ### Réalisé

@@ -144,7 +144,7 @@ export async function buildApp(
       : { mode: opts.auth.accessToken ? ('token' as const) : ('dev' as const) },
   }));
 
-  registerV1(app, db, opts.signalApproval);
+  registerV1(app, db, opts.signalApproval, { hideDemoOrg: opts.auth.hideDemoOrg ?? false });
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
   const relayOnce = (): Promise<number> => relayOutbox(db, (events) => broadcast(io, events));

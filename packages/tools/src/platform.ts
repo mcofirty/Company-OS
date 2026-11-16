@@ -1,9 +1,13 @@
 import { z } from 'zod';
 import { TaskKindSchema } from '@company-os/contracts';
 import {
+  companyStatus,
   completeMeeting,
   createTask,
   DomainError,
+  getDocument,
+  listDocuments,
+  saveDocument,
   proposeAgentHire,
   startMeeting,
   type Db,
@@ -54,7 +58,7 @@ export const PLATFORM_ADAPTERS: PlatformAdapter[] = [
   {
     toolId: 'platform',
     action: 'propose_agent',
-    kind: 'demo',
+    kind: 'internal',
     inputSchema: z
       .object({ departmentId: str(64), title: str(60), justification: str(200) })
       .strict(),
@@ -89,7 +93,7 @@ export const PLATFORM_ADAPTERS: PlatformAdapter[] = [
   {
     toolId: 'platform',
     action: 'convene_meeting',
-    kind: 'demo',
+    kind: 'internal',
     inputSchema: z.object({ topic: str(160), participants: str(400) }).strict(),
     outputSchema: Out,
     simulatedLatencyMs: 300,
@@ -159,7 +163,7 @@ export const PLATFORM_ADAPTERS: PlatformAdapter[] = [
   {
     toolId: 'platform',
     action: 'delegate_task',
-    kind: 'demo',
+    kind: 'internal',
     inputSchema: z.object({ kind: str(40), assigneeAgentId: str(64) }).strict(),
     outputSchema: Out,
     simulatedLatencyMs: 600,
@@ -187,6 +191,94 @@ export const PLATFORM_ADAPTERS: PlatformAdapter[] = [
     },
   },
 ];
+
+/** Outils internes RÉELS des organisations live : état de l'entreprise et bibliothèque. */
+PLATFORM_ADAPTERS.push(
+  {
+    toolId: 'company',
+    action: 'status',
+    kind: 'internal',
+    inputSchema: z.object({ focus: str(80) }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    async invoke(ctx, input) {
+      const status = await companyStatus(ctx.db, ctx.orgId, input['focus']);
+      return {
+        summary: `État lu : ${status.agents.length} agent(s), ${status.openMissions.length} mission(s) ouverte(s)`,
+        data: status as unknown as Record<string, unknown>,
+      };
+    },
+    summarize: (o) => (o as Out).summary,
+  },
+  {
+    toolId: 'library',
+    action: 'save_document',
+    kind: 'internal',
+    inputSchema: z.object({ title: str(200), content: z.string().min(1).max(200_000) }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    async invoke(ctx, input) {
+      try {
+        // Identifiant = invocation : un rejeu après reprise n'enregistre pas de doublon.
+        const doc = await saveDocument(ctx.db, {
+          id: ctx.invocationId,
+          orgId: ctx.orgId,
+          agentId: ctx.agentId,
+          taskId: ctx.taskId,
+          title: input['title']!,
+          content: input['content']!,
+        });
+        return {
+          summary: `Document enregistré : « ${doc.title.slice(0, 120)} »`,
+          data: { documentId: doc.id, title: doc.title, size: doc.size },
+        };
+      } catch (e) {
+        return asToolError(e);
+      }
+    },
+    summarize: (o) => (o as Out).summary,
+  },
+  {
+    toolId: 'library',
+    action: 'list_documents',
+    kind: 'internal',
+    inputSchema: z.object({ query: str(120) }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    async invoke(ctx, input) {
+      const docs = await listDocuments(ctx.db, ctx.orgId, { query: input['query'], limit: 30 });
+      return {
+        summary: `${docs.length} document(s) trouvé(s)`,
+        data: { documents: docs },
+      };
+    },
+    summarize: (o) => (o as Out).summary,
+  },
+  {
+    toolId: 'library',
+    action: 'read_document',
+    kind: 'internal',
+    inputSchema: z.object({ documentId: z.uuid() }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    async invoke(ctx, input) {
+      try {
+        const doc = await getDocument(ctx.db, ctx.orgId, input['documentId']!);
+        return {
+          summary: `Document lu : « ${doc.title.slice(0, 120)} »`,
+          data: {
+            title: doc.title,
+            createdAt: doc.createdAt,
+            content: doc.content.slice(0, 50_000),
+          },
+        };
+      } catch (e) {
+        return asToolError(e);
+      }
+    },
+    summarize: (o) => (o as Out).summary,
+  },
+);
 
 export const findPlatformAdapter = (toolId: string, action: string): PlatformAdapter | undefined =>
   PLATFORM_ADAPTERS.find((a) => a.toolId === toolId && a.action === action);

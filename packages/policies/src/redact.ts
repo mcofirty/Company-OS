@@ -2,12 +2,15 @@
  * Rédaction des données sensibles avant stockage UI/logs et avant envoi au modèle
  * (docs/05 §4). Volontairement conservatrice : mieux vaut masquer trop que pas assez.
  */
-const RULES: [RegExp, string][] = [
+const SECRET_RULES: [RegExp, string][] = [
   // Secrets et jetons (clés API, bearer, JWT)
   [/\bsk-[A-Za-z0-9_-]{8,}/g, '[SECRET]'],
   [/\b(?:Bearer|Token)\s+[A-Za-z0-9._~+/=-]{8,}/gi, '[SECRET]'],
   [/\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g, '[SECRET]'],
   [/\b(?:api[_-]?key|password|passwd|secret)\s*[:=]\s*\S+/gi, '[SECRET]'],
+];
+const RULES: [RegExp, string][] = [
+  ...SECRET_RULES,
   // Coordonnées
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[EMAIL]'],
   [/\bFR\d{2}(?:\s?[A-Z0-9]{4}){5}\s?[A-Z0-9]{3}\b/g, '[IBAN]'],
@@ -19,6 +22,16 @@ const RULES: [RegExp, string][] = [
 export function redactText(input: string): string {
   let out = input;
   for (const [re, rep] of RULES) out = out.replace(re, rep);
+  return out;
+}
+
+/**
+ * Secrets seulement (clés, jetons, mots de passe) : pour les documents destinés à l'utilisateur,
+ * dont les coordonnées professionnelles font partie du contenu utile.
+ */
+export function redactSecrets(input: string): string {
+  let out = input;
+  for (const [re, rep] of SECRET_RULES) out = out.replace(re, rep);
   return out;
 }
 

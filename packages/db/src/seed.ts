@@ -17,6 +17,28 @@ export const DEFAULT_LIMITS = {
   maxCostMicros: 500_000,
 } as const;
 
+/**
+ * Synchronise la table des outils avec le catalogue (idempotent). Appelé au seed, à la création
+ * d'une organisation live et au démarrage de l'API : un nouvel outil réel est disponible après
+ * une mise à jour sans relancer de seed.
+ */
+export async function ensureCatalogTools(db: Db): Promise<void> {
+  for (const t of TOOL_CATALOG) {
+    const data = {
+      name: t.name,
+      code: t.code,
+      category: t.category,
+      color: t.color,
+      actions: t.actions.map((a) => ({ ...a })),
+    };
+    await db.tool.upsert({
+      where: { id: t.id },
+      create: { id: t.id, orgId: null, ...data },
+      update: data,
+    });
+  }
+}
+
 /** Seed démo relançable sans doublons (upserts + createAgent idempotent). */
 export async function seedDemo(db: Db, now = new Date()): Promise<{ agentsCreated: number }> {
   await db.organization.upsert({ where: { id: DEMO_ORG.id }, create: DEMO_ORG, update: {} });
@@ -33,20 +55,7 @@ export async function seedDemo(db: Db, now = new Date()): Promise<{ agentsCreate
       update: {},
     });
   }
-  for (const t of TOOL_CATALOG) {
-    const data = {
-      name: t.name,
-      code: t.code,
-      category: t.category,
-      color: t.color,
-      actions: t.actions.map((a) => ({ ...a })),
-    };
-    await db.tool.upsert({
-      where: { id: t.id },
-      create: { id: t.id, orgId: null, ...data },
-      update: data,
-    });
-  }
+  await ensureCatalogTools(db);
   // Budgets mensuels (micro-dollars) : plafond dur, alerte à 80 %.
   const budgets = [
     { scopeType: 'org', scopeId: DEMO_ORG.id, limitMicros: 20_000_000 },

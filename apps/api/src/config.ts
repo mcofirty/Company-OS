@@ -22,6 +22,8 @@ export const EnvSchema = z.object({
   OIDC_CLIENT_ID: optional(z.string().min(1)),
   OIDC_SCOPE: z.string().default('openid profile email'),
   RATE_LIMIT_PER_MIN: z.coerce.number().int().min(10).default(1200),
+  /** Masque l'organisation de démonstration (serveur de production : données réelles seulement). */
+  HIDE_DEMO_ORG: z.enum(['true', 'false']).default('false'),
   TEMPORAL_ADDRESS: z.string().default('localhost:7233'),
 });
 export type Env = z.infer<typeof EnvSchema>;

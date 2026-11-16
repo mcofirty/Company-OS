@@ -128,6 +128,13 @@ export interface ToolCatalogEntry {
   category: string;
   color: string;
   actions: ToolActionSpec[];
+  /**
+   * Où l'outil existe : `demo` = données fictives (organisation de démonstration uniquement) ;
+   * `live` = outil réel (organisations live). Défaut : `demo`.
+   */
+  availability?: 'demo' | 'live';
+  /** Exécuté par Anthropic côté serveur (recherche web…), pas par la passerelle d'outils. */
+  serverSide?: boolean;
 }
 
 export const TOOL_CATALOG: ToolCatalogEntry[] = [
@@ -326,6 +333,98 @@ TOOL_CATALOG.push({
     },
   ],
 });
+
+/** Outils RÉELS (aucune donnée fictive) proposés aux organisations live. */
+TOOL_CATALOG.push(
+  {
+    id: 'web',
+    name: 'Web (réel)',
+    code: 'NET',
+    category: 'recherche',
+    color: '#3b7dd8',
+    availability: 'live',
+    serverSide: true,
+    actions: [
+      {
+        action: 'search',
+        kind: 'search',
+        risk: 'read',
+        label: 'Rechercher sur Internet (0,01 $ par recherche)',
+        input: { field: 'query', description: 'Requête de recherche' },
+      },
+      {
+        action: 'fetch',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire une page web citée dans la mission ou trouvée par une recherche',
+        input: { field: 'url', description: 'Adresse de la page' },
+      },
+    ],
+  },
+  {
+    id: 'company',
+    name: 'Entreprise (cockpit)',
+    code: 'HQS',
+    category: 'pilotage',
+    color: '#7c60c9',
+    availability: 'live',
+    actions: [
+      {
+        action: 'status',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire l’état réel de l’entreprise (agents, missions, blocages, coûts)',
+        input: {
+          field: 'focus',
+          description: 'Périmètre : « tout », ou un nom de département ou d’agent pour restreindre',
+        },
+      },
+    ],
+  },
+  {
+    id: 'library',
+    name: 'Bibliothèque',
+    code: 'LIB',
+    category: 'documents',
+    color: '#2b9471',
+    availability: 'live',
+    actions: [
+      {
+        action: 'save_document',
+        kind: 'write',
+        risk: 'internal_write',
+        label: 'Enregistrer un document (rapport, note…) consultable dans le cockpit',
+        input: { field: 'title', description: 'Titre du document' },
+        moreInputs: [{ field: 'content', description: 'Contenu complet du document, en Markdown' }],
+      },
+      {
+        action: 'list_documents',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lister les documents de l’entreprise',
+        input: { field: 'query', description: 'Mot-clé à chercher dans les titres, ou « tout »' },
+      },
+      {
+        action: 'read_document',
+        kind: 'read',
+        risk: 'read',
+        label: 'Lire un document de la bibliothèque',
+        input: { field: 'documentId', description: 'Identifiant du document' },
+      },
+    ],
+  },
+);
+
+/** L'outil existe-t-il pour ce mode d'organisation ? */
+export const toolAvailableIn = (
+  t: Pick<ToolCatalogEntry, 'availability'>,
+  mode: 'demo' | 'live',
+  allowDemoTools = false,
+): boolean => {
+  const where = t.availability ?? 'demo';
+  if (mode === 'demo') return where === 'demo';
+  return where === 'live' || allowDemoTools;
+};
 
 export const toolById = (id: string): ToolCatalogEntry | undefined =>
   TOOL_CATALOG.find((t) => t.id === id);

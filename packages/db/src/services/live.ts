@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { instructionsFor, PROMPT_VERSION } from '@company-os/agents';
-import { TOOL_CATALOG, type CreateAgentRequest } from '@company-os/contracts';
+import { TOOL_CATALOG, toolAvailableIn, type CreateAgentRequest } from '@company-os/contracts';
 import { anchorsOfKind, HQ_MAP } from '@company-os/world';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
 import { withOrgTx } from '../events';
 import { DEMO_DEPARTMENTS } from '../seed-data';
+import { ensureCatalogTools } from '../seed';
 import { createAgentInTx } from './agents';
 
 /** Modèle par défaut des agents live (tarif présent dans config/llm-pricing.json). */
@@ -30,6 +31,7 @@ export async function initLiveOrg(
     }
     return { orgId: existing.id, created: false };
   }
+  await ensureCatalogTools(db);
   const orgId = randomUUID();
   const prefix = orgId.slice(0, 8);
   await db.$transaction(async (tx) => {
@@ -66,11 +68,21 @@ export async function initLiveOrg(
 }
 
 /** Droits demandés validés contre le catalogue : `high_impact` et actions de plateforme refusés. */
-export function validateGrants(grants: Record<string, string[]>): Record<string, string[]> {
+export function validateGrants(
+  grants: Record<string, string[]>,
+  opts: { allowDemoTools?: boolean } = {},
+): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [toolId, actions] of Object.entries(grants)) {
     const tool = TOOL_CATALOG.find((t) => t.id === toolId);
     if (!tool) throw new DomainError('VALIDATION_ERROR', `Outil inconnu : ${toolId}`);
+    // Organisation live : uniquement des outils réels (aucune donnée fictive).
+    if (!toolAvailableIn(tool, 'live', opts.allowDemoTools)) {
+      throw new DomainError(
+        'POLICY_DENIED',
+        `${tool.name} : outil de démonstration (données fictives), indisponible en LIVE`,
+      );
+    }
     if (toolId === 'platform') {
       throw new DomainError(
         'POLICY_DENIED',
@@ -113,7 +125,6 @@ export async function createAgentByAdmin(
   },
 ): Promise<{ agentId: string; created: boolean }> {
   const { req } = input;
-  const grants = validateGrants(req.grants);
   const agentId = `${slug(req.name)}-${randomUUID().slice(0, 6)}`;
   const { result } = await withOrgTx(db, input.orgId, new Date(), async (ctx) => {
     const { tx, orgId, now } = ctx;
@@ -132,6 +143,8 @@ export async function createAgentByAdmin(
         'Organisation démo : agents fixes (seed) ou recrutés via validation',
       );
     }
+    const org = await tx.organization.findUniqueOrThrow({ where: { id: orgId } });
+    const grants = validateGrants(req.grants, { allowDemoTools: org.allowDemoTools });
     const dept = await tx.department.findFirst({ where: { id: req.departmentId, orgId } });
     if (!dept) throw new DomainError('NOT_FOUND', 'Département introuvable');
     const taken = new Set(
@@ -194,10 +207,13 @@ export async function createAgentByAdmin(
   return result;
 }
 
-/** Organisations accessibles à un utilisateur (sélecteur du cockpit). */
-export async function orgsOfUser(db: Db, userId: string) {
+/**
+ * Organisations accessibles à un utilisateur (sélecteur du cockpit). `hideDemo` : sur un
+ * serveur de production, les organisations de démonstration n'apparaissent pas.
+ */
+export async function orgsOfUser(db: Db, userId: string, opts: { hideDemo?: boolean } = {}) {
   const rows = await db.membership.findMany({
-    where: { userId },
+    where: { userId, ...(opts.hideDemo ? { org: { mode: 'live' as const } } : {}) },
     include: { org: true },
     orderBy: { org: { createdAt: 'asc' } },
   });

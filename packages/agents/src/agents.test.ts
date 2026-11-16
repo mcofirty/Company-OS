@@ -232,8 +232,50 @@ describe('AnthropicProvider (fetch simulé, aucun appel réseau)', () => {
       outputTokens: 56,
       cacheReadTokens: 100,
       cacheWriteTokens: 0,
+      webSearchRequests: 0,
+      webFetchRequests: 0,
     });
     expect(res.stopReason).toBe('tool_use');
+    // Sans outil web accordé, aucun outil serveur n'est déclaré.
+    expect(JSON.stringify(body['tools'])).not.toContain('web_search');
+  });
+
+  it('outils web accordés : outils serveur déclarés (sans strict), recherches comptées', async () => {
+    let body: Record<string, unknown> = {};
+    const fakeFetch = (async (_url: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return new Response(
+        JSON.stringify({
+          id: 'msg_2',
+          type: 'message',
+          role: 'assistant',
+          model: 'claude-opus-5-5',
+          content: [{ type: 'text', text: 'ok' }],
+          stop_reason: 'end_turn',
+          stop_sequence: null,
+          usage: {
+            input_tokens: 10,
+            output_tokens: 5,
+            server_tool_use: { web_search_requests: 3, web_fetch_requests: 1 },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    }) as unknown as typeof fetch;
+    const p = new AnthropicProvider({ apiKey: 'sk-ant-test', fetch: fakeFetch });
+    const res = await p.complete({ ...req, webTools: { search: true, fetch: true } });
+    const tools = body['tools'] as Record<string, unknown>[];
+    expect(tools.find((t) => t['name'] === 'web_search')).toEqual({
+      type: 'web_search_20260318',
+      name: 'web_search',
+      max_uses: 5,
+    });
+    expect(tools.find((t) => t['name'] === 'web_fetch')).toMatchObject({
+      type: 'web_fetch_20260318',
+      max_uses: 5,
+      max_content_tokens: 20_000,
+    });
+    expect(res.usage).toMatchObject({ webSearchRequests: 3, webFetchRequests: 1 });
   });
   it('classe les erreurs (429 retryable, 401 définitive)', async () => {
     const failing = (status: number) =>

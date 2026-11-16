@@ -1482,3 +1482,24 @@ kbd {
     white-space: nowrap;
   }
 }
+.doc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--outline);
+  font-size: 12.5px;
+}
+.doc-viewer pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface-muted);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin: 0;
+}

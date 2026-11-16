@@ -26,6 +26,8 @@ export interface AuthConfig {
   accessToken?: string;
   /** Production : jetons JWT d'un fournisseur OIDC, utilisateurs et rôles lus en base. */
   oidc?: OidcVerifier;
+  /** Serveur de production : les organisations de démonstration sont masquées et refusées. */
+  hideDemoOrg?: boolean;
 }
 
 export interface Credentials {
@@ -61,13 +63,18 @@ export async function resolvePrincipal(
   if (configured) {
     if (!c.bearer) throw new DomainError('UNAUTHORIZED', 'Authentification requise');
     if (cfg.accessToken && sameSecret(c.bearer, cfg.accessToken)) {
-      return withOrgChoice(db, c.orgHeader, {
-        userId: DEV_ADMIN.id,
-        orgId: DEMO_ORG.id,
-        role: 'admin',
-        displayName: 'Administrateur (jeton)',
-        via: 'token',
-      });
+      return withOrgChoice(
+        db,
+        c.orgHeader,
+        {
+          userId: DEV_ADMIN.id,
+          orgId: DEMO_ORG.id,
+          role: 'admin',
+          displayName: 'Administrateur (jeton)',
+          via: 'token',
+        },
+        cfg.hideDemoOrg,
+      );
     }
     if (cfg.oidc && looksLikeJwt(c.bearer)) {
       const id = await cfg.oidc.verify(c.bearer); // lève UNAUTHORIZED si invalide
@@ -80,13 +87,18 @@ export async function resolvePrincipal(
   }
   const asked = typeof c.devRoleHeader === 'string' ? c.devRoleHeader : undefined;
   const role: Role = asked === 'viewer' || asked === 'operator' ? asked : 'admin';
-  return withOrgChoice(db, c.orgHeader, {
-    userId: DEV_ADMIN.id,
-    orgId: DEMO_ORG.id,
-    role,
-    displayName: DEV_ADMIN.displayName,
-    via: 'dev',
-  });
+  return withOrgChoice(
+    db,
+    c.orgHeader,
+    {
+      userId: DEV_ADMIN.id,
+      orgId: DEMO_ORG.id,
+      role,
+      displayName: DEV_ADMIN.displayName,
+      via: 'dev',
+    },
+    cfg.hideDemoOrg,
+  );
 }
 
 /**
@@ -98,11 +110,32 @@ async function withOrgChoice(
   db: Db,
   orgHeader: string | string[] | undefined,
   base: Principal,
+  hideDemo = false,
 ): Promise<Principal> {
-  const wanted = typeof orgHeader === 'string' ? orgHeader : undefined;
-  if (!wanted || wanted === base.orgId) return base;
-  const m = await db.membership.findFirst({ where: { orgId: wanted, userId: base.userId } });
-  if (!m) throw new DomainError('FORBIDDEN', 'Organisation non autorisée');
+  let wanted = typeof orgHeader === 'string' ? orgHeader : undefined;
+  if (hideDemo) {
+    // Démo masquée : organisation par défaut = première organisation live dont on est membre.
+    // Une demande EXPLICITE de la démo est refusée plus bas (jamais remplacée en silence).
+    if (!wanted) {
+      const first = await db.membership.findFirst({
+        where: { userId: base.userId, org: { mode: 'live' } },
+        orderBy: { org: { createdAt: 'asc' } },
+      });
+      if (!first) {
+        throw new DomainError('FORBIDDEN', 'Aucune organisation live : lancer pnpm live:init');
+      }
+      wanted = first.orgId;
+    }
+  } else if (!wanted || wanted === base.orgId) {
+    return base;
+  }
+  const m = await db.membership.findFirst({
+    where: { orgId: wanted, userId: base.userId },
+    include: { org: true },
+  });
+  if (!m || (hideDemo && m.org.mode !== 'live')) {
+    throw new DomainError('FORBIDDEN', 'Organisation non autorisée');
+  }
   const rank = { viewer: 0, operator: 1, admin: 2 } as const;
   return { ...base, orgId: wanted, role: rank[m.role] < rank[base.role] ? m.role : base.role };
 }

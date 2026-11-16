@@ -20,6 +20,14 @@ const PricingSchema = z.object({
       cacheWritePerMTok: z.number().min(0),
     }),
   ),
+  /** Outils exécutés par Anthropic, facturés à l'usage en plus des tokens. */
+  serverTools: z
+    .object({
+      webSearchPerRequestUsd: z.number().min(0),
+      webFetchPerRequestUsd: z.number().min(0),
+      source: z.string(),
+    })
+    .optional(),
 });
 export type Pricing = z.infer<typeof PricingSchema>;
 
@@ -59,4 +67,17 @@ export function maxCallCostMicros(
   const p = pricing.models[model];
   if (!p) return null;
   return Math.ceil(estInputTokens * p.inputPerMTok + maxOutputTokens * p.outputPerMTok);
+}
+
+/** Coût des outils serveur (recherche/lecture web) en micro-dollars, selon la grille versionnée. */
+export function serverToolCostMicros(
+  pricing: Pricing,
+  u: { webSearchRequests?: number; webFetchRequests?: number },
+): number {
+  const p = pricing.serverTools;
+  if (!p) return 0;
+  return Math.round(
+    (u.webSearchRequests ?? 0) * p.webSearchPerRequestUsd * 1_000_000 +
+      (u.webFetchRequests ?? 0) * p.webFetchPerRequestUsd * 1_000_000,
+  );
 }

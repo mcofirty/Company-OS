@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
+  toolAvailableIn,
+  toolById,
   CancelTaskRequestSchema,
   CreateAgentRequestSchema,
   CreateTaskRequestSchema,
@@ -34,6 +36,8 @@ import {
   orgsOfUser,
   cancelTask,
   retryTask,
+  getDocument,
+  listDocuments,
 } from '@company-os/db';
 import { principalOf, requireRole } from '../auth';
 
@@ -51,14 +55,19 @@ const DecideBody = z
   .object({ decision: z.enum(['approve', 'reject']), reason: z.string().min(3).max(280) })
   .strict();
 
-export function registerV1(app: FastifyInstance, db: Db, signalApproval?: ApprovalSignaler): void {
+export function registerV1(
+  app: FastifyInstance,
+  db: Db,
+  signalApproval?: ApprovalSignaler,
+  opts: { hideDemoOrg?: boolean } = {},
+): void {
   const meta = { schemaVersion: 1 };
 
   app.get('/v1/me', async (req) => {
     const p = principalOf(req);
     const operator = p.role !== 'viewer';
     const admin = p.role === 'admin';
-    const orgs = await orgsOfUser(db, p.userId);
+    const orgs = await orgsOfUser(db, p.userId, { hideDemo: opts.hideDemoOrg });
     const live = orgs.find((o) => o.id === p.orgId)?.mode === 'live';
     return {
       data: {
@@ -239,6 +248,27 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
     return reply.status(201).send({ data: r, meta });
   });
 
+  /** Documents réels produits par les agents (bibliothèque). */
+  app.get('/v1/documents', async (req) => {
+    const p = principalOf(req);
+    const q = z
+      .object({ taskId: z.uuid().optional(), query: z.string().max(120).optional() })
+      .parse(req.query);
+    return {
+      data: await listDocuments(db, p.orgId, {
+        ...(q.taskId ? { taskId: q.taskId } : {}),
+        ...(q.query ? { query: q.query } : {}),
+        limit: 100,
+      }),
+      meta,
+    };
+  });
+  app.get('/v1/documents/:id', async (req) => {
+    const p = principalOf(req);
+    const { id } = Id.parse(req.params);
+    return { data: await getDocument(db, p.orgId, id), meta };
+  });
+
   app.get('/v1/tasks/:id', async (req) => {
     const p = principalOf(req);
     const { id } = Id.parse(req.params);
@@ -294,7 +324,8 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
 
   app.get('/v1/tools', async (req) => {
     const p = principalOf(req);
-    const [tools, active] = await Promise.all([
+    const [org, allTools, active] = await Promise.all([
+      db.organization.findUniqueOrThrow({ where: { id: p.orgId } }),
       db.tool.findMany({
         where: { OR: [{ orgId: p.orgId }, { orgId: null }] },
         orderBy: { id: 'asc' },
@@ -306,6 +337,11 @@ export function registerV1(app: FastifyInstance, db: Db, signalApproval?: Approv
       }),
     ]);
     const counts = new Map(active.map((a) => [a.toolId, a._count]));
+    // Même règle que le snapshot : une org live ne voit que les outils réels.
+    const tools = allTools.filter((t) => {
+      const entry = toolById(t.id);
+      return entry ? toolAvailableIn(entry, org.mode, org.allowDemoTools) : false;
+    });
     return {
       data: tools.map((t) => ({ ...toolView(t), activeInvocations: counts.get(t.id) ?? 0 })),
       meta,

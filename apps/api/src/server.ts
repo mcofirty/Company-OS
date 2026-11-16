@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { config } from 'dotenv';
-import { createDb } from '@company-os/db';
+import { createDb, ensureCatalogTools } from '@company-os/db';
 import { Client, Connection } from '@temporalio/client';
 import { buildApp } from './app';
 import { loadConfig, type ApiConfig } from './config';
@@ -20,6 +20,8 @@ const { env } = cfg;
 const stopTelemetry = initTelemetry(process.env);
 
 const db = createDb(env.DATABASE_URL);
+// Nouveaux outils du catalogue disponibles après une mise à jour, sans relancer de seed.
+await ensureCatalogTools(db);
 
 // Client Temporal paresseux : l'API démarre même si Temporal est indisponible
 // (le workflow revérifie alors la décision en base toutes les 20 s).

@@ -194,7 +194,11 @@ export class ToolGateway {
       if (pending.status !== 'approved') return reject('APPROVAL_REJECTED');
     }
     // Échec fermé : en démo, seul un adaptateur démo peut s'exécuter.
-    if (org.mode === 'demo' && adapter.kind !== 'demo') return reject('POLICY_DENIED');
+    if (org.mode === 'demo' && adapter.kind === 'live') return reject('POLICY_DENIED');
+    // Aucune donnée fictive dans une organisation live (sauf autorisation explicite : tests).
+    if (org.mode === 'live' && adapter.kind === 'demo' && !org.allowDemoTools) {
+      return reject('DEMO_TOOL_DISABLED');
+    }
 
     // ---- Exécution avec retries bornés ----
     for (let attempt = invocation.attempt; attempt <= this.maxAttempts; attempt++) {

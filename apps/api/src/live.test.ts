@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { io as connect } from 'socket.io-client';
 import type { DomainEvent } from '@company-os/contracts';
-import { DEMO_ORG, DEV_ADMIN, initLiveOrg } from '@company-os/db';
+import { DEMO_ORG, DEV_ADMIN, initLiveOrg, saveDocument } from '@company-os/db';
 import { resetAndSeed, testDb } from '../../../tests/setup/helpers';
 import { buildApp } from './app';
 
@@ -54,7 +54,7 @@ const agentBody = () => ({
   name: 'Léa Martin',
   title: 'Commerciale',
   departmentId: `${orgId.slice(0, 8)}-sales`,
-  grants: { crm: ['lookup_lead'] },
+  grants: { company: ['status'], library: ['save_document'] },
   goal: 'Préparer les relances',
   instructions: 'Ton chaleureux, proposer un rendez-vous de 20 minutes.',
   monthlyBudgetUsd: 2,
@@ -140,5 +140,56 @@ describe('Live encadré — API', () => {
     await new Promise((r) => setTimeout(r, 300));
     s.close();
     expect(received.filter((e) => e.orgId === orgId)).toEqual([]);
+  });
+
+  it('outils : une org live ne voit que des outils réels ; documents consultables par l’API', async () => {
+    const tools = (await req('GET', '/v1/tools', { org: orgId })).json().data as { id: string }[];
+    expect(tools.map((t) => t.id).sort()).toEqual(['company', 'library', 'web']);
+    const boot = (await req('GET', '/v1/bootstrap', { org: orgId })).json().data;
+    expect(boot.tools.map((t: { id: string }) => t.id).sort()).toEqual([
+      'company',
+      'library',
+      'web',
+    ]);
+    // La démo garde ses outils fictifs, sans les outils réels.
+    const demo = (await req('GET', '/v1/tools')).json().data as { id: string }[];
+    expect(demo.map((t) => t.id)).toContain('crm');
+    expect(demo.map((t) => t.id)).not.toContain('web');
+
+    const doc = await saveDocument(db, {
+      orgId,
+      agentId: 'a',
+      taskId: null,
+      title: 'Rapport',
+      content: 'Contenu réel. api_key=abcdef123456',
+    });
+    const list = (await req('GET', '/v1/documents', { org: orgId })).json().data;
+    expect(list).toEqual([expect.objectContaining({ id: doc.id, title: 'Rapport' })]);
+    const full = (await req('GET', `/v1/documents/${doc.id}`, { org: orgId })).json().data;
+    expect(full.content).toContain('Contenu réel.');
+    expect(full.content).not.toContain('abcdef123456'); // secret masqué avant stockage
+    // Isolation : le document n'existe pas pour l'org démo.
+    expect((await req('GET', `/v1/documents/${doc.id}`)).statusCode).toBe(404);
+  });
+
+  it('HIDE_DEMO_ORG : la démo disparaît, l’org live devient l’organisation par défaut', async () => {
+    const { app: hidden } = await buildApp({
+      db,
+      corsOrigin: 'http://localhost:3000',
+      auth: { allowDevPrincipal: true, hideDemoOrg: true },
+    });
+    const get = (url: string, org?: string) =>
+      hidden.inject({
+        method: 'GET',
+        url,
+        remoteAddress: '127.0.0.1',
+        headers: org ? { 'x-org-id': org } : {},
+      });
+    const me = (await get('/v1/me')).json().data;
+    expect(me.orgId).toBe(orgId);
+    expect(me.orgs.map((o: { mode: string }) => o.mode)).toEqual(['live']);
+    expect((await get('/v1/bootstrap')).json().data.org.mode).toBe('live');
+    expect((await get('/v1/bootstrap', DEMO_ORG.id)).statusCode).toBe(403);
+    await hidden.close();
   });
 });

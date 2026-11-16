@@ -74,6 +74,8 @@ export const LIVE_ORG = {
   id: '1d2c3b4a-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
   name: 'Org live (test)',
   mode: 'live',
+  // Tests de la boucle LLM avec les outils de démonstration : autorisation explicite.
+  allowDemoTools: true,
 } as const;
 
 export async function seedLiveOrg(

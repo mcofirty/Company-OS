@@ -211,3 +211,15 @@ ADR-047 — **Déploiement mono-serveur avec Caddy.** Un VPS unique (Hostinger, 
 ports. Adresses `sslip.io` par défaut (gratuites, liées à l'IP) ; un nom de domaine peut les remplacer.
 La configuration est lue clé par clé, jamais exécutée comme script.
 
+
+ADR-048 — **Aucune donnée fictive en LIVE.** Chaque outil du catalogue déclare `availability` (`demo`
+par défaut, `live`). Une organisation live ne voit et n'accorde que des outils réels ; les adaptateurs
+`kind: 'demo'` sont refusés par la passerelle (`DEMO_TOOL_DISABLED`) sauf `organizations.allow_demo_tools`
+(réservé aux tests). Outils réels livrés : `web` (recherche/lecture web via les outils serveur
+Anthropic, tracés comme invocations, coût de recherche compté au budget), `company` (état réel de
+l'entreprise lu en base) et `library` (documents produits, secrets masqués, lisibles et téléchargeables
+dans l'inspecteur de tâche).
+
+ADR-049 — **Démo masquée sur un serveur réel.** `HIDE_DEMO_ORG=true` (défaut du compose de production) :
+l'org démo disparaît de `/v1/me`, l'org par défaut est la première org live du membre, et une demande
+explicite de la démo reçoit 403 (jamais de substitution silencieuse). `install.sh` ne charge plus la démo.

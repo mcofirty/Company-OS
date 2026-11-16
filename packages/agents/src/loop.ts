@@ -122,6 +122,9 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
       return stop('blocked', 'MODEL_REFUSAL', 'Le modèle a décliné la requête.');
 
     messages.push({ role: 'assistant', content: resp.content });
+    // Outil serveur (recherche web…) interrompu par la limite d'itérations d'Anthropic : on
+    // renvoie le tour tel quel, sans nouveau message, et le serveur reprend (compte une étape).
+    if (resp.stopReason === 'pause_turn') continue;
     const toolUses = resp.content.filter(isToolUse);
     if (toolUses.length === 0) {
       if (resp.stopReason === 'max_tokens')

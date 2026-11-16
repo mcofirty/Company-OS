@@ -11,8 +11,10 @@ export class MockProvider implements LLMProvider {
     private readonly script: ((req: LlmRequest) => {
       content: LlmContentBlock[];
       stopReason?: string;
+      /** Usage propre à cette réponse (ex. recherches web), fusionné avec l'usage par défaut. */
+      usage?: Partial<LlmResponse['usage']>;
     })[],
-    private readonly usage = {
+    private readonly usage: LlmResponse['usage'] = {
       inputTokens: 1000,
       outputTokens: 200,
       cacheReadTokens: 0,
@@ -31,7 +33,7 @@ export class MockProvider implements LLMProvider {
       content: r.content,
       stopReason: r.stopReason ?? 'tool_use',
       model: this.model,
-      usage: this.usage,
+      usage: { ...this.usage, ...r.usage },
     };
   }
 }

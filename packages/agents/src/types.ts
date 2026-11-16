@@ -27,6 +27,8 @@ export interface LlmRequest {
   tools: LlmToolDef[];
   maxTokens: number;
   effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** Outils web exécutés par Anthropic (accordés explicitement à l'agent). */
+  webTools?: { search: boolean; fetch: boolean };
 }
 
 export interface LlmUsageCounts {
@@ -34,6 +36,9 @@ export interface LlmUsageCounts {
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
+  /** Recherches / lectures web exécutées par Anthropic pendant l'appel. */
+  webSearchRequests?: number;
+  webFetchRequests?: number;
 }
 
 export interface LlmResponse {

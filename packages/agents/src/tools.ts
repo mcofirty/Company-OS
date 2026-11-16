@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { toolAction } from '@company-os/contracts';
+import { toolAction, toolById } from '@company-os/contracts';
 import type { LlmToolDef } from './types';
 
 export const SUBMIT_RESULT = 'submit_result';
@@ -73,16 +73,18 @@ export function buildToolDefs(grants: { toolId: string; actions: string[] }[]): 
   for (const g of [...grants].sort((a, b) => a.toolId.localeCompare(b.toolId))) {
     for (const action of [...g.actions].sort()) {
       const spec = toolAction(g.toolId, action);
-      if (!spec) continue;
+      // Outils exécutés côté serveur par Anthropic (web) : déclarés autrement par le fournisseur.
+      if (!spec || toolById(g.toolId)?.serverSide) continue;
+      const fields = [spec.input, ...(spec.moreInputs ?? [])];
       defs.push({
         name: toolName(g.toolId, action),
         description: `${spec.label} (outil ${g.toolId}, risque ${spec.risk}).`,
         input_schema: {
           type: 'object',
-          properties: {
-            [spec.input.field]: { type: 'string', description: spec.input.description },
-          },
-          required: [spec.input.field],
+          properties: Object.fromEntries(
+            fields.map((f) => [f.field, { type: 'string', description: f.description }]),
+          ),
+          required: fields.map((f) => f.field),
           additionalProperties: false,
         },
       });

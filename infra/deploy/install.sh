@@ -93,6 +93,7 @@ API_ACCESS_TOKEN=$(secret)
 # Clé Anthropic : transmise au worker uniquement.
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
 DEMO_AUTOPILOT=false
+HIDE_DEMO_ORG=true
 IMAGE_TAG=latest
 ORG_NAME="$(clean "$ORG_NAME")"
 ORG_BUDGET=$(clean "$ORG_BUDGET")
@@ -123,8 +124,7 @@ compose build
 say "5/7 Démarrage (base, Temporal, migrations, API, worker, cockpit, HTTPS)"
 compose up -d --wait
 
-say "6/7 Organisations : démonstration + votre organisation LIVE"
-compose --profile demo run --rm seed
+say "6/7 Votre organisation LIVE (aucune donnée de démonstration sur ce serveur)"
 compose --profile tools run --rm admin src/live-cli.ts --name "${ORG_NAME:-Ma Société}" --budget "${ORG_BUDGET:-5}"
 
 say "7/7 Sauvegarde quotidienne de la base (03:30, 14 jours conservés)"

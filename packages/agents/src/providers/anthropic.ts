@@ -53,7 +53,23 @@ export class AnthropicProvider implements LLMProvider {
         fallbacks: 'default',
         output_config: { effort: req.effort },
         system: req.system,
-        tools: req.tools.map((t) => ({ ...t, strict: true })),
+        tools: [
+          ...req.tools.map((t) => ({ ...t, strict: true })),
+          // Outils serveur (exécutés par Anthropic) : recherche 10 $/1 000, lecture sans surcoût.
+          ...(req.webTools?.search
+            ? [{ type: 'web_search_20260318' as const, name: 'web_search' as const, max_uses: 5 }]
+            : []),
+          ...(req.webTools?.fetch
+            ? [
+                {
+                  type: 'web_fetch_20260318' as const,
+                  name: 'web_fetch' as const,
+                  max_uses: 5,
+                  max_content_tokens: 20_000,
+                },
+              ]
+            : []),
+        ],
         messages: req.messages,
       });
       return {
@@ -65,6 +81,8 @@ export class AnthropicProvider implements LLMProvider {
           outputTokens: res.usage.output_tokens,
           cacheReadTokens: res.usage.cache_read_input_tokens ?? 0,
           cacheWriteTokens: res.usage.cache_creation_input_tokens ?? 0,
+          webSearchRequests: res.usage.server_tool_use?.web_search_requests ?? 0,
+          webFetchRequests: res.usage.server_tool_use?.web_fetch_requests ?? 0,
         },
       };
     } catch (err) {
