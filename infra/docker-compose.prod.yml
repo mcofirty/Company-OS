@@ -9,7 +9,6 @@ name: company-os-prod
 
 x-server: &server
   image: company-os-server:${IMAGE_TAG:-latest}
-  build: { context: .., dockerfile: infra/docker/server.Dockerfile }
   restart: unless-stopped
   environment: &server-env
     NODE_ENV: production
@@ -90,6 +89,7 @@ services:
 
   api:
     <<: *server
+    build: { context: .., dockerfile: infra/docker/server.Dockerfile }
     environment:
       <<: *server-env
       API_HOST: 0.0.0.0
@@ -98,6 +98,9 @@ services:
 
   worker:
     <<: *server
+    # Même image que l'API, construite une seule fois par le service api (deux constructions
+    # parallèles de la même image échouent : « image already exists »).
+    pull_policy: never
     command: ['apps/worker/node_modules/.bin/tsx', 'apps/worker/src/main.ts']
     environment:
       <<: *server-env
