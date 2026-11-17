@@ -5,3 +5,4 @@ export * from './snapshot';
 export * from './api';
 export * from './apps';
 export * from './routing';
+export * from './chains';

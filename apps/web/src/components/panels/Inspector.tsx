@@ -33,6 +33,8 @@ import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance
 import { TaskDocuments } from './Documents';
 import type { AgentProfile } from './AgentCard';
 import { AgentManage, AgentWork, type AgentRemote } from './AgentWork';
+import { FeedbackBox, TaskQualityBlock, type TaskQuality } from './TaskQuality';
+import { ObjectiveBar, type ObjectiveView } from '../pages/AgentOps';
 import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
 import { DepartmentDialog } from '../cockpit/OrgDialogs';
 
@@ -413,6 +415,8 @@ function InvLink({
 
 interface TaskDetail {
   task: TaskView;
+  quality?: TaskQuality;
+  feedback?: { kind: string; note: string; createdAt: string }[];
   runs: {
     id: string;
     provider: string;
@@ -561,11 +565,20 @@ function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props
             )}
           </div>
         )}
+      <TaskQualityBlock q={detail?.quality} onSelect={onSelect} />
       {world.org.mode === 'live' &&
         caps.createMission &&
         ['succeeded', 'failed', 'blocked', 'cancelled'].includes(task.status) && (
           <FollowUp taskId={task.id} onCreated={(id) => onSelect({ kind: 'task', id })} />
         )}
+      {task.status === 'succeeded' && (
+        <FeedbackBox
+          taskId={task.id}
+          feedback={detail?.feedback ?? []}
+          live={world.org.mode === 'live'}
+          onDone={(id) => id && onSelect({ kind: 'task', id })}
+        />
+      )}
       <TaskDocuments taskId={task.id} version={`${task.status}-${world.lastSeq}`} />
       <Section title="Exécution (run)">
         {detail?.runs.map((r) => (
@@ -742,6 +755,7 @@ function DepartmentInspector({ world, id, now, onSelect }: Props & { id: string 
           </p>
         </div>
       </header>
+      <DepartmentObjectives departmentId={dept.id} seq={world.lastSeq} />
       {caps.manageDepartments && (
         <div className="insp-actions">
           <button
@@ -922,5 +936,19 @@ export function FollowUp({
         </button>
       </div>
     </div>
+  );
+}
+
+/** Objectifs du pôle et leur barre d'avancement. */
+function DepartmentObjectives({ departmentId, seq }: { departmentId: string; seq: number }) {
+  const list = useRemote<ObjectiveView[]>('/v1/objectives', seq);
+  const mine = (list ?? []).filter((o) => o.departmentId === departmentId);
+  if (!mine.length) return null;
+  return (
+    <Section title="Objectifs du pôle">
+      {mine.map((o) => (
+        <ObjectiveBar key={o.id} o={o} />
+      ))}
+    </Section>
   );
 }

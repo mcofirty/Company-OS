@@ -18,6 +18,10 @@ export const MissionSchema = z
     instructions: z.string().trim().min(10).max(4000),
     /** Niveau de modèle pour CETTE mission (sinon : réglage de l'agent). */
     modelTier: ModelChoiceSchema.optional(),
+    /** Objectif de pôle servi par cette mission (la mission compte dans sa progression). */
+    objectiveId: z.uuid().optional(),
+    /** Contrôle qualité : un second agent relit le livrable avant qu'il ne soit rendu. */
+    qualityCheck: z.boolean().optional(),
   })
   .strict();
 export type Mission = z.infer<typeof MissionSchema>;

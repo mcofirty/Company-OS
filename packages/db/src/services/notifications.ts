@@ -103,13 +103,43 @@ export async function notificationFor(db: Db, e: DomainEvent): Promise<Notificat
           deadlineAt: e.payload.deadlineAt,
         },
       };
-    case 'task.completed':
+    case 'task.completed': {
+      // Livrable sous contrôle qualité : notifié après la relecture (et les relectures elles-mêmes, jamais).
+      const t = await db.task.findUnique({
+        where: { id: e.payload.taskId },
+        select: { qualityCheck: true, reviewOf: true, chainId: true },
+      });
+      if (t?.qualityCheck || t?.reviewOf || t?.chainId) return null;
       return {
         kind: 'completed',
         title: `Mission terminée · ${await agentName(e.payload.agentId)}`,
         message: clip(`${await taskTitle(e.payload.taskId)} — ${e.payload.safeSummary}`, 300),
         priority: 3,
         tags: ['white_check_mark'],
+      };
+    }
+    case 'task.review.completed':
+      return {
+        kind: 'completed',
+        title: `Livrable relu · ${await taskTitle(e.payload.taskId)}`,
+        message: clip(
+          `${e.payload.verdict === 'ok' ? 'Conforme' : 'Points à revoir'} (relu par ${await agentName(e.payload.reviewerAgentId)}) — ${e.payload.notes}`,
+          300,
+        ),
+        priority: e.payload.verdict === 'ok' ? 3 : 4,
+        tags: [e.payload.verdict === 'ok' ? 'white_check_mark' : 'mag'],
+      };
+    case 'chain.updated':
+      if (e.payload.status !== 'awaiting_validation' && e.payload.status !== 'blocked') return null;
+      return {
+        kind: e.payload.status === 'blocked' ? 'failed' : 'approval',
+        title:
+          e.payload.status === 'blocked'
+            ? 'Mission en chaîne bloquée'
+            : 'Mission en chaîne terminée : à valider',
+        message: clip(e.payload.title, 200),
+        priority: e.payload.status === 'blocked' ? 4 : 4,
+        tags: ['link'],
       };
     case 'task.failed':
     case 'task.blocked':

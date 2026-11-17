@@ -1,14 +1,16 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CreateAgentRequest, WorldSnapshot } from '@company-os/contracts';
-import { ApiFailure } from '../../lib/api';
+import { api, ApiFailure } from '../../lib/api';
 import { ModelTierSelect, TIER_CHOICE_LABEL, type Tier } from './ModelTierSelect';
 
 export interface MissionInput {
   title: string;
   instructions: string;
   modelTier?: Tier;
+  objectiveId?: string;
+  qualityCheck?: boolean;
 }
 
 const RISK_LABEL: Record<string, string> = {
@@ -315,6 +317,18 @@ export function MissionForm({
 }) {
   const agents = world.agents.filter((a) => a.status === 'active');
   const [tier, setTier] = useState<Tier | ''>('');
+  const [objectiveId, setObjectiveId] = useState('');
+  const [quality, setQuality] = useState(false);
+  const [objectives, setObjectives] = useState<
+    { id: string; title: string; departmentId: string }[]
+  >([]);
+  useEffect(() => {
+    api<{ id: string; title: string; departmentId: string }[]>('/v1/objectives')
+      .then((r) => setObjectives(r.data))
+      .catch(() => setObjectives([]));
+  }, []);
+  const agentDept = world.agents.find((a) => a.id === agentId)?.departmentId;
+  const deptObjectives = objectives.filter((o) => o.departmentId === agentDept);
   const [agentId, setAgentId] = useState(initialAgent ?? agents[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -329,7 +343,15 @@ export function MissionForm({
           e.preventDefault();
           setBusy(true);
           setError(null);
-          onCreate(agentId, { title, instructions, ...(tier ? { modelTier: tier } : {}) })
+          onCreate(agentId, {
+            title,
+            instructions,
+            ...(tier ? { modelTier: tier } : {}),
+            ...(objectiveId && deptObjectives.some((o) => o.id === objectiveId)
+              ? { objectiveId }
+              : {}),
+            ...(quality ? { qualityCheck: true } : {}),
+          })
             .then(onClose)
             .catch((err: unknown) => setError(errorText(err)))
             .finally(() => setBusy(false));
@@ -381,6 +403,30 @@ export function MissionForm({
             placeholder="Ce que l’agent doit faire, le résultat attendu…"
             data-testid="mission-instructions"
           />
+        </label>
+        <label>
+          Objectif du pôle (facultatif)
+          <select
+            value={objectiveId}
+            onChange={(e) => setObjectiveId(e.target.value)}
+            data-testid="mission-objective"
+          >
+            <option value="">Aucun</option>
+            {deptObjectives.map((o) => (
+              <option key={o.id} value={o.id}>
+                🎯 {o.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={quality}
+            onChange={(e) => setQuality(e.target.checked)}
+            data-testid="mission-quality"
+          />
+          Contrôle qualité : un second agent relit avant que le livrable me soit rendu
         </label>
         <label>
           Modèle pour cette mission

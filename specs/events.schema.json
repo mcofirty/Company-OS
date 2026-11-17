@@ -15,7 +15,7 @@
       "type": "string",
       "enum": [
         "agent.created", "agent.activated", "agent.paused", "agent.resumed", "agent.deactivated",
-        "task.created", "task.started", "task.completed", "task.failed", "task.blocked", "task.cancelled", "task.retry_scheduled",
+        "task.created", "task.started", "task.completed", "task.failed", "task.blocked", "task.cancelled", "task.retry_scheduled", "task.review.completed", "objective.updated", "agent.feedback.recorded", "chain.updated",
         "agent.run.started", "agent.run.completed",
         "tool.invocation.requested", "tool.invocation.started", "tool.invocation.succeeded", "tool.invocation.failed", "tool.invocation.rejected",
         "meeting.started", "meeting.completed", "approval.requested", "approval.decided",

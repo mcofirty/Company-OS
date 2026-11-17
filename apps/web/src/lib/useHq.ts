@@ -289,7 +289,13 @@ export function useHq() {
   const createMission = useCallback(
     async (
       agentId: string,
-      mission: { title: string; instructions: string; modelTier?: string },
+      mission: {
+        title: string;
+        instructions: string;
+        modelTier?: string;
+        objectiveId?: string;
+        qualityCheck?: boolean;
+      },
     ): Promise<TaskView> => {
       const { data } = await api<TaskView>('/v1/tasks', {
         method: 'POST',
@@ -381,6 +387,10 @@ export interface Me {
     manageSchedules?: boolean;
     manageNotifications?: boolean;
     manageServer?: boolean;
+    manageObjectives?: boolean;
+    runChains?: boolean;
+    giveFeedback?: boolean;
+    viewCosts?: boolean;
     manageDepartments?: boolean;
     conveneMeeting?: boolean;
   };

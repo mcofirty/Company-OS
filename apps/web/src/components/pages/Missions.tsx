@@ -7,8 +7,9 @@ import { useControls } from '../../lib/controls';
 import { TASK_STATUS_LABEL, time } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { ScheduleForm, ScheduleRow, type ScheduleView } from './Schedules';
+import { ChainsPanel, ObjectivesPanel } from './AgentOps';
 
-export type MissionsTab = 'open' | 'incidents' | 'done' | 'recurring';
+export type MissionsTab = 'open' | 'incidents' | 'done' | 'recurring' | 'objectives' | 'chains';
 const DAY = 86_400_000;
 
 /** Incidents des dernières 24 h : tâches bloquées ou échouées (même règle que l'indicateur). */
@@ -63,7 +64,8 @@ export function MissionsPage({
   }, [live, version]);
 
   const rows = { open, incidents, done };
-  const list: TaskView[] = tab === 'recurring' ? [] : rows[tab];
+  const list: TaskView[] =
+    tab === 'recurring' || tab === 'objectives' || tab === 'chains' ? [] : rows[tab];
   const TABS: [MissionsTab, string, number | null][] = [
     ['open', 'En cours', open.length],
     ['incidents', 'Incidents (24 h)', incidents.length],
@@ -77,6 +79,8 @@ export function MissionsPage({
           ],
         ]
       : []),
+    ['objectives', 'Objectifs', null],
+    ...(live ? [['chains', 'Chaînes', null] as [MissionsTab, string, number | null]] : []),
   ];
   return (
     <section className="page" aria-label="Missions" data-testid="missions-page">
@@ -115,7 +119,11 @@ export function MissionsPage({
           </button>
         )}
       </header>
-      {tab === 'recurring' ? (
+      {tab === 'objectives' ? (
+        <ObjectivesPanel world={world} toast={toast} />
+      ) : tab === 'chains' ? (
+        <ChainsPanel world={world} toast={toast} onSelect={onSelect} />
+      ) : tab === 'recurring' ? (
         schedules === null ? (
           <p className="muted">Chargement…</p>
         ) : schedules.length === 0 ? (

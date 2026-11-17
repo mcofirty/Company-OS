@@ -26,3 +26,4 @@ export * from './services/memory';
 export * from './services/notifications';
 export * from './services/org';
 export * from './services/insights';
+export * from './services/agent-ops';

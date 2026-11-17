@@ -21,6 +21,7 @@ import { activityAfterCancel, activityAfterTask } from '@company-os/world';
 import type { Db, Tx } from '../client';
 import { DomainError } from '../errors';
 import { withOrgTx, type OrgTxContext } from '../events';
+import { afterTaskFinished } from './agent-ops';
 import { taskView } from '../views';
 
 const IDEMPOTENCY_TTL_MS = 24 * 3600 * 1000;
@@ -43,6 +44,13 @@ export interface CreateTaskInput {
   scheduleId?: string;
   /** Suite d'une mission précédente. */
   followUpOf?: string;
+  /** Mission de planification d'un objectif (ne compte pas dans sa progression). */
+  objectiveCounts?: boolean;
+  /** Relecture qualité : tâche relue. */
+  reviewOf?: string;
+  /** Mission en chaîne : chaîne et étape. */
+  chainId?: string;
+  chainStep?: number;
 }
 
 /** Crée une tâche démo (statut `queued`) et émet `task.created`. Idempotent par clé. */
@@ -102,6 +110,7 @@ export async function createTaskInTx(
 
   let depth = 0;
   let correlationId: string = randomUUID();
+  let inheritedObjective: string | null = null;
   if (input.parentTaskId) {
     const parent = await tx.task.findFirst({ where: { id: input.parentTaskId, orgId } });
     if (!parent) throw new DomainError('NOT_FOUND', 'Tâche parente introuvable');
@@ -133,6 +142,15 @@ export async function createTaskInTx(
         : null;
     }
     correlationId = parent.correlationId;
+    // Délégation au service d'un objectif : la sous-mission compte aussi pour l'objectif.
+    inheritedObjective = parent.objectiveId;
+  }
+  const objectiveId = input.mission?.objectiveId ?? inheritedObjective;
+  if (input.mission?.objectiveId) {
+    const obj = await tx.objective.findFirst({
+      where: { id: input.mission.objectiveId, orgId, status: 'active' },
+    });
+    if (!obj) throw new DomainError('NOT_FOUND', 'Objectif introuvable ou archivé');
   }
 
   const taskId = randomUUID();
@@ -157,6 +175,12 @@ export async function createTaskInTx(
       scheduleId: input.scheduleId ?? null,
       followUpOf: input.followUpOf ?? null,
       modelTier: input.mission?.modelTier ?? null,
+      objectiveId,
+      objectiveCounts: input.objectiveCounts ?? true,
+      qualityCheck: input.mission?.qualityCheck ?? false,
+      reviewOf: input.reviewOf ?? null,
+      chainId: input.chainId ?? null,
+      chainStep: input.chainStep ?? null,
     },
   });
   if (agent.activity === 'idle') {
@@ -529,6 +553,8 @@ export async function finishTask(
         version: { increment: 1 },
       },
     });
+    // Contrôle qualité, relectures et missions en chaîne : étape suivante dans la même transaction.
+    await afterTaskFinished(ctx, updated.id);
     return taskView(updated);
   });
   return result;

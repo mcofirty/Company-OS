@@ -17,6 +17,7 @@ import {
 } from '@company-os/agents';
 import {
   companyMemory,
+  feedbackMemory,
   connectorToolsForGrants,
   delegatedResults,
   expireApprovalIfDue,
@@ -205,13 +206,19 @@ export function createActivities(deps: ActivityDeps) {
       // Mission libre : consignes de l'humain (description), sans paramètres de scénario.
       const params = isDemoTaskKind(kind) ? DEMO_TASK_CATALOG[kind].input : {};
       // Organisations live : mémoire du pôle (dernières missions, documents) en données.
+      // + retours de l'humain sur les livrables de CET agent (apprentissage, ADR-069).
       const memory =
         ctx.org.mode === 'live'
-          ? await companyMemory(db, {
-              orgId: ctx.org.id,
-              departmentId: ctx.agent.departmentId,
-              excludeTaskId: ctx.task.id,
-            })
+          ? [
+              await feedbackMemory(db, ctx.org.id, ctx.agent.id),
+              await companyMemory(db, {
+                orgId: ctx.org.id,
+                departmentId: ctx.agent.departmentId,
+                excludeTaskId: ctx.task.id,
+              }),
+            ]
+              .filter(Boolean)
+              .join('\n\n')
           : '';
       const base = buildTaskMessage({
         id: ctx.task.id,

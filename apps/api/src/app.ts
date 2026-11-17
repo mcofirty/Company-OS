@@ -20,6 +20,7 @@ import { registerV1, type ApprovalSignaler } from './routes/v1';
 import { registerConnectors } from './routes/connectors';
 import { registerNotifications } from './routes/notifications';
 import { registerOps } from './routes/ops';
+import { registerAgentOps } from './routes/agent-ops';
 import { createNotifier } from './notifier';
 import type { ConnectorSettings } from './config';
 
@@ -169,6 +170,7 @@ export async function buildApp(
   registerV1(app, db, opts.signalApproval, { hideDemoOrg: opts.auth.hideDemoOrg ?? false });
   registerConnectors(app, db, opts.connectors ?? { secretKey: null, allowPrivateNetwork: false });
   registerOps(app, opts.opsDir ?? null);
+  registerAgentOps(app, db);
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
   const notifier = createNotifier(db, {

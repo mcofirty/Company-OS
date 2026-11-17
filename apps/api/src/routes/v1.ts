@@ -121,6 +121,10 @@ export function registerV1(
           manageServer: admin,
           manageDepartments: admin,
           conveneMeeting: operator,
+          manageObjectives: admin,
+          runChains: operator && live,
+          giveFeedback: operator,
+          viewCosts: operator,
         },
       },
       meta,
@@ -596,6 +600,23 @@ export function registerV1(
     return {
       data: {
         task: taskView(task),
+        // Contrôle qualité, objectif et chaîne de cette mission ; retours déjà donnés.
+        quality: {
+          qualityCheck: task.qualityCheck,
+          reviewStatus: task.reviewStatus,
+          reviewNotes: task.reviewNotes,
+          reviewOf: task.reviewOf,
+          objectiveId: task.objectiveId,
+          chainId: task.chainId,
+          chainStep: task.chainStep,
+          autoRetries: task.autoRetries,
+        },
+        feedback: (
+          await db.agentFeedback.findMany({
+            where: { orgId: p.orgId, taskId: id },
+            orderBy: { createdAt: 'asc' },
+          })
+        ).map((f) => ({ kind: f.kind, note: f.note, createdAt: f.createdAt.toISOString() })),
         runs: runs.map((r) => ({
           id: r.id,
           provider: r.provider,

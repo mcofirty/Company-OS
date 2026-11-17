@@ -25,6 +25,10 @@ export const ALL_EVENT_TYPES = [
   'task.blocked',
   'task.cancelled',
   'task.retry_scheduled',
+  'task.review.completed',
+  'objective.updated',
+  'agent.feedback.recorded',
+  'chain.updated',
   'agent.run.started',
   'agent.run.completed',
   'tool.invocation.requested',
@@ -123,6 +127,37 @@ export const Payloads = {
     /** Numéro de l'essai automatique (1 ou 2). */
     attempt: z.number().int().min(1).max(5),
     notBefore: z.iso.datetime(),
+  }),
+  /** Contrôle qualité : relecture d'un livrable par un second agent. */
+  'task.review.completed': z.object({
+    taskId: Uuid,
+    reviewTaskId: Uuid,
+    reviewerAgentId: SlugIdSchema,
+    verdict: z.enum(['ok', 'issues']),
+    notes: SafeText,
+  }),
+  /** Objectif chiffré d'un pôle (création, modification, archivage). */
+  'objective.updated': z.object({
+    objectiveId: Uuid,
+    departmentId: z.string().max(80),
+    title: z.string().max(120),
+    target: z.number().int().min(1).max(10_000),
+    change: z.enum(['created', 'updated', 'archived']),
+  }),
+  /** Retour de l'humain sur un livrable : retenu pour les missions suivantes de l'agent. */
+  'agent.feedback.recorded': z.object({
+    agentId: SlugIdSchema,
+    taskId: Uuid.nullable(),
+    kind: z.enum(['correction', 'rejet']),
+    note: SafeText,
+  }),
+  /** Mission en chaîne : progression d'étape en étape, puis validation humaine. */
+  'chain.updated': z.object({
+    chainId: Uuid,
+    title: z.string().max(160),
+    step: z.number().int().min(0),
+    total: z.number().int().min(1),
+    status: z.enum(['running', 'awaiting_validation', 'done', 'blocked', 'cancelled']),
   }),
   /** Annulation humaine d'une tâche en file ou bloquée ; `retriedAs` = tâche qui la remplace. */
   'task.cancelled': z.object({
@@ -401,6 +436,10 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.deactivated'),
   variant('task.cancelled'),
   variant('task.retry_scheduled'),
+  variant('task.review.completed'),
+  variant('objective.updated'),
+  variant('agent.feedback.recorded'),
+  variant('chain.updated'),
   variant('tool.connector.updated'),
   variant('agent.grants.updated'),
   variant('agent.profile.updated'),

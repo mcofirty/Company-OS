@@ -117,7 +117,12 @@ export function applyEvent(
       }
       break;
     }
+    // Détails servis par l'API (objectifs, relectures, retours, chaînes) : visibles dans le fil.
     case 'budget.threshold_reached':
+    case 'task.review.completed':
+    case 'objective.updated':
+    case 'agent.feedback.recorded':
+    case 'chain.updated':
       break;
     case 'system.paused':
       w = { ...w, system: { paused: true } };

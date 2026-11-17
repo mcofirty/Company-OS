@@ -165,6 +165,40 @@ export function describe(
         tone: 'warning',
         icon: '$',
       };
+    case 'task.review.completed':
+      return {
+        text: `${agentName(e.payload.reviewerAgentId)} a relu un livrable · ${e.payload.verdict === 'ok' ? 'conforme' : 'points à revoir'}`,
+        tone: e.payload.verdict === 'ok' ? 'success' : 'warning',
+        icon: '🔍',
+      };
+    case 'objective.updated':
+      return {
+        text: `Objectif ${e.payload.change === 'created' ? 'fixé' : e.payload.change === 'archived' ? 'archivé' : 'modifié'} · ${e.payload.title} (cible ${e.payload.target})`,
+        tone: 'neutral',
+        icon: '🎯',
+      };
+    case 'agent.feedback.recorded':
+      return {
+        text: `Retour ${e.payload.kind === 'rejet' ? '(livrable refusé)' : '(correction)'} pour ${agentName(e.payload.agentId)} · retenu pour la suite`,
+        tone: 'neutral',
+        icon: '✎',
+      };
+    case 'chain.updated':
+      return {
+        text: `Chaîne « ${e.payload.title} » · ${
+          e.payload.status === 'awaiting_validation'
+            ? 'attend ta validation'
+            : e.payload.status === 'done'
+              ? 'validée'
+              : e.payload.status === 'blocked'
+                ? 'bloquée'
+                : e.payload.status === 'cancelled'
+                  ? 'annulée'
+                  : `étape ${e.payload.step + 1}/${e.payload.total}`
+        }`,
+        tone: e.payload.status === 'blocked' ? 'danger' : 'neutral',
+        icon: '⛓',
+      };
     case 'system.paused':
       return { text: `Système mis en pause : ${e.payload.reason}`, tone: 'danger', icon: '■' };
     case 'system.resumed':

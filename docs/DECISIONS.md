@@ -340,3 +340,16 @@ ADR-068 — **Reprise automatique des erreurs techniques.** Une mission close pa
 pendant ces essais. Au-delà, ou pour une erreur non technique (refus, budget, validation), la mission
 est bloquée et l'humain est prévenu. Le workflow Temporal ne laisse plus une mission « en cours » si
 une activité échoue après ses propres essais : il la clôt en `TECHNICAL_ERROR`.
+
+ADR-069 — **Fonctionnement des agents : objectifs, qualité, retours, coûts, chaînes.**
+- Objectifs de pôle (`objectives`) : progression = missions réussies rattachées sur la période (la
+  mission de planification confiée au responsable ne compte pas ; les sous-missions déléguées héritent
+  de l'objectif).
+- Contrôle qualité (option de mission) : un second agent (responsable, sinon collègue du pôle) relit ;
+  verdict « CONFORME / À REVOIR » rattaché au livrable ; la notification de fin attend la relecture.
+- Retours de l'humain (`agent_feedback`) : injectés comme données en tête des missions suivantes de
+  l'agent ; relance facultative avec la remarque.
+- Coûts : agrégés depuis `agent_runs` (réel) ; économie du mode Auto = même consommation de jetons au
+  tarif Opus moins le coût réel (estimation affichée comme telle).
+- Missions en chaîne : modèles versionnés dans le code ; chaque étape reçoit le résultat précédent en
+  données ; la dernière étape est toujours une validation humaine (rien n'est publié par la chaîne).

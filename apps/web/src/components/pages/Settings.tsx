@@ -8,6 +8,7 @@ import { usd } from '../../lib/format';
 import { useTheme, type ThemeChoice } from '../../lib/theme';
 import { ConnectorsPanel } from '../cockpit/Connectors';
 import { ServerSettings } from './ServerSettings';
+import { CostsPanel } from './AgentOps';
 
 type NotifyEvent = 'approval' | 'completed' | 'failed' | 'schedule' | 'daily';
 interface NotificationView {
@@ -27,7 +28,8 @@ const EVENT_LABEL: Record<NotifyEvent, string> = {
 };
 const errText = (e: unknown) => (e instanceof ApiFailure ? e.message : 'Erreur inattendue');
 
-export type SettingsSection = 'connectors' | 'notifications' | 'budgets' | 'appearance' | 'server';
+export type SettingsSection =
+  'connectors' | 'notifications' | 'budgets' | 'costs' | 'appearance' | 'server';
 
 /** Page « Réglages » : connecteurs, notifications, budgets, apparence. */
 export function SettingsPage({
@@ -53,6 +55,7 @@ export function SettingsPage({
       ? ([['notifications', 'Notifications']] as [SettingsSection, string][])
       : []),
     ['budgets', 'Budgets'],
+    ...(caps.viewCosts ? ([['costs', 'Coûts']] as [SettingsSection, string][]) : []),
     ['appearance', 'Apparence'],
     ...(caps.manageServer ? ([['server', 'Serveur']] as [SettingsSection, string][]) : []),
   ];
@@ -93,6 +96,7 @@ export function SettingsPage({
         {current === 'budgets' && <BudgetsSettings world={world} toast={toast} />}
         {current === 'appearance' && <AppearanceSettings />}
         {current === 'server' && <ServerSettings toast={toast} />}
+        {current === 'costs' && <CostsPanel world={world} />}
       </div>
     </section>
   );

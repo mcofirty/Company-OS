@@ -3986,3 +3986,223 @@ kbd {
   width: 110px;
   margin: 0 6px;
 }
+
+/* ---------- Objectifs, chaînes, coûts, qualité ---------- */
+.ops-panel {
+  display: grid;
+  gap: 12px;
+}
+.inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.inline-form input[type='text'],
+.inline-form input:not([type]) {
+  flex: 1 1 220px;
+}
+.ops-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+.ops-group .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.objective-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.objective {
+  flex: 1;
+  display: grid;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+}
+.objective-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.stat-bar.big {
+  height: 9px;
+}
+.stat-bar > span.done {
+  background: var(--accent);
+}
+.chain-templates {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.chain-tpl {
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+}
+.chain-tpl.on,
+.chain-tpl:hover {
+  border-color: var(--accent);
+}
+.chain-form {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--accent);
+  background: var(--surface);
+}
+.chain-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 6px;
+  align-items: end;
+}
+.chain-final {
+  font-weight: 650;
+  color: var(--ink-soft);
+}
+.chain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.chain {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  display: grid;
+  gap: 8px;
+}
+.chain-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.chain-track {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chain-track .step button,
+.chain-track .step span {
+  display: inline-flex;
+  flex-direction: column;
+  border: 1px solid var(--outline);
+  background: var(--surface-muted);
+  border-radius: 9px;
+  padding: 4px 9px;
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+.chain-track .step small {
+  font-weight: 400;
+  color: var(--ink-soft);
+}
+.chain-track .step.st-succeeded button,
+.chain-track .step.st-succeeded span {
+  border-color: var(--success);
+  color: var(--success);
+}
+.chain-track .step.st-running button {
+  border-color: var(--accent);
+}
+.status-pill-sm.chain-awaiting_validation {
+  background: var(--warning);
+  color: #fff;
+}
+.cost-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.cost-kpis > div {
+  display: grid;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+}
+.cost-kpis b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.cost-kpis .saving b {
+  color: var(--success);
+}
+.cost-kpis small {
+  color: var(--ink-soft);
+}
+.cost-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 5px;
+}
+.cost-bars li {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr) 120px;
+  gap: 8px;
+  align-items: center;
+  font-size: 12.5px;
+}
+.cost-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cost-track {
+  height: 10px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  overflow: hidden;
+}
+.cost-track span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 5px;
+}
+.cost-value {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.task-quality p {
+  margin: 4px 0;
+}
+.quality-ok strong {
+  color: var(--success);
+}
+.quality-bad strong {
+  color: var(--danger);
+}
+.quality-warn strong {
+  color: var(--warning);
+}
+.feedback-box {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0;
+}

@@ -210,6 +210,17 @@ model Task {
   /// Reprise automatique après une erreur technique : essais faits, et pas avant cette date.
   autoRetries    Int          @default(0) @map("auto_retries")
   notBefore      DateTime?    @map("not_before") @db.Timestamptz(3)
+  /// Objectif de pôle servi par cette mission ; false pour la mission de planification.
+  objectiveId     String?     @map("objective_id") @db.Uuid
+  objectiveCounts Boolean     @default(true) @map("objective_counts")
+  /// Contrôle qualité : relecture par un second agent avant restitution.
+  qualityCheck   Boolean      @default(false) @map("quality_check")
+  reviewOf       String?      @map("review_of") @db.Uuid
+  reviewStatus   String?      @map("review_status")
+  reviewNotes    String?      @map("review_notes")
+  /// Mission en chaîne : chaîne et numéro d'étape.
+  chainId        String?      @map("chain_id") @db.Uuid
+  chainStep      Int?         @map("chain_step")
   depth          Int          @default(0)
   /// Plafond de coût de CETTE exécution (mission récurrente), en micro-USD.
   costCapMicros  Int?         @map("cost_cap_micros")
@@ -630,4 +641,58 @@ model OAuthSession {
   expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
 
   @@map("oauth_sessions")
+}
+
+/// Objectif chiffré d'un pôle sur une période (ex. « 10 posts LinkedIn ce mois »).
+model Objective {
+  id           String   @id @db.Uuid
+  orgId        String   @map("org_id") @db.Uuid
+  departmentId String   @map("department_id")
+  title        String
+  target       Int
+  periodStart  DateTime @map("period_start") @db.Timestamptz(3)
+  periodEnd    DateTime @map("period_end") @db.Timestamptz(3)
+  /// active | archived
+  status       String   @default("active")
+  createdBy    String   @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([orgId, status])
+  @@map("objectives")
+}
+
+/// Retour de l'humain sur un livrable : retenu pour les missions suivantes de l'agent.
+model AgentFeedback {
+  id        String   @id @db.Uuid
+  orgId     String   @map("org_id") @db.Uuid
+  agentId   String   @map("agent_id")
+  taskId    String?  @map("task_id") @db.Uuid
+  /// correction | rejet
+  kind      String
+  note      String
+  createdBy String   @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([orgId, agentId, createdAt])
+  @@map("agent_feedback")
+}
+
+/// Missions en chaîne (modèle prêt à l'emploi : veille → article → post → validation).
+model MissionChain {
+  id          String   @id @db.Uuid
+  orgId       String   @map("org_id") @db.Uuid
+  templateId  String   @map("template_id")
+  title       String
+  topic       String
+  /// [{ title, instructions, agentId, taskId? }]
+  steps       Json
+  currentStep Int      @default(0) @map("current_step")
+  /// running | awaiting_validation | done | blocked | cancelled
+  status      String   @default("running")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@index([orgId, status])
+  @@map("mission_chains")
 }
