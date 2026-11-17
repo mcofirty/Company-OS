@@ -327,9 +327,9 @@ export function MissionForm({
       .then((r) => setObjectives(r.data))
       .catch(() => setObjectives([]));
   }, []);
+  const [agentId, setAgentId] = useState(initialAgent ?? agents[0]?.id ?? '');
   const agentDept = world.agents.find((a) => a.id === agentId)?.departmentId;
   const deptObjectives = objectives.filter((o) => o.departmentId === agentDept);
-  const [agentId, setAgentId] = useState(initialAgent ?? agents[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
   const [busy, setBusy] = useState(false);
