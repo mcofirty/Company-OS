@@ -22,7 +22,8 @@ Pour chaque changement : horodatage UTC, commit (si disponible), tâches termin�
 
 ### Tests (exécutés le 2026-11-26)
 - `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 199/199 (dont ops, notifications, auto-retry,
-  agent-ops). `pnpm e2e` : voir commit.
+  agent-ops). `pnpm e2e` : 26/26 (25 + scénario live relancé après correction du formulaire de
+  mission, plantage détecté par ce test).
 
 ### Prochaine tâche
 - Retour utilisateur en production ; vérifier l'activation de l'agent hôte sur le VPS.
