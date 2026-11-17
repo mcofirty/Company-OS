@@ -63,6 +63,29 @@ function deps(
 }
 
 describe('boucle bornée', () => {
+  it('le temps d’attente d’une validation humaine ne compte pas dans le délai du run', async () => {
+    let clock = 0;
+    const p = new MockProvider([
+      () => ({ content: [call('t1')] }),
+      () => ({ content: [submit()] }),
+    ]);
+    const d = deps(p);
+    d.now = () => clock;
+    let first = true;
+    d.toolStep = async () => {
+      if (first) {
+        first = false;
+        return { content: '', isError: false, lastEventId: null, approvalId: 'ap-1' };
+      }
+      return { content: 'ok', isError: false, lastEventId: null };
+    };
+    d.waitForApproval = async () => {
+      clock += 3 * 3600_000; // l'humain valide 3 h plus tard
+      return 'approved';
+    };
+    expect((await agentLoop(d, { taskMessage: 'm', limits })).status).toBe('succeeded');
+  });
+
   it('outil puis submit_result -> succès', async () => {
     const p = new MockProvider([
       () => ({ content: [call('t1')] }),

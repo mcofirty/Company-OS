@@ -22,3 +22,5 @@ export * from './services/hierarchy';
 export * from './services/purge';
 export * from './services/admin';
 export * from './services/schedules';
+export * from './services/memory';
+export * from './services/notifications';

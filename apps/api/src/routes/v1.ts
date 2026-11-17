@@ -47,6 +47,7 @@ import {
   updateAgentVersion,
   updateBudgetLimit,
   listSchedules,
+  createFollowUp,
   saveSchedule,
   deleteSchedule,
   runDueSchedules,
@@ -108,6 +109,7 @@ export function registerV1(
           editAgent: admin,
           editBudget: admin,
           manageSchedules: admin && live,
+          manageNotifications: admin && live,
         },
       },
       meta,
@@ -374,6 +376,26 @@ export function registerV1(
     return reply
       .status(created ? 201 : 200)
       .send({ data: task, meta: { ...meta, idempotentReplay: !created } });
+  });
+
+  /** « Demander une suite » : même agent, résultat précédent fourni, nouvelle demande. */
+  app.post('/v1/tasks/:id/follow-up', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const { instructions } = z
+      .object({ instructions: z.string().trim().min(5).max(2500) })
+      .strict()
+      .parse(req.body);
+    const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+    const task = await createFollowUp(db, {
+      orgId: p.orgId,
+      taskId: id,
+      instructions,
+      actor: { kind: 'user', id: p.userId },
+      ...(key.success ? { idempotencyKey: key.data } : {}),
+    });
+    return reply.status(201).send({ data: task, meta });
   });
 
   /** Annulation humaine (tâche en file ou bloquée), motif obligatoire. */

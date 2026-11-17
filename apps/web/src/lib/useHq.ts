@@ -363,5 +363,6 @@ export interface Me {
     editAgent?: boolean;
     editBudget?: boolean;
     manageSchedules?: boolean;
+    manageNotifications?: boolean;
   };
 }

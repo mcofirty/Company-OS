@@ -347,6 +347,39 @@ PLATFORM_ADAPTERS.push(
   },
   {
     toolId: 'team',
+    action: 'wait',
+    kind: 'internal',
+    inputSchema: z.object({ taskIds: str(2000) }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    summarize: (o: unknown) => (o as Out).summary,
+    async invoke(ctx, input) {
+      await assertManager(ctx);
+      // Seulement des missions déléguées par CETTE mission (sous-tâches directes).
+      const children = await ctx.db.task.findMany({
+        where: { orgId: ctx.orgId, parentTaskId: ctx.taskId },
+        select: { id: true },
+      });
+      const own = new Set(children.map((c) => c.id));
+      const raw = (input['taskIds'] ?? '').trim();
+      const asked =
+        raw === '' || /^tout/i.test(raw)
+          ? [...own]
+          : raw
+              .split(',')
+              .map((x) => x.trim())
+              .filter((x) => own.has(x));
+      if (asked.length === 0) {
+        throw new ToolError('NO_DELEGATED_TASK', false, 'Aucune mission confiée à attendre');
+      }
+      return {
+        summary: `Attente des résultats de ${asked.length} mission(s) confiée(s)`,
+        data: { taskIds: asked },
+      };
+    },
+  },
+  {
+    toolId: 'team',
     action: 'recruit',
     kind: 'internal',
     inputSchema: z

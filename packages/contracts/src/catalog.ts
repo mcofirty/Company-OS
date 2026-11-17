@@ -448,6 +448,17 @@ TOOL_CATALOG.push({
       ],
     },
     {
+      action: 'wait',
+      kind: 'read',
+      risk: 'read',
+      label: 'Attendre les résultats des missions confiées, puis les recevoir',
+      input: {
+        field: 'taskIds',
+        description:
+          '« toutes » (missions confiées pendant CETTE mission) ou identifiants séparés par des virgules',
+      },
+    },
+    {
       action: 'recruit',
       kind: 'write',
       risk: 'internal_write',

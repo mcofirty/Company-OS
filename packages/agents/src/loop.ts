@@ -33,6 +33,8 @@ export interface ToolStepResult {
   lastEventId: string | null;
   /** Action externe suspendue : décision humaine attendue avant exécution. */
   approvalId?: string | null;
+  /** Manager : attendre la fin de ces missions déléguées, puis recevoir leurs résultats. */
+  waitForTasks?: string[];
 }
 
 export type ApprovalDecision = 'approved' | 'rejected' | 'expired';
@@ -49,6 +51,8 @@ export interface LoopDeps {
   }): Promise<ToolStepResult>;
   /** Attend la décision humaine (signal Temporal ou interrogation en mode inline). */
   waitForApproval(input: { approvalId: string }): Promise<ApprovalDecision>;
+  /** Attend la fin de missions déléguées ; renvoie leurs résultats (texte pour le modèle). */
+  waitForTasks?(input: { taskIds: string[] }): Promise<string>;
   now(): number;
 }
 
@@ -90,6 +94,8 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
   let cost = 0;
   let nudged = false;
   let lastEventId: string | null = null;
+  // Temps passé à attendre un humain ou des subordonnés : exclu du délai maximal du run.
+  let waited = 0;
 
   const stop = (
     status: 'blocked' | 'failed',
@@ -113,7 +119,7 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
         'MAX_STEPS',
         `Limite de ${input.limits.maxSteps} étapes atteinte sans résultat.`,
       );
-    if (deps.now() - start > input.limits.maxDurationMs)
+    if (deps.now() - start - waited > input.limits.maxDurationMs)
       return stop('blocked', 'TIMEOUT', 'Délai maximal du run dépassé.');
     if (cost >= input.limits.maxCostMicros)
       return stop('blocked', 'RUN_BUDGET_EXCEEDED', 'Plafond de coût du run atteint.');
@@ -174,7 +180,9 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
       if (out.approvalId) {
         if (out.lastEventId) lastEventId = out.lastEventId;
         const approvalId = out.approvalId;
+        const t0 = deps.now();
         const decision = await deps.waitForApproval({ approvalId });
+        waited += deps.now() - t0;
         out =
           decision === 'approved'
             ? await deps.toolStep({
@@ -190,6 +198,12 @@ export async function agentLoop(deps: LoopDeps, input: LoopInput): Promise<LoopO
                 isError: true,
                 lastEventId: null,
               };
+      }
+      if (out.waitForTasks && out.waitForTasks.length > 0 && deps.waitForTasks) {
+        const t0 = deps.now();
+        const content = await deps.waitForTasks({ taskIds: out.waitForTasks });
+        waited += deps.now() - t0;
+        out = { ...out, content, isError: false };
       }
       if (out.lastEventId) lastEventId = out.lastEventId;
       results.push({

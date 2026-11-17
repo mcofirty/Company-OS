@@ -17,6 +17,14 @@ export async function runAgentTaskInline(
       now: () => Date.now(),
       modelStep: (i) => acts.modelStep({ runId, ...i }),
       toolStep: (i) => acts.toolStep({ runId, ...i }),
+      waitForTasks: async ({ taskIds }) => {
+        const deadline = Date.now() + 4 * 3600_000;
+        for (;;) {
+          const r = await acts.checkTasks({ runId, taskIds });
+          if (r.done || Date.now() > deadline) return r.content;
+          await new Promise((res) => setTimeout(res, pollMs * 10));
+        }
+      },
       waitForApproval: async ({ approvalId }) => {
         for (;;) {
           const status = await acts.checkApproval({ approvalId });

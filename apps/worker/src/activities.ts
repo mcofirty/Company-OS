@@ -16,7 +16,9 @@ import {
   type ToolStepResult,
 } from '@company-os/agents';
 import {
+  companyMemory,
   connectorToolsForGrants,
+  delegatedResults,
   expireApprovalIfDue,
   isConnectorToolId,
   getApprovalStatus,
@@ -202,15 +204,27 @@ export function createActivities(deps: ActivityDeps) {
       const kind = TaskKindSchema.parse(ctx.task.kind);
       // Mission libre : consignes de l'humain (description), sans paramètres de scénario.
       const params = isDemoTaskKind(kind) ? DEMO_TASK_CATALOG[kind].input : {};
+      // Organisations live : mémoire du pôle (dernières missions, documents) en données.
+      const memory =
+        ctx.org.mode === 'live'
+          ? await companyMemory(db, {
+              orgId: ctx.org.id,
+              departmentId: ctx.agent.departmentId,
+              excludeTaskId: ctx.task.id,
+            })
+          : '';
+      const base = buildTaskMessage({
+        id: ctx.task.id,
+        kind,
+        title: ctx.task.title,
+        description: ctx.task.description,
+        input: params,
+      });
       return {
         runId: input.runId,
-        taskMessage: buildTaskMessage({
-          id: ctx.task.id,
-          kind,
-          title: ctx.task.title,
-          description: ctx.task.description,
-          input: params,
-        }),
+        taskMessage: memory
+          ? `${base}\n\n<memoire_entreprise>\n${memory}\n</memoire_entreprise>`
+          : base,
         limits: ctx.version.limits,
         providerClass: ctx.org.mode === 'demo' ? 'demo' : 'llm',
       };
@@ -306,6 +320,13 @@ export function createActivities(deps: ActivityDeps) {
         };
       }
       if (r.status === 'succeeded') {
+        // Manager : attente durable (workflow) des missions déléguées, sans appel au modèle.
+        if (parsed.toolId === 'team' && parsed.action === 'wait') {
+          const ids = (r.output as { data?: { taskIds?: unknown } }).data?.taskIds;
+          if (Array.isArray(ids) && ids.every((x) => typeof x === 'string')) {
+            return { content: '', isError: false, lastEventId: r.lastEventId, waitForTasks: ids };
+          }
+        }
         return {
           content: wrapToolOutput(parsed.toolId, parsed.action, r.output),
           isError: false,
@@ -324,6 +345,15 @@ export function createActivities(deps: ActivityDeps) {
         isError: true,
         lastEventId: r.lastEventId,
       };
+    },
+
+    /** Missions déléguées terminées ? (+ résultats). Interrogé périodiquement par le workflow. */
+    async checkTasks(input: {
+      runId: string;
+      taskIds: string[];
+    }): Promise<{ done: boolean; content: string }> {
+      const run = await db.agentRun.findUniqueOrThrow({ where: { id: input.runId } });
+      return delegatedResults(db, { orgId: run.orgId, taskIds: input.taskIds });
     },
 
     /** Lecture de l'état d'une validation (filet de sécurité si un signal est perdu). */

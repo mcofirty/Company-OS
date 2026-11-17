@@ -11,6 +11,8 @@ import { registerAuth, type AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
 import { registerV1, type ApprovalSignaler } from './routes/v1';
 import { registerConnectors } from './routes/connectors';
+import { registerNotifications } from './routes/notifications';
+import { createNotifier } from './notifier';
 import type { ConnectorSettings } from './config';
 
 const STATUS: Partial<Record<ErrorCode, number>> = {
@@ -35,6 +37,10 @@ export interface AppOptions {
   signalApproval?: ApprovalSignaler;
   /** Connecteurs MCP : clé de chiffrement des jetons, accès réseau privé (tests). */
   connectors?: ConnectorSettings;
+  /** Lien ouvert depuis une notification (cockpit). */
+  webOrigin?: string;
+  /** Tests : client HTTP des notifications. */
+  notifyFetch?: typeof fetch;
   /** Requêtes /v1 par minute et par client (IP). Défaut 1200. */
   rateLimitPerMinute?: number;
 }
@@ -152,7 +158,25 @@ export async function buildApp(
   registerConnectors(app, db, opts.connectors ?? { secretKey: null, allowPrivateNetwork: false });
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
-  const relayOnce = (): Promise<number> => relayOutbox(db, (events) => broadcast(io, events));
+  const notifier = createNotifier(db, {
+    secretKey: opts.connectors?.secretKey ?? null,
+    allowPrivateNetwork: opts.connectors?.allowPrivateNetwork ?? false,
+    webOrigin:
+      opts.webOrigin ?? (Array.isArray(opts.corsOrigin) ? opts.corsOrigin[0]! : opts.corsOrigin),
+    log: (msg, extra) => app.log.warn({ ...extra }, msg),
+    ...(opts.notifyFetch ? { fetchImpl: opts.notifyFetch } : {}),
+  });
+  registerNotifications(
+    app,
+    db,
+    opts.connectors ?? { secretKey: null, allowPrivateNetwork: false },
+    notifier,
+  );
+  const relayOnce = (): Promise<number> =>
+    relayOutbox(db, (events) => {
+      broadcast(io, events);
+      notifier.handle(events); // non bloquant
+    });
   app.addHook('onClose', async () => {
     await new Promise<void>((resolve) => void io.close(() => resolve()));
   });

@@ -1,4 +1,4 @@
-import { condition, defineSignal, proxyActivities, setHandler } from '@temporalio/workflow';
+import { condition, defineSignal, proxyActivities, setHandler, sleep } from '@temporalio/workflow';
 import { agentLoop, type ApprovalDecision, type LoopOutcome } from '@company-os/agents/loop';
 import type { Activities } from '../activities';
 
@@ -22,7 +22,7 @@ const { toolStep } = proxyActivities<Activities>({
   retry: { maximumAttempts: 3, initialInterval: '1 second' },
 });
 
-const { checkApproval, expireApproval } = proxyActivities<Activities>({
+const { checkApproval, expireApproval, checkTasks } = proxyActivities<Activities>({
   startToCloseTimeout: '15 seconds',
   retry: { maximumAttempts: 5 },
 });
@@ -61,6 +61,15 @@ export async function agentTaskWorkflow(input: { runId: string }): Promise<LoopO
       modelStep: (i) => modelStep({ runId: input.runId, ...i }),
       toolStep: (i) => toolStep({ runId: input.runId, ...i }),
       waitForApproval,
+      // Attente durable des missions déléguées (4 h max) : aucun appel modèle pendant l'attente.
+      waitForTasks: async ({ taskIds }) => {
+        const deadline = Date.now() + 4 * 3600_000;
+        for (;;) {
+          const r = await checkTasks({ runId: input.runId, taskIds });
+          if (r.done || Date.now() > deadline) return r.content;
+          await sleep('30 seconds');
+        }
+      },
     },
     { taskMessage: prepared.taskMessage, limits: prepared.limits },
   );
