@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { AgentView, InvocationView, WorldSnapshot } from '@company-os/contracts';
 import {
   departmentPresence,
@@ -71,6 +72,61 @@ const std = (c: string, r = 0.85): THREE.MeshStandardMaterial => {
   if (!m) MATS.set(k, (m = new THREE.MeshStandardMaterial({ color: c, roughness: r })));
   return m;
 };
+const FLAT = new Map<string, THREE.MeshStandardMaterial>();
+/** Feuillage à facettes : un matériau partagé par couleur (fusion du décor possible). */
+const flatStd = (c: string): THREE.MeshStandardMaterial => {
+  let m = FLAT.get(c);
+  if (!m)
+    FLAT.set(
+      c,
+      (m = new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, flatShading: true })),
+    );
+  return m;
+};
+/**
+ * Fusionne le décor fixe : une géométrie par matériau (et par mode d'ombre). Les matériaux restent
+ * partagés, donc les recolorations (pôle, nuit, écrans) continuent de s'appliquer. Divise les appels
+ * de dessin par ~20 : indispensable sans carte graphique.
+ */
+function mergeStatic(root: THREE.Object3D, skip: Set<THREE.Object3D>): void {
+  root.updateMatrixWorld(true);
+  const groups = new Map<
+    string,
+    { mat: THREE.Material; cast: boolean; geos: THREE.BufferGeometry[] }
+  >();
+  const victims: THREE.Mesh[] = [];
+  const visit = (o: THREE.Object3D): void => {
+    if (skip.has(o)) return;
+    const m = o as THREE.Mesh;
+    if (m.isMesh && !Array.isArray(m.material) && m.visible) {
+      const g = m.geometry.index ? m.geometry : null;
+      if (g && g.attributes['uv'] && g.attributes['normal']) {
+        const key = `${m.material.uuid}|${m.castShadow}`;
+        let e = groups.get(key);
+        if (!e) groups.set(key, (e = { mat: m.material, cast: m.castShadow, geos: [] }));
+        const c = g.clone();
+        for (const name of Object.keys(c.attributes))
+          if (!['position', 'normal', 'uv'].includes(name)) c.deleteAttribute(name);
+        c.applyMatrix4(m.matrixWorld);
+        e.geos.push(c);
+        victims.push(m);
+      }
+    }
+    for (const ch of o.children) visit(ch);
+  };
+  visit(root);
+  for (const v of victims) v.removeFromParent();
+  for (const e of groups.values()) {
+    const merged = mergeGeometries(e.geos, false);
+    e.geos.forEach((g) => g.dispose());
+    if (!merged) continue;
+    const mm = new THREE.Mesh(merged, e.mat);
+    mm.castShadow = e.cast;
+    mm.receiveShadow = true;
+    mm.matrixAutoUpdate = false;
+    root.add(mm);
+  }
+}
 const geo = <T extends THREE.BufferGeometry>(k: string, f: () => T): T => {
   let g = GEOS.get(k) as T | undefined;
   if (!g) GEOS.set(k, (g = f()));
@@ -509,10 +565,20 @@ export class StudioScene implements HqWorldView {
       if (a.kind === 'meeting_seat') this.meetingChair(a);
     }
     this.build = this.world;
+    // Décor fixe fusionné (hors locaux libres, masquables, et hors robot aspirateur, mobile).
+    const skip = new Set<THREE.Object3D>();
+    for (const l of this.annexLayers.values()) skip.add(l.furn).add(l.free);
+    if (this.vacuum) skip.add(this.vacuum.g);
+    mergeStatic(this.world, skip);
+    for (const l of this.annexLayers.values()) {
+      mergeStatic(l.furn, new Set());
+      mergeStatic(l.free, new Set());
+    }
   }
 
   /** Calque de construction : les locaux libres ont leur propre groupe (masqué tant qu'il est vide). */
   private build: THREE.Object3D = this.world;
+  private outdoor: THREE.Group | null = null;
   private annexLayers = new Map<
     string,
     { furn: THREE.Group; free: THREE.Group; rug: THREE.Mesh | null }
@@ -597,6 +663,7 @@ export class StudioScene implements HqWorldView {
   private buildOutdoor(): void {
     const o = new THREE.Group();
     this.scene.add(o);
+    this.outdoor = o;
     const grass = new THREE.Mesh(
       new THREE.PlaneGeometry(260, 220),
       new THREE.MeshStandardMaterial({ map: grassTex(), roughness: 1 }),
@@ -699,6 +766,7 @@ export class StudioScene implements HqWorldView {
     }
     // Bancs et range-vélos devant l'entrée.
     for (const x of [1.5, 9.5]) mesh(B(2, 0.1, 0.6), std('#a8794f', 0.8), x, 0.2, -4.2, o);
+    mergeStatic(o, new Set());
   }
 
   private buildRoom(room: Room): void {
@@ -1130,11 +1198,7 @@ export class StudioScene implements HqWorldView {
       const a = (k / n) * Math.PI * 2 + size * 3;
       const leaf = mesh(
         S(0.2 * size),
-        new THREE.MeshStandardMaterial({
-          color: k % 2 ? '#4f9a57' : '#3f8a4a',
-          roughness: 0.8,
-          flatShading: true,
-        }),
+        flatStd(k % 2 ? '#4f9a57' : '#3f8a4a'),
         Math.sin(a) * 0.22 * size,
         (0.52 + (k % 3) * 0.13) * size,
         Math.cos(a) * 0.22 * size,
@@ -1187,7 +1251,7 @@ export class StudioScene implements HqWorldView {
     ] as const)
       mesh(
         geo(`ico${rr}`, () => new THREE.IcosahedronGeometry(rr, 1)),
-        new THREE.MeshStandardMaterial({ color: '#4e9a52', flatShading: true, roughness: 0.8 }),
+        flatStd('#4e9a52'),
         cx + dx,
         y,
         cz + dz,
