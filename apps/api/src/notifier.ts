@@ -7,6 +7,7 @@ import {
 } from '@company-os/db';
 import { openSecret } from '@company-os/policies';
 import { assertSafeMcpUrl } from '@company-os/tools';
+import { signAction } from './notify-actions';
 
 /**
  * Envoi des notifications (ntfy : application téléphone, email facultatif). Appelé après la
@@ -28,6 +29,8 @@ export function createNotifier(
     webOrigin: string;
     log: (msg: string, extra?: Record<string, unknown>) => void;
     fetchImpl?: typeof fetch;
+    /** Adresse publique de l'API : boutons « Valider / Refuser » des notifications. */
+    publicApiUrl?: string;
   },
 ): Notifier {
   const doFetch = cfg.fetchImpl ?? fetch;
@@ -63,6 +66,23 @@ export function createNotifier(
         priority: msg.priority,
         tags: msg.tags,
         click: cfg.webOrigin,
+        ...(msg.approval && cfg.publicApiUrl
+          ? {
+              // Boutons d'action ntfy : POST vers un lien signé, valable pour CETTE demande.
+              actions: (['approve', 'reject'] as const).map((decision) => ({
+                action: 'http',
+                label: decision === 'approve' ? '✅ Valider' : '✖ Refuser',
+                url: `${cfg.publicApiUrl}/v1/notify/approval?t=${signAction(cfg.secretKey!, {
+                  orgId,
+                  approvalId: msg.approval!.id,
+                  decision,
+                  exp: Date.parse(msg.approval!.deadlineAt),
+                })}`,
+                method: 'POST',
+                clear: true,
+              })),
+            }
+          : { actions: [{ action: 'view', label: 'Ouvrir le QG', url: cfg.webOrigin }] }),
         ...(s.email ? { email: s.email } : {}),
       }),
     });

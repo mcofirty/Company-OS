@@ -9,18 +9,21 @@ import { useTheme, type ThemeChoice } from '../../lib/theme';
 import { ConnectorsPanel } from '../cockpit/Connectors';
 import { ServerSettings } from './ServerSettings';
 
-type NotifyEvent = 'approval' | 'completed' | 'failed' | 'schedule';
+type NotifyEvent = 'approval' | 'completed' | 'failed' | 'schedule' | 'daily';
 interface NotificationView {
   configured: boolean;
   email: string | null;
   events: NotifyEvent[];
   enabled: boolean;
+  dailyHour?: number;
+  timezone?: string;
 }
 const EVENT_LABEL: Record<NotifyEvent, string> = {
   approval: 'Une validation m’attend',
   completed: 'Mission terminée',
   failed: 'Mission bloquée ou échouée',
   schedule: 'Mission récurrente lancée',
+  daily: 'Rapport du matin (missions, livrables, coût IA, validations)',
 };
 const errText = (e: unknown) => (e instanceof ApiFailure ? e.message : 'Erreur inattendue');
 
@@ -108,6 +111,7 @@ function NotificationsSettings({
   const [email, setEmail] = useState('');
   const [events, setEvents] = useState<NotifyEvent[]>(['approval', 'completed', 'failed']);
   const [enabled, setEnabled] = useState(true);
+  const [dailyHour, setDailyHour] = useState(8);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -118,6 +122,7 @@ function NotificationsSettings({
         setEmail(r.data.email ?? '');
         setEvents(r.data.events);
         setEnabled(r.data.configured ? r.data.enabled : true);
+        setDailyHour(r.data.dailyHour ?? 8);
       })
       .catch((e: unknown) => setError(errText(e)));
   }, []);
@@ -131,6 +136,8 @@ function NotificationsSettings({
         email: email.trim() || null,
         events,
         enabled,
+        dailyHour,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       setView(r.data);
       setUrl('');
@@ -218,6 +225,26 @@ function NotificationsSettings({
           </label>
         ))}
       </fieldset>
+      {events.includes('daily') && (
+        <label>
+          Heure du rapport du matin
+          <select
+            value={dailyHour}
+            onChange={(e) => setDailyHour(Number(e.target.value))}
+            data-testid="notify-daily-hour"
+          >
+            {Array.from({ length: 24 }, (_, h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, '0')} h 00
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <p className="muted small">
+        Les demandes de validation arrivent avec des boutons « ✅ Valider » et « ✖ Refuser » : un
+        appui suffit, sans ouvrir le cockpit.
+      </p>
       <label className="check">
         <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
         Notifications actives
@@ -237,6 +264,20 @@ function NotificationsSettings({
         </button>
         <button className="btn" disabled={busy || !view?.configured} onClick={() => void test()}>
           Envoyer un test
+        </button>
+        <button
+          className="btn"
+          disabled={busy || !view?.configured}
+          onClick={() => {
+            setBusy(true);
+            apiPost('/v1/notifications/daily')
+              .then(() => toast({ text: 'Rapport du matin envoyé', tone: 'success' }))
+              .catch((e: unknown) => setError(errText(e)))
+              .finally(() => setBusy(false));
+          }}
+          data-testid="notify-daily-now"
+        >
+          Recevoir le rapport maintenant
         </button>
       </div>
     </div>

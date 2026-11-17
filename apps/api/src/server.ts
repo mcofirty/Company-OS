@@ -41,6 +41,7 @@ const { app, relayOnce } = await buildApp({
   connectors: cfg.connectors,
   rateLimitPerMinute: env.RATE_LIMIT_PER_MIN,
   opsDir: env.OPS_DIR ?? null,
+  dailyReports: true,
   logger: true,
 });
 

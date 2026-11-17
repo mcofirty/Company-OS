@@ -5,7 +5,14 @@ import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { z } from 'zod';
 import type { ErrorCode } from '@company-os/contracts';
-import { DomainError, relayOutbox, type Db } from '@company-os/db';
+import {
+  dailyReport,
+  DomainError,
+  dueDailyReports,
+  markDailySent,
+  relayOutbox,
+  type Db,
+} from '@company-os/db';
 import { startSpan } from '@company-os/policies';
 import { registerAuth, type AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
@@ -44,6 +51,8 @@ export interface AppOptions {
   notifyFetch?: typeof fetch;
   /** Dossier d'échange avec l'agent hôte (sauvegardes, mises à jour) ; null en développement. */
   opsDir?: string | null;
+  /** Envoi du rapport du matin (serveur) ; désactivé dans les tests. */
+  dailyReports?: boolean;
   /** Requêtes /v1 par minute et par client (IP). Défaut 1200. */
   rateLimitPerMinute?: number;
 }
@@ -168,6 +177,7 @@ export async function buildApp(
     webOrigin:
       opts.webOrigin ?? (Array.isArray(opts.corsOrigin) ? opts.corsOrigin[0]! : opts.corsOrigin),
     log: (msg, extra) => app.log.warn({ ...extra }, msg),
+    ...(opts.connectors?.publicApiUrl ? { publicApiUrl: opts.connectors.publicApiUrl } : {}),
     ...(opts.notifyFetch ? { fetchImpl: opts.notifyFetch } : {}),
   });
   registerNotifications(
@@ -175,13 +185,33 @@ export async function buildApp(
     db,
     opts.connectors ?? { secretKey: null, allowPrivateNetwork: false },
     notifier,
+    opts.signalApproval,
   );
+  // Rapport du matin : vérifié chaque minute (un seul envoi par jour et par organisation).
+  const dailyTimer = opts.dailyReports
+    ? setInterval(() => {
+        void (async () => {
+          for (const orgId of await dueDailyReports(db)) {
+            try {
+              await markDailySent(db, orgId);
+              await notifier.send(orgId, await dailyReport(db, orgId));
+            } catch (err) {
+              app.log.warn(
+                { orgId, err: String(err).slice(0, 120) },
+                'rapport du matin non envoyé',
+              );
+            }
+          }
+        })().catch(() => undefined);
+      }, 60_000)
+    : null;
   const relayOnce = (): Promise<number> =>
     relayOutbox(db, (events) => {
       broadcast(io, events);
       notifier.handle(events); // non bloquant
     });
   app.addHook('onClose', async () => {
+    if (dailyTimer) clearInterval(dailyTimer);
     await new Promise<void>((resolve) => void io.close(() => resolve()));
   });
   return { app, io, relayOnce };

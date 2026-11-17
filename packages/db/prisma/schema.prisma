@@ -603,6 +603,10 @@ model NotificationSetting {
   /// Événements notifiés : approval, completed, failed, schedule
   events      String[]
   enabled     Boolean  @default(true)
+  /// Rapport du matin : heure locale d'envoi, fuseau, dernier envoi (un seul par jour).
+  dailyHour   Int      @default(8) @map("daily_hour")
+  timezone    String   @default("Europe/Paris")
+  lastDailyAt DateTime? @map("last_daily_at") @db.Timestamptz(3)
   updatedBy   String   @map("updated_by")
   updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
 
