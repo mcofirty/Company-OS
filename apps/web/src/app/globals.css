@@ -3682,3 +3682,29 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Barre de replay : sous les barres du haut, dans la zone du monde. */
+.cockpit.immersive .replay-bar {
+  top: calc(var(--gap) * 3 + 58px + 44px);
+  left: calc(var(--gap) * 2 + var(--rail-w));
+  right: calc(var(--side-w) + var(--gap) * 2);
+  border-radius: 12px;
+  z-index: 27;
+}
+.cockpit.immersive.is-replay .filter-bar {
+  display: none;
+}
+/* Sans carte graphique : pas de flou d'arrière-plan (coûteux), verre plus opaque. */
+[data-lowgpu] .cockpit.immersive .topbar,
+[data-lowgpu] .cockpit.immersive .rail,
+[data-lowgpu] .cockpit.immersive .side,
+[data-lowgpu] .cockpit.immersive .feed,
+[data-lowgpu] .cockpit.immersive .view-tabs,
+[data-lowgpu] .cockpit.immersive .app-bar,
+[data-lowgpu] .cockpit.immersive .glass-ui,
+[data-lowgpu] .cockpit.immersive .world-pane .filter-bar .chips,
+[data-lowgpu] .cockpit.immersive .agent-popover .agent-card,
+[data-lowgpu] .cockpit.immersive .page {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgba(var(--glass-rgb), max(0.9, var(--ga)));
+}

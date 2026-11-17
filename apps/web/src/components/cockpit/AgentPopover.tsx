@@ -77,8 +77,14 @@ export function AgentPopover({
             y = ay - h * 0.35;
           }
         }
-        x = Math.max(8, Math.min(x, paneR.width - CARD_W - 8));
-        y = Math.max(48, Math.min(y, paneR.height - h - 8));
+        // Zone libre : ne pas passer sous les panneaux flottants (équipe, barres du haut).
+        const side = pane.closest('.cockpit')?.querySelector('.side')?.getBoundingClientRect();
+        const bar = pane.querySelector('.view-bar .view-tabs')?.getBoundingClientRect();
+        const maxX = (side && side.width > 0 ? side.left - paneR.left : paneR.width) - CARD_W - 8;
+        const minY = bar && bar.height > 0 ? bar.bottom - paneR.top + 8 : 48;
+        if (p && x > maxX) x = canR.left - paneR.left + p.x - GAP - CARD_W;
+        x = Math.max(8, Math.min(x, maxX));
+        y = Math.max(minY, Math.min(y, paneR.height - h - 8));
         el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
         el.style.opacity = '1';
       }

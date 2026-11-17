@@ -141,6 +141,8 @@ export class StudioScene implements HqWorldView {
   private night = false;
   private reduced = false;
   private raf = 0;
+  private lowPower = false;
+  private lastRender = 0;
   private last = 0;
   private ro: ResizeObserver;
   private avatars = new Map<string, Avatar>();
@@ -178,13 +180,17 @@ export class StudioScene implements HqWorldView {
     private readonly cb: WorldCallbacks,
   ) {
     this.reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // Sans carte graphique (rendu logiciel) : mode économe, pour garder l'interface fluide.
+    this.lowPower = softwareRenderer();
+    // Signalé à l'interface : le verre dépoli (flou) est remplacé par un fond plus opaque.
+    if (this.lowPower) document.documentElement.dataset['lowgpu'] = '1';
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: !this.lowPower,
       powerPreference: 'high-performance',
     });
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.0;
-    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.enabled = !this.lowPower;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.canvas = this.renderer.domElement;
     this.canvas.className = 'studio-canvas';
@@ -978,7 +984,7 @@ export class StudioScene implements HqWorldView {
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
     if (!w || !h) return;
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(this.lowPower ? 0.75 : Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(w, h, false);
     this.cam.aspect = w / h;
     this.cam.updateProjectionMatrix();
@@ -1097,7 +1103,14 @@ export class StudioScene implements HqWorldView {
 
   // ------------------------------------------------------------------ animation
   private frame(t: number): void {
-    const dt = Math.min(0.05, (t - (this.last || t)) / 1000);
+    // Cadence plafonnée (≈30 img/s ; 8 en rendu logiciel) : le reste du temps va à l'interface.
+    const minGap = this.lowPower ? 125 : 30;
+    if (t - this.lastRender < minGap) {
+      this.raf = requestAnimationFrame((x) => this.frame(x));
+      return;
+    }
+    this.lastRender = t;
+    const dt = Math.min(this.lowPower ? 0.15 : 0.05, (t - (this.last || t)) / 1000);
     this.last = t;
     for (const av of this.avatars.values()) {
       this.step(av, dt);
@@ -1307,6 +1320,20 @@ export class StudioScene implements HqWorldView {
   }
   isWalking(id: string): boolean {
     return (this.avatars.get(id)?.path.length ?? 0) > 0;
+  }
+}
+
+/** Rendu WebGL logiciel (SwiftShader, llvmpipe…) : pas de carte graphique utilisable. */
+export function softwareRenderer(): boolean {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if (!gl) return true;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '';
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return /swiftshader|llvmpipe|software|softpipe/i.test(name);
+  } catch {
+    return false;
   }
 }
 
