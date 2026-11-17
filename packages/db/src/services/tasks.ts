@@ -476,8 +476,10 @@ export async function listRunningTasks(db: Db, orgId: string) {
 }
 
 /**
- * Annulation humaine d'une tâche EN FILE ou BLOQUÉE (une tâche en cours ou en attente de
- * validation suit son workflow ; elle n'est pas interrompue ici). Émet `task.cancelled`.
+ * Annulation humaine d'une tâche. En file ou bloquée : simple annulation. En cours ou en attente de
+ * validation : la mission est ARRÊTÉE — run clos, actions d'outil en attente rejetées, validations
+ * en attente rejetées, agent libéré ; le worker s'arrête à sa prochaine étape (il relit le statut)
+ * et sa clôture éventuelle est ignorée (transition refusée). Émet `task.cancelled`.
  */
 export async function cancelTaskInTx(
   ctx: OrgTxContext,
@@ -486,33 +488,110 @@ export async function cancelTaskInTx(
   const { tx, orgId, now } = ctx;
   const task = await tx.task.findFirst({ where: { id: input.taskId, orgId } });
   if (!task) throw new DomainError('NOT_FOUND', 'Tâche introuvable');
-  if (task.status !== 'queued' && task.status !== 'blocked') {
-    throw new DomainError(
-      'CONFLICT',
-      `Annulation possible seulement en file ou bloquée (statut : ${task.status})`,
-    );
+  const stoppable = ['queued', 'blocked', 'running', 'waiting_approval', 'created'];
+  if (!stoppable.includes(task.status)) {
+    throw new DomainError('CONFLICT', `Tâche déjà terminée (statut : ${task.status})`);
   }
   const reason = input.reason.trim().slice(0, 200);
+  const inFlight = task.status === 'running' || task.status === 'waiting_approval';
   const updated = await transitionTask(ctx, task.id, 'cancelled', {
     endedAt: now,
     resultSummary: `Annulée : ${reason}`,
   });
-  // Même règle que le réducteur client (activityAfterCancel).
+  if (inFlight) {
+    await tx.agentRun.updateMany({
+      where: { taskId: task.id, status: 'running' },
+      data: { status: 'cancelled', endedAt: now, failureCode: 'TASK_CANCELLED' },
+    });
+    // Actions d'outil non terminées : rejetées (rien ne s'exécutera après l'arrêt).
+    const invs = await tx.toolInvocation.findMany({
+      where: {
+        taskId: task.id,
+        status: { in: ['requested', 'authorized', 'running', 'waiting_approval'] },
+      },
+    });
+    for (const inv of invs) {
+      await tx.toolInvocation.update({
+        where: { id: inv.id },
+        data: { status: 'rejected', errorCode: 'TASK_CANCELLED', endedAt: now },
+      });
+      ctx.emit({
+        ...base,
+        type: 'tool.invocation.rejected',
+        aggregateType: 'tool_invocation',
+        aggregateId: inv.id,
+        aggregateVersion: 3,
+        correlationId: inv.correlationId,
+        causationId: null,
+        actor: input.actor,
+        provenance: inv.provenance,
+        payload: {
+          invocationId: inv.id,
+          toolId: inv.toolId,
+          agentId: inv.agentId,
+          taskId: task.id,
+          reasonCode: 'TASK_CANCELLED',
+        },
+      });
+    }
+    const approvals = await tx.approvalRequest.findMany({
+      where: { orgId, taskId: task.id, status: 'pending' },
+    });
+    for (const ap of approvals) {
+      await tx.approvalRequest.update({
+        where: { id: ap.id },
+        data: {
+          status: 'rejected',
+          reviewedAt: now,
+          reviewedBy: input.actor.id,
+          decisionReason: 'Mission arrêtée',
+          version: { increment: 1 },
+        },
+      });
+      ctx.emit({
+        ...base,
+        type: 'approval.decided',
+        aggregateType: 'approval',
+        aggregateId: ap.id,
+        aggregateVersion: ap.version + 1,
+        correlationId: task.correlationId,
+        causationId: null,
+        actor: input.actor,
+        provenance: task.provenance,
+        payload: {
+          approvalId: ap.id,
+          decision: 'rejected',
+          reviewerId: input.actor.id,
+          reason: 'Mission arrêtée',
+        },
+      });
+    }
+  }
+  // Même règle que le réducteur client.
   const agent = await tx.agent.findUniqueOrThrow({ where: { id: task.agentId } });
   const remaining = await tx.task.findMany({
     where: { orgId, agentId: task.agentId, status: { in: ['queued', 'blocked'] } },
     select: { agentId: true, status: true },
   });
-  const activity = activityAfterCancel(
-    agent.activity as AgentActivity,
-    remaining.map((t) => ({ agentId: t.agentId, status: t.status as TaskStatus })),
-    agent.id,
-  );
-  if (activity !== agent.activity) {
+  const rest = remaining.map((t) => ({ agentId: t.agentId, status: t.status as TaskStatus }));
+  if (agent.currentTaskId === task.id) {
     await tx.agent.update({
       where: { id: agent.id },
-      data: { activity, version: { increment: 1 } },
+      data: {
+        currentTaskId: null,
+        lastTaskEndedAt: now,
+        activity: agent.status === 'paused' ? 'paused' : activityAfterTask(rest, agent.id, false),
+        version: { increment: 1 },
+      },
     });
+  } else {
+    const activity = activityAfterCancel(agent.activity as AgentActivity, rest, agent.id);
+    if (activity !== agent.activity) {
+      await tx.agent.update({
+        where: { id: agent.id },
+        data: { activity, version: { increment: 1 } },
+      });
+    }
   }
   ctx.emit({
     ...base,

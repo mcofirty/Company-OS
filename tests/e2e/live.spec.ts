@@ -91,8 +91,9 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.getByTestId('inspector-title')).toHaveText(firstTitle);
   await expect(page.getByTestId('timeline')).toContainText('tâche annulée et relancée');
   // Annuler la nouvelle tâche bloquée (motif obligatoire) : statut « Annulée », agent libéré.
-  page.once('dialog', (d) => void d.accept('Abandon de la mission (e2e)'));
   await page.getByTestId('task-cancel').click();
+  await page.getByTestId('task-cancel-reason').fill('Abandon de la mission (e2e)');
+  await page.getByTestId('task-cancel-confirm').click();
   await expect(page.getByTestId('inspector')).toContainText('Annulée', { timeout: 15_000 });
   await expect(page.getByTestId('task-cancel')).toHaveCount(0);
   await expect(page.getByTestId('timeline')).toContainText('Abandon de la mission (e2e)');
@@ -101,8 +102,10 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await page.getByRole('button', { name: 'Afficher l’équipe' }).click();
   await page.getByTestId('team-list').getByText('Camille').click();
   await expect(page.getByTestId('inspector-title')).toHaveText('Camille');
-  page.once('dialog', (d) => void d.accept('Fin du test e2e'));
   await page.getByTestId('agent-delete').click();
+  await expect(page.getByTestId('agent-delete-confirm')).toBeDisabled(); // motif obligatoire
+  await page.getByTestId('agent-delete-reason').fill('Fin du test e2e');
+  await page.getByTestId('agent-delete-confirm').click();
   await expect(page.getByTestId('inspector')).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByTestId('live-empty')).toBeVisible();
   await expect(page.getByTestId('timeline')).toContainText('supprimé · Fin du test e2e');

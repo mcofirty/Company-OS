@@ -327,9 +327,17 @@ export function applyEvent(
         endedAt: at,
         resultSummary: `Annulée : ${p.reason}`,
       }));
-      w = patchAgent(w, p.agentId, (a) => ({
-        activity: activityAfterCancel(a.activity, w.tasks, p.agentId),
-      }));
+      w = patchAgent(w, p.agentId, (a) =>
+        a.currentTaskId === p.taskId
+          ? {
+              // Mission arrêtée en cours : l'agent est libéré (même règle côté serveur).
+              currentTaskId: null,
+              lastTaskEndedAt: at,
+              activity:
+                a.status === 'paused' ? 'paused' : activityAfterTask(w.tasks, p.agentId, false),
+            }
+          : { activity: activityAfterCancel(a.activity, w.tasks, p.agentId) },
+      );
       w = { ...w, tasks: trimTasks(w.tasks) };
       break;
     }

@@ -186,7 +186,7 @@ export async function assignToReport(
 
 /**
  * Suppression d'un agent par un administrateur humain (suppression logique : l'historique reste).
- * Refusée pendant une mission en cours. Tâches en file / bloquées : annulées. Subordonnés :
+ * Mission en cours : arrêtée (le worker s'arrête à sa prochaine étape). Tâches ouvertes : annulées. Subordonnés :
  * rattachés au manager de l'agent (ou à l'administrateur). Droits retirés, poste libéré,
  * propositions de recrutement en attente rejetées.
  */
@@ -201,18 +201,13 @@ export async function deleteAgent(
     });
     if (!agent) throw new DomainError('NOT_FOUND', 'Agent introuvable');
     const reason = input.reason.trim().slice(0, 200) || 'Suppression par un administrateur';
-    const busy = await tx.task.count({
-      where: { orgId, agentId: agent.id, status: { in: ['running', 'waiting_approval'] } },
-    });
-    if (busy > 0) {
-      throw new DomainError(
-        'CONFLICT',
-        `${agent.name} est en pleine mission : attendre la fin (ou décider la validation en attente) avant de le supprimer`,
-      );
-    }
     const actor = { kind: 'user' as const, id: input.actorId };
     const open = await tx.task.findMany({
-      where: { orgId, agentId: agent.id, status: { in: ['queued', 'blocked'] } },
+      where: {
+        orgId,
+        agentId: agent.id,
+        status: { in: ['created', 'queued', 'blocked', 'running', 'waiting_approval'] },
+      },
       select: { id: true },
     });
     for (const t of open) {
@@ -249,7 +244,7 @@ export async function deleteAgent(
         data: {
           status: 'rejected',
           reviewedAt: ctx.now,
-          reviewedBy: `user:${input.actorId}`,
+          reviewedBy: input.actorId,
           decisionReason: 'Demandeur supprimé',
           version: { increment: 1 },
         },

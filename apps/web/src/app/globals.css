@@ -1993,3 +1993,19 @@ kbd {
   align-items: center;
   font-size: 12.5px;
 }
+.confirm-box {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 6%, var(--surface));
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.confirm-box p {
+  margin: 0;
+  font-size: 12.5px;
+}
+.confirm-box input {
+  width: 100%;
+}

@@ -1,14 +1,7 @@
 import type { WorldSnapshot } from '@company-os/contracts';
 import { randomUUID } from 'node:crypto';
 import { instructionsFor, PROMPT_VERSION } from '@company-os/agents';
-import {
-  createAgent,
-  createDb,
-  DEMO_ORG,
-  listEventsAfter,
-  seedDemo,
-  type Db,
-} from '@company-os/db';
+import { createAgent, createDb, listEventsAfter, seedDemo, type Db } from '@company-os/db';
 import { applyEvents } from '@company-os/world';
 
 export function testDb(): Db {
@@ -50,7 +43,7 @@ export function emptySnapshot(base: WorldSnapshot): WorldSnapshot {
 
 /** Projection client (fold du journal) à comparer au snapshot serveur. */
 export async function foldAll(db: Db, base: WorldSnapshot): Promise<WorldSnapshot> {
-  const events = await listEventsAfter(db, DEMO_ORG.id, 0, 10_000);
+  const events = await listEventsAfter(db, base.org.id, 0, 10_000);
   return applyEvents(emptySnapshot(base), events);
 }
 

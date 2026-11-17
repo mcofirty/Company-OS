@@ -17,7 +17,12 @@ export type ModelStepResult =
   | { kind: 'ok'; response: LlmResponse; costMicros: number }
   | {
       kind: 'denied';
-      code: 'BUDGET_EXCEEDED' | 'KILL_SWITCH' | 'PROVIDER_ERROR' | 'PROVIDER_UNAVAILABLE';
+      code:
+        | 'BUDGET_EXCEEDED'
+        | 'KILL_SWITCH'
+        | 'PROVIDER_ERROR'
+        | 'PROVIDER_UNAVAILABLE'
+        | 'TASK_CANCELLED';
       message: string;
     };
 

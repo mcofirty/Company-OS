@@ -12,7 +12,10 @@ import {
   proposeSubordinate,
 } from '@company-os/db';
 import { ToolGateway } from '@company-os/tools';
-import { resetAndSeed, testDb } from '../../../tests/setup/helpers';
+import { comparable, foldAll, resetAndSeed, testDb } from '../../../tests/setup/helpers';
+import { MockProvider } from '@company-os/agents';
+import { loadPricing } from '@company-os/policies';
+import { createActivities } from './activities';
 
 const db = testDb();
 const admin = { kind: 'user', id: DEV_ADMIN.id } as const;
@@ -177,7 +180,7 @@ describe('Équipe d’un manager (live)', () => {
     expect(events).toHaveLength(3); // Léo rattaché, Léo promu, Zoé rattachée
   });
 
-  it('suppression : équipe rattachée, tâches en attente annulées, refus en pleine mission', async () => {
+  it('suppression : équipe rattachée, tâches en attente annulées, recrutements rejetés', async () => {
     const { agentId: boss } = await hire('Iris', 'manager', {});
     const { agentId: mgr } = await hire('Inès', 'manager', { company: ['status'] });
     const { agentId: sub } = await hire('Hugo', 'specialist', {});
@@ -195,14 +198,6 @@ describe('Équipe d’un manager (live)', () => {
       managerId: mgr,
       role: 'specialist',
     });
-    // Mission en cours : suppression refusée.
-    const runId = await runOf(mgr);
-    await expect(
-      deleteAgent(db, { orgId, actorId: DEV_ADMIN.id, agentId: mgr, reason: 'Réorganisation' }),
-    ).rejects.toThrow(/pleine mission/);
-    await db.agentRun.update({ where: { id: runId }, data: { status: 'succeeded' } });
-    await db.task.updateMany({ where: { orgId, agentId: mgr }, data: { status: 'succeeded' } });
-    await db.agent.update({ where: { id: mgr }, data: { currentTaskId: null, activity: 'idle' } });
     // Une tâche en file et une proposition de recrutement en attente.
     await createTask(db, {
       orgId,
@@ -239,12 +234,61 @@ describe('Équipe d’un manager (live)', () => {
       (await db.approvalRequest.findFirstOrThrow({ where: { orgId, agentId: mgr } })).status,
     ).toBe('rejected');
     // L'historique reste ; l'agent disparaît du QG ; snapshot = rejeu du journal.
-    expect(await db.task.count({ where: { orgId, agentId: mgr } })).toBe(2);
+    expect(await db.task.count({ where: { orgId, agentId: mgr } })).toBe(1); // historique conservé
     const snap = (await loadSnapshot(db, orgId))!;
     expect(snap.agents.map((a) => a.id)).not.toContain(mgr);
     expect(snap.agents.find((a) => a.id === sub)?.managerId).toBe(boss);
     await expect(
       deleteAgent(db, { orgId, actorId: DEV_ADMIN.id, agentId: mgr, reason: 'Encore' }),
     ).rejects.toThrow(/introuvable/);
+  });
+
+  it('suppression en pleine mission : mission arrêtée, l’agent ne fait plus rien', async () => {
+    const { agentId } = await hire('Inès', 'manager', { company: ['status'] });
+    const runId = await runOf(agentId);
+    const acts = createActivities({
+      db,
+      gateway,
+      pricing: loadPricing(),
+      liveProvider: new MockProvider([() => ({ content: [] })]),
+    });
+    const r = await deleteAgent(db, {
+      orgId,
+      actorId: DEV_ADMIN.id,
+      agentId,
+      reason: 'Erreur de création',
+    });
+    expect(r.cancelledTasks).toBe(1);
+    const task = await db.task.findFirstOrThrow({ where: { orgId, agentId } });
+    expect(task.status).toBe('cancelled');
+    expect((await db.agentRun.findUniqueOrThrow({ where: { id: runId } })).status).toBe(
+      'cancelled',
+    );
+    // Le worker relit l'état : plus aucun appel au modèle ni aux outils.
+    expect(await acts.modelStep({ runId, step: 1, messages: [] })).toMatchObject({
+      kind: 'denied',
+      code: 'TASK_CANCELLED',
+    });
+    expect(
+      await acts.toolStep({
+        runId,
+        step: 1,
+        toolUseId: 't1',
+        name: 'company__status',
+        input: { focus: 'tout' },
+        causationId: null,
+      }),
+    ).toMatchObject({ isError: true });
+    expect(await db.toolInvocation.count({ where: { taskId: task.id } })).toBe(0);
+    // Clôture tardive du workflow ignorée ; snapshot serveur = rejeu du journal.
+    expect(
+      await acts.finishRun({
+        runId,
+        outcome: { status: 'succeeded', result: { summary: 'x' } } as never,
+      }),
+    ).toEqual({ status: 'cancelled' });
+    const snap = (await loadSnapshot(db, orgId))!;
+    expect(snap.agents).toHaveLength(0);
+    expect(comparable(await foldAll(db, snap))).toEqual(comparable(snap));
   });
 });

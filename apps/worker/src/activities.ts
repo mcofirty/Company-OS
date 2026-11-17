@@ -77,6 +77,10 @@ export function createActivities(deps: ActivityDeps) {
     const ctx = await loadRunContext(db, input.runId);
     if (ctx.org.killSwitch)
       return { kind: 'denied', code: 'KILL_SWITCH', message: 'Système en pause (kill switch).' };
+    // Mission arrêtée par un humain (ou agent supprimé) : aucun nouvel appel au modèle.
+    if (ctx.task.status === 'cancelled' || ctx.agent.deletedAt) {
+      return { kind: 'denied', code: 'TASK_CANCELLED', message: 'Mission arrêtée par un humain.' };
+    }
     const provider = providerFor(ctx.org.mode);
     if (!provider) {
       return {
@@ -250,6 +254,13 @@ export function createActivities(deps: ActivityDeps) {
       approvalId?: string;
     }): Promise<ToolStepResult> {
       const ctx = await loadRunContext(db, input.runId);
+      if (ctx.task.status === 'cancelled' || ctx.agent.deletedAt) {
+        return {
+          content: 'Mission arrêtée par un humain : aucune action supplémentaire.',
+          isError: true,
+          lastEventId: null,
+        };
+      }
       const parsed = parseToolName(input.name);
       const raw =
         input.input && typeof input.input === 'object' && !Array.isArray(input.input)

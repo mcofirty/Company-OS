@@ -371,6 +371,14 @@ export function Cockpit() {
                   <span className="muted">
                     {world?.agents.length ?? 0} agents · cliquez pour inspecter
                   </span>
+                  <button
+                    className="btn small-btn"
+                    onClick={() => setOrgOpen(true)}
+                    disabled={!world}
+                    data-testid="team-orgchart"
+                  >
+                    ⑂ Organigramme
+                  </button>
                   {controls.caps.createAgent && (
                     <button
                       className="btn small-btn"

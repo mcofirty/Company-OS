@@ -87,7 +87,7 @@ describe('Annulation et relance de tâches', () => {
     expect(comparable(await foldAll(db, snap))).toEqual(comparable(snap));
   });
 
-  it('une tâche en cours ne s’annule pas ici (le workflow suit son cours)', async () => {
+  it('une tâche en cours peut être ARRÊTÉE : agent libéré, terminée = non annulable', async () => {
     const { task } = await createTask(db, {
       orgId: org,
       kind: 'qualify_lead',
@@ -95,9 +95,20 @@ describe('Annulation et relance de tâches', () => {
       requester: admin,
     });
     await startNextTask(db, org);
-    expect((await post(`/v1/tasks/${task.id}/cancel`, { reason: 'Stop' })).json().error.code).toBe(
-      'CONFLICT',
-    );
+    const r = await post(`/v1/tasks/${task.id}/cancel`, { reason: 'Mission bloquée' });
+    expect(r.statusCode).toBe(200);
+    expect(await db.agentRun.findFirstOrThrow({ where: { taskId: task.id } })).toMatchObject({
+      status: 'cancelled',
+    });
+    const agent = await db.agent.findUniqueOrThrow({ where: { id: 'sdr-01' } });
+    expect(agent.currentTaskId).toBeNull();
+    const snap = (await loadSnapshot(db, org))!;
+    expect(snap.agents.find((a) => a.id === 'sdr-01')).toMatchObject({ currentTaskId: null });
+    expect(comparable(await foldAll(db, snap))).toEqual(comparable(snap));
+    // Déjà terminée : refus.
+    expect(
+      (await post(`/v1/tasks/${task.id}/cancel`, { reason: 'Encore' })).json().error.code,
+    ).toBe('CONFLICT');
   });
 
   it('relancer une tâche bloquée : nouvelle tâche identique, ancienne annulée et reliée', async () => {

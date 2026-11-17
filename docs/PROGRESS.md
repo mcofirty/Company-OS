@@ -3,6 +3,20 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-17 (15) — Arrêt des missions en cours, suppression fiable
+
+### Réalisé
+- Correctif : la suppression était refusée dès qu'une mission était « en cours » (y compris une mission
+  restée bloquée dans cet état) et la confirmation reposait sur une fenêtre native (bloquable, erreur
+  hors écran). Désormais : une mission en cours ou en attente de validation peut être ARRÊTÉE
+  (run clos, actions et validations en attente rejetées, agent libéré) ; le worker relit l'état et
+  s'arrête à l'étape suivante ; la suppression arrête la mission si besoin.
+- Confirmations dans la page (motif obligatoire, erreur affichée sur place) : « ■ Arrêter la mission »,
+  « ⊘ Annuler », « 🗑 Supprimer l'agent ». Bouton « ⑂ Organigramme » ajouté dans le panneau Équipe.
+
+### Tests (exécutés le 2026-11-17)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 151/151. `pnpm e2e` : 24/24.
+
 ## Session 2026-11-17 (14) — Suppression d'agents
 
 ### Réalisé

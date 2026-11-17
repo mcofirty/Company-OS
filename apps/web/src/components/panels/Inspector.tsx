@@ -28,7 +28,7 @@ import {
 import type { Selection } from '../../world/HqScene';
 import { useControls } from '../../lib/controls';
 import type { MetricsSummary } from '../../lib/useMetrics';
-import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
+import { Badge, ConfirmAction, Empty, Provenance, Section, ToolIcon } from '../common';
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 import { TaskDocuments } from './Documents';
 import type { AgentProfile } from './AgentCard';
@@ -128,7 +128,6 @@ function AgentInspector({
   const [grantsVersion, setGrantsVersion] = useState(0);
   const [editGrants, setEditGrants] = useState<Record<string, string[]> | null>(null);
   const [grantsError, setGrantsError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const remote = useRemote<{
     grants: { toolId: string; actions: string[] }[];
     profile: AgentProfile;
@@ -369,37 +368,22 @@ function AgentInspector({
       )}
       {caps.deleteAgent && (
         <div className="actions row lifecycle">
-          <button
-            className="btn danger"
-            disabled={busy}
-            data-testid="agent-delete"
-            onClick={() => {
-              const reason = window.prompt(
-                `Supprimer ${agent.name} ? Il quitte le QG et l’organigramme ; ses tâches en attente sont annulées, son équipe est rattachée à son manager. L’historique reste consultable.\n\nMotif :`,
-              );
-              if (!reason || reason.trim().length < 3) return;
-              setBusy(true);
-              setDeleteError(null);
-              api(`/v1/agents/${agent.id}/delete`, {
+          <ConfirmAction
+            label="🗑 Supprimer l’agent"
+            confirmLabel="Supprimer définitivement"
+            question={`Supprimer ${agent.name} ? ${agent.currentTaskId ? 'Sa mission en cours est arrêtée. ' : ''}Il quitte le QG et l’organigramme ; ses tâches en attente sont annulées et son équipe est rattachée à son manager. L’historique reste consultable.`}
+            placeholder="Motif (ex. poste supprimé)"
+            testId="agent-delete"
+            onConfirm={async (reason) => {
+              await api(`/v1/agents/${agent.id}/delete`, {
                 method: 'POST',
                 headers: { 'idempotency-key': crypto.randomUUID() },
-                body: JSON.stringify({ reason: reason.trim() }),
-              })
-                .then(() => onSelect(null))
-                .catch((e: unknown) =>
-                  setDeleteError(e instanceof ApiFailure ? e.message : 'Erreur inattendue'),
-                )
-                .finally(() => setBusy(false));
+                body: JSON.stringify({ reason }),
+              });
+              onSelect(null);
             }}
-          >
-            🗑 Supprimer l’agent
-          </button>
+          />
         </div>
-      )}
-      {deleteError && (
-        <p className="form-error" role="alert" data-testid="agent-delete-error">
-          {deleteError}
-        </p>
       )}
       <p className="hint">
         Index visuel #{index + 1} · les déplacements sont une projection locale, sans effet métier.
@@ -553,7 +537,7 @@ function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props
         </p>
       )}
       {caps.createTask &&
-        (task.status === 'blocked' || task.status === 'failed' || task.status === 'queued') && (
+        ['blocked', 'failed', 'queued', 'running', 'waiting_approval'].includes(task.status) && (
           <div className="actions row">
             {(task.status === 'blocked' || task.status === 'failed') && (
               <button
@@ -569,22 +553,23 @@ function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props
                 ↻ Relancer
               </button>
             )}
-            {(task.status === 'blocked' || task.status === 'queued') && (
-              <button
-                className="btn danger"
-                disabled={busy}
-                data-testid="task-cancel"
-                onClick={() => {
-                  const reason = window.prompt(
-                    'Motif de l’annulation (conservé dans le journal) :',
-                  );
-                  if (!reason || reason.trim().length < 3) return;
-                  setBusy(true);
-                  void onCancelTask(task.id, reason.trim()).finally(() => setBusy(false));
-                }}
-              >
-                ⊘ Annuler
-              </button>
+            {['blocked', 'queued', 'running', 'waiting_approval'].includes(task.status) && (
+              <ConfirmAction
+                label={
+                  task.status === 'running' || task.status === 'waiting_approval'
+                    ? '■ Arrêter la mission'
+                    : '⊘ Annuler'
+                }
+                confirmLabel="Confirmer"
+                question={
+                  task.status === 'running' || task.status === 'waiting_approval'
+                    ? 'Arrêter la mission en cours ? L’agent s’arrête à sa prochaine étape ; les actions en attente sont rejetées.'
+                    : 'Annuler cette tâche ?'
+                }
+                placeholder="Motif (conservé dans le journal)"
+                testId="task-cancel"
+                onConfirm={(reason) => onCancelTask(task.id, reason)}
+              />
             )}
           </div>
         )}

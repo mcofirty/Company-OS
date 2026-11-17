@@ -259,5 +259,5 @@ jamais livré sur ce serveur.
 
 ADR-055 — **Suppression d'agent = suppression logique, décidée par un humain.** `deletedAt` + événement
 `agent.deleted` : l'agent quitte le QG, les listes et l'organigramme ; tâches, invocations et journal
-restent consultables (audit). Refusée pendant une mission en cours ; tâches en file/bloquées annulées ;
+restent consultables (audit). Une mission en cours est arrêtée (révisé le 2026-11-17) ; tâches ouvertes annulées ;
 subordonnés rattachés à son manager ; droits retirés ; ses recrutements en attente rejetés.
