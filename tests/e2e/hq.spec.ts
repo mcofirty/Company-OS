@@ -306,13 +306,13 @@ test('validation d’un envoi d’email : en attente, puis approuvé depuis l’
   expect(d.invocations.map((i) => i.status)).toEqual(['succeeded']);
 });
 
-test('M4 — recherche Ctrl+K : trouver un agent et ouvrir son inspecteur', async ({ page }) => {
+test('M4 — recherche Ctrl+K : trouver un agent et ouvrir sa fiche', async ({ page }) => {
   await open(page);
   await page.keyboard.press('Control+k');
   await page.getByTestId('search-input').fill('sdr');
   await expect(page.getByTestId('search-result').first()).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('inspector')).toBeVisible();
+  await expect(page.getByTestId('agent-popover')).toBeVisible();
 });
 
 test('M4 — filtre département : avatars estompés, liste et outils filtrés', async ({ page }) => {
