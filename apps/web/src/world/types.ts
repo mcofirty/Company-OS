@@ -39,6 +39,10 @@ export interface HqWorldView {
   /** Options propres au rendu 3D (sans effet en 2D). */
   setView?(v: CameraView): void;
   setNight?(on: boolean): void;
+  /** « eco » : rendu seulement quand quelque chose bouge, ~8 img/s ; « fluide » : ~30 img/s. */
+  setMotion?(m: 'eco' | 'fluide'): void;
+  /** Rendu suspendu (onglet Bureau masqué par une page) : aucune charge. */
+  setPaused?(p: boolean): void;
   /** Marges occupées par l'interface flottante, en px : le cadrage les évite. */
   setInsets?(i: { top: number; right: number; bottom: number; left: number }): void;
 }

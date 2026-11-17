@@ -58,8 +58,9 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.locator('[data-testid^="grant-crm-"]')).toHaveCount(0);
   await expect(page.locator('[data-testid^="grant-erp-issue_invoice"]')).toHaveCount(0);
   await page.getByTestId('agent-submit').click();
-  await expect(page.getByTestId('inspector-title')).toHaveText('Camille', { timeout: 15_000 });
-  await expect(page.getByTestId('team-list')).toHaveCount(0); // l'inspecteur remplace la liste
+  await expect(page.getByTestId('agent-card-name')).toHaveText('Camille', { timeout: 15_000 });
+  // La fiche s'ouvre à côté de l'avatar ; l'équipe reste visible à droite.
+  await expect(page.getByTestId('team-list')).toBeVisible();
   // Fiche agent : pôle, compétences, outils accordés, tâches habituelles, actions.
   const card = page.getByTestId('agent-card');
   await expect(card).toContainText('Operations');
@@ -101,12 +102,13 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   // Suppression de l'agent (admin) : il quitte le QG et la liste ; l'historique reste.
   await page.keyboard.press('Escape'); // retour à la liste de l'équipe
   await page.getByTestId('team-list').getByText('Camille').click();
-  await expect(page.getByTestId('inspector-title')).toHaveText('Camille');
+  await expect(page.getByTestId('agent-card-name')).toHaveText('Camille');
+  await page.getByTestId('popover-tab-work').click();
   await page.getByTestId('agent-delete').click();
   await expect(page.getByTestId('agent-delete-confirm')).toBeDisabled(); // motif obligatoire
   await page.getByTestId('agent-delete-reason').fill('Fin du test e2e');
   await page.getByTestId('agent-delete-confirm').click();
-  await expect(page.getByTestId('inspector')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByTestId('agent-popover')).toHaveCount(0, { timeout: 15_000 });
   await expect(page.getByTestId('live-empty')).toBeVisible();
   await expect(page.getByTestId('timeline')).toContainText('supprimé · Fin du test e2e');
 

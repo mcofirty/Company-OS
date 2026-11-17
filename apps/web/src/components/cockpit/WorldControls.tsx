@@ -60,6 +60,17 @@ export function WorldControls({
           {prefs.night ? '☀️ Jour' : '🌙 Nuit'}
         </button>
       )}
+      {is3d && (
+        <button
+          className="wc-btn"
+          aria-pressed={prefs.motion === 'eco'}
+          onClick={() => onPrefs({ motion: prefs.motion === 'eco' ? 'fluide' : 'eco' })}
+          title="Économie : l’image n’est recalculée que quand quelque chose bouge (moins de charge pour l’ordinateur)"
+          data-testid="toggle-eco"
+        >
+          {prefs.motion === 'eco' ? '🍃 Éco' : '⚡ Fluide'}
+        </button>
+      )}
       {!uiHidden && (
         <>
           <span className="wc-sep" aria-hidden />

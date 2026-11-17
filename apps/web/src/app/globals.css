@@ -3718,3 +3718,38 @@ kbd {
 .studio-labels [hidden] {
   display: none !important;
 }
+/* Fiche flottante : onglets Fiche / Travail & réglages (inspecteur de l'agent intégré). */
+.popover-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 48px 0 10px;
+}
+.popover-tabs button {
+  border: 0;
+  background: rgba(var(--glass-rgb, 255, 255, 255), 0.5);
+  color: var(--ink-soft);
+  font-weight: 650;
+  font-size: 12.5px;
+  padding: 6px 12px;
+  border-radius: 9px 9px 0 0;
+}
+.popover-tabs button[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--ink);
+}
+.agent-popover .inspector {
+  margin: 0;
+  border-radius: 14px;
+  max-height: none;
+}
+.agent-popover .inspector > .close {
+  display: none;
+}
+.cockpit.immersive .agent-popover {
+  background: rgba(var(--glass-rgb), max(0.92, var(--ga)));
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
+}
+.cockpit.immersive .agent-popover .agent-card {
+  border-radius: 0 0 18px 18px;
+}

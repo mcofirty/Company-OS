@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TaskKind } from '@company-os/contracts';
 import { ApiFailure, getBackend, setOrg } from '../lib/api';
 import { ControlsContext, controlsFrom } from '../lib/controls';
@@ -115,7 +115,11 @@ export function Cockpit() {
   // Les KPI serveur décrivent le présent : masqués pendant un replay pour ne pas mélanger les époques.
   const metrics = replay.active ? null : liveMetrics;
 
-  const select = useCallback((s: Selection | null) => setSelection(s), []);
+  // La fiche d'un agent s'ouvre toujours à côté de son avatar, dans le bureau.
+  const select = useCallback((s: Selection | null) => {
+    setSelection(s);
+    if (s?.kind === 'agent') setView('office');
+  }, []);
   // Équipe : agents en activité ; les anciens (désactivés) sont masqués par défaut.
   const activeAgents = (world?.agents ?? []).filter((a) => a.status !== 'deactivated');
   const formerAgents = (world?.agents ?? []).filter((a) => a.status === 'deactivated');
@@ -146,6 +150,9 @@ export function Cockpit() {
   useEffect(() => scene.current?.setLinksMode(links), [links, sceneReady]);
   useEffect(() => scene.current?.setNight?.(display.night), [display.night, sceneReady]);
   useEffect(() => scene.current?.setView?.(camView), [camView, sceneReady]);
+  useEffect(() => scene.current?.setMotion?.(display.motion), [display.motion, sceneReady]);
+  // Une page (Missions, Livrables…) recouvre le bureau : rendu 3D suspendu.
+  useEffect(() => scene.current?.setPaused?.(view !== 'office'), [view, sceneReady]);
   const hasWorld = world !== null;
   // Zone libre entre les panneaux flottants : le cadrage du QG l'utilise.
   useEffect(() => {
@@ -243,6 +250,40 @@ export function Cockpit() {
     },
     [hq, fail],
   );
+
+  /** Inspecteur d'un élément ; pour un agent, il est rendu dans la fiche flottante. */
+  const inspectorFor = (sel: Selection): ReactNode =>
+    world ? (
+      <Inspector
+        world={world}
+        selection={sel}
+        now={now}
+        metrics={metrics}
+        onSelect={select}
+        onCreateTask={onCreateTask}
+        onFocus={(id) => scene.current?.focusAgent(id)}
+        onDecide={onDecide}
+        onLifecycle={onLifecycle}
+        onMission={(agentId) => setMissionFor(agentId)}
+        onCancelTask={async (taskId, reason) => {
+          try {
+            await hq.cancelTask(taskId, reason);
+            toast({ text: 'Tâche annulée', tone: 'success' });
+          } catch (err) {
+            fail(err);
+          }
+        }}
+        onRetryTask={async (taskId) => {
+          try {
+            const task = await hq.retryTask(taskId);
+            toast({ text: `Relancée : ${task.title}`, tone: 'success' });
+            setSelection({ kind: 'task', id: task.id });
+          } catch (err) {
+            fail(err);
+          }
+        }}
+      />
+    ) : null;
 
   return (
     <ControlsContext.Provider value={controls}>
@@ -560,7 +601,7 @@ export function Cockpit() {
               toast={toast}
             />
           )}
-          {world && view === 'office' && selection?.kind === 'agent' && (
+          {world && view === 'office' && selection?.kind === 'agent' && !uiHidden && (
             <AgentPopover
               key={selection.id}
               world={world}
@@ -571,6 +612,7 @@ export function Cockpit() {
               onMission={(agentId) => setMissionFor(agentId)}
               onSelect={select}
               onClose={() => setSelection(null)}
+              details={inspectorFor(selection)}
             />
           )}
           <div className="legend" aria-hidden>
@@ -581,38 +623,12 @@ export function Cockpit() {
           </div>
         </main>
         <aside className="side">
-          {world && !selection && <ApprovalsInbox world={world} now={now} onSelect={select} />}
+          {world && (!selection || selection.kind === 'agent') && (
+            <ApprovalsInbox world={world} now={now} onSelect={select} />
+          )}
           <div className="side-top">
-            {world && selection ? (
-              <Inspector
-                world={world}
-                selection={selection}
-                now={now}
-                metrics={metrics}
-                onSelect={select}
-                onCreateTask={onCreateTask}
-                onFocus={(id) => scene.current?.focusAgent(id)}
-                onDecide={onDecide}
-                onLifecycle={onLifecycle}
-                onMission={(agentId) => setMissionFor(agentId)}
-                onCancelTask={async (taskId, reason) => {
-                  try {
-                    await hq.cancelTask(taskId, reason);
-                    toast({ text: 'Tâche annulée', tone: 'success' });
-                  } catch (err) {
-                    fail(err);
-                  }
-                }}
-                onRetryTask={async (taskId) => {
-                  try {
-                    const task = await hq.retryTask(taskId);
-                    toast({ text: `Relancée : ${task.title}`, tone: 'success' });
-                    setSelection({ kind: 'task', id: task.id });
-                  } catch (err) {
-                    fail(err);
-                  }
-                }}
-              />
+            {world && selection && selection.kind !== 'agent' ? (
+              inspectorFor(selection)
             ) : (
               <section className="panel" aria-label="Équipe">
                 <header className="panel-head">

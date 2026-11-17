@@ -45,6 +45,7 @@ test('Cockpit v2 — gérer un agent, planifier, suite, pages et réglages', asy
 
   // Gérer l'agent : nouvelle version (consignes + modèle économique) et budget.
   await page.getByTestId('team-list').getByText('Iris').click();
+  await page.getByTestId('popover-tab-work').click();
   await page.getByTestId('agent-edit-version').click();
   await page
     .getByTestId('version-instructions')

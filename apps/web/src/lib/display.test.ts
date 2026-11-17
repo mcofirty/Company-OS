@@ -12,6 +12,7 @@ describe('préférences d’affichage', () => {
       renderer: '2d',
       glass: 0.95,
       night: true,
+      motion: 'eco',
     });
     expect(parseDisplay('{"glass":0}').glass).toBe(0.3);
   });

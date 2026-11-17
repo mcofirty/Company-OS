@@ -66,7 +66,7 @@ test('S01 — premier affichage : carte, départements, 12 agents, outils, KPI, 
   expect(rendered).toBe(true);
 });
 
-test('clic sur un avatar dans la carte -> inspecteur agent', async ({ page }) => {
+test('clic sur un avatar dans la carte -> fiche à côté de l’avatar', async ({ page }) => {
   await open(page);
   const canvas = page.getByTestId('world-canvas').locator('canvas');
   const box = (await canvas.boundingBox())!;
@@ -74,12 +74,16 @@ test('clic sur un avatar dans la carte -> inspecteur agent', async ({ page }) =>
     const pos = await page.evaluate(() => window.__hqScene?.agentScreenPosition('billing-01'));
     if (!pos) throw new Error('avatar absent');
     await page.mouse.click(box.x + pos.x, box.y + pos.y);
-    await expect(page.getByTestId('inspector-title')).toHaveText('Mei', { timeout: 1500 });
+    await expect(page.getByTestId('agent-card-name')).toHaveText('Mei', { timeout: 1500 });
   }).toPass({ timeout: 20_000 });
-  await expect(page.getByTestId('inspector')).toContainText('Facturation');
-  await expect(page.getByTestId('inspector')).toContainText('DEMO');
+  const pop = page.getByTestId('agent-popover');
+  await expect(pop).toContainText('Facturation');
+  // La fiche n'est jamais dupliquée dans le panneau de droite.
+  await expect(page.locator('.side [data-testid="inspector"]')).toHaveCount(0);
+  await pop.getByTestId('popover-tab-work').click();
+  await expect(pop.getByTestId('inspector')).toContainText('DEMO');
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('inspector')).toHaveCount(0);
+  await expect(pop).toHaveCount(0);
 });
 
 test('S02 — cycle complet : tâche -> CRM -> succès, timeline/KPI, refresh sans perte', async ({
@@ -376,6 +380,7 @@ test('M4 — suspendre puis reprendre un agent ; alerte acquittée', async ({ pa
   await open(page);
   page.on('dialog', (d) => void d.accept('Contrôle e2e M4'));
   await page.getByTestId('team-list').locator('li', { hasText: 'Nora' }).first().click();
+  await page.getByTestId('popover-tab-work').click();
   await expect(page.getByTestId('agent-pause')).toBeVisible();
   await page.getByTestId('agent-pause').click();
   await expect(page.getByTestId('agent-resume')).toBeVisible();

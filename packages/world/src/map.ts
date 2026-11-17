@@ -23,7 +23,12 @@ export type FurnitureKind =
   | 'pingpong'
   | 'beanbag'
   | 'armchair'
-  | 'round_table';
+  | 'round_table'
+  | 'foosball'
+  | 'arcade'
+  | 'bleacher'
+  | 'bike_rack'
+  | 'fridge';
 
 export interface Tile {
   x: number;
@@ -193,11 +198,11 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 
 /** Décor des atriums (hors locaux) : chaque tuile listée bloque le passage. */
 const ATRIUM: [FurnitureKind, number, number][] = [
-  // Atrium nord (y 8-11) : cabines, jardinière, mange-debout, grand arbre.
+  // Atrium nord (y 8-11) : cabines, baby-foot, mange-debout, grand arbre.
   ['booth', 2, 9],
   ['booth', 3, 9],
-  ['plant', 7, 9],
-  ['plant', 8, 9],
+  ['foosball', 7, 9],
+  ['foosball', 8, 9],
   ['high_table', 16, 9],
   ['high_table', 17, 9],
   ['high_table', 18, 9],
@@ -208,16 +213,22 @@ const ATRIUM: [FurnitureKind, number, number][] = [
   ['plant', 0, 8],
   ['plant', 35, 8],
   ['plant', 22, 10],
-  // Atrium sud (y 19-21) : ping-pong, poufs, cabine, plantes.
+  // Atrium sud (y 19-21) : ping-pong, gradins « town hall », cabine, plantes.
   ['pingpong', 7, 20],
   ['pingpong', 8, 20],
-  ['beanbag', 15, 20],
-  ['beanbag', 17, 20],
+  ['bleacher', 15, 20],
+  ['bleacher', 16, 20],
+  ['bleacher', 17, 20],
+  ['bleacher', 18, 20],
+  ['bleacher', 19, 20],
+  ['bleacher', 20, 20],
   ['booth', 32, 20],
   ['plant', 0, 20],
   ['plant', 35, 20],
   ['plant', 24, 20],
-  // Passage vers l'aile d'extension.
+  // Passage vers l'aile d'extension : range-vélos, plantes.
+  ['bike_rack', 3, 28],
+  ['bike_rack', 4, 28],
   ['plant', 0, 28],
   ['plant', 35, 28],
   ['plant', 12, 28],
@@ -329,7 +340,10 @@ export function buildHqMap(): WorldMap {
         { kind: 'counter', x: x0, y: y0, roomId: spec.id },
         { kind: 'counter', x: x0 + 1, y: y0, roomId: spec.id },
         { kind: 'counter', x: x0 + 2, y: y0, roomId: spec.id },
+        { kind: 'fridge', x: x0 + 3, y: y0, roomId: spec.id },
+        { kind: 'fridge', x: x0 + 4, y: y0, roomId: spec.id },
         { kind: 'plant', x: x1, y: y0, roomId: spec.id },
+        { kind: 'arcade', x: x1, y: y0 + 2, roomId: spec.id },
         { kind: 'cafe_table', x: x0 + 2, y: y0 + 3, roomId: spec.id },
         { kind: 'cafe_table', x: x0 + 6, y: y0 + 3, roomId: spec.id },
         { kind: 'sofa', x: x0 + 1, y: y1, roomId: spec.id },

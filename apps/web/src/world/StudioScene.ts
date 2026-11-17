@@ -122,6 +122,88 @@ const shade = (hex: string, l: number): string => {
   return `#${c.getHexString()}`;
 };
 
+/** Moquette chinée (bruit doux, sans damier) : teintée par la couleur du pôle. */
+function carpetTex(repeat: [number, number]): THREE.CanvasTexture {
+  return canvasTex(
+    96,
+    96,
+    (g) => {
+      g.fillStyle = '#ffffff';
+      g.fillRect(0, 0, 96, 96);
+      let seed = 7;
+      const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
+      for (let i = 0; i < 1400; i++) {
+        const v = 236 + Math.floor(rnd() * 19);
+        g.fillStyle = `rgb(${v},${v},${v})`;
+        g.fillRect(Math.floor(rnd() * 96), Math.floor(rnd() * 96), 2, 2);
+      }
+    },
+    repeat,
+  );
+}
+function neonTex(text: string): THREE.CanvasTexture {
+  return canvasTex(512, 96, (g) => {
+    g.clearRect(0, 0, 512, 96);
+    g.font = '800 64px Inter, system-ui, sans-serif';
+    g.textAlign = 'center';
+    g.shadowColor = '#ff5fa2';
+    g.shadowBlur = 18;
+    g.strokeStyle = '#ffd1e6';
+    g.lineWidth = 3;
+    g.strokeText(text, 256, 70);
+    g.fillStyle = '#ffffff';
+    g.fillText(text, 256, 70);
+  });
+}
+interface Kpis {
+  running: number;
+  working: number;
+  agents: number;
+  done: number;
+  approvals: number;
+}
+/** Indicateurs réels pour le mur d'écrans (aucune valeur inventée). */
+export function kpisOf(world: WorldSnapshot): Kpis {
+  const active = world.agents.filter((a) => a.status !== 'deactivated');
+  return {
+    running: world.tasks.filter((t) => t.status === 'running' || t.status === 'queued').length,
+    working: active.filter((a) => ['working', 'using_tool', 'thinking'].includes(a.activity))
+      .length,
+    agents: active.length,
+    done: world.tasks.filter((t) => t.status === 'succeeded').length,
+    approvals: world.approvals.filter((a) => a.status === 'pending').length,
+  };
+}
+function drawKpis(g: CanvasRenderingContext2D, k: Kpis | null): void {
+  g.fillStyle = '#0f1420';
+  g.fillRect(0, 0, 640, 220);
+  g.fillStyle = '#6ee7b7';
+  g.font = '700 22px Inter, system-ui, sans-serif';
+  g.fillText('● EN DIRECT', 22, 36);
+  g.fillStyle = '#93a4c8';
+  g.font = '500 18px Inter, system-ui, sans-serif';
+  g.fillText('Tableau de bord du QG', 170, 36);
+  const cells: [string, string][] = k
+    ? [
+        ['Missions en cours', String(k.running)],
+        ['Agents au travail', `${k.working}/${k.agents}`],
+        ['Missions réussies', String(k.done)],
+        ['Validations', String(k.approvals)],
+      ]
+    : [];
+  cells.forEach(([label, v], i) => {
+    const x = 22 + i * 154;
+    g.fillStyle = '#18213a';
+    g.fillRect(x, 58, 140, 140);
+    g.fillStyle = '#ffffff';
+    g.font = '800 52px Inter, system-ui, sans-serif';
+    g.fillText(v, x + 12, 128);
+    g.fillStyle = '#93a4c8';
+    g.font = '500 16px Inter, system-ui, sans-serif';
+    g.fillText(label, x + 12, 176);
+  });
+}
+
 export class StudioScene implements HqWorldView {
   readonly canvas: HTMLCanvasElement;
   private renderer: THREE.WebGLRenderer;
@@ -143,6 +225,10 @@ export class StudioScene implements HqWorldView {
   private raf = 0;
   private lowPower = false;
   private lastRender = 0;
+  private motion: 'eco' | 'fluide' = 'eco';
+  private paused = false;
+  /** Quelque chose a changé depuis la dernière image (caméra, données, survol…). */
+  private dirty = true;
   private last = 0;
   private ro: ResizeObserver;
   private avatars = new Map<string, Avatar>();
@@ -155,7 +241,16 @@ export class StudioScene implements HqWorldView {
   private lamps: THREE.PointLight[] = [];
   private lampShades: THREE.MeshStandardMaterial[] = [];
   private windows: THREE.MeshBasicMaterial[] = [];
+  private screensDecor: THREE.MeshBasicMaterial[] = [];
   private wallBands = new Map<string, THREE.MeshStandardMaterial>();
+  private roomEdges = new Map<string, THREE.MeshStandardMaterial>();
+  private kpiScreen: { tex: THREE.CanvasTexture; key: string } | null = null;
+  private neon: THREE.MeshBasicMaterial | null = null;
+  private vacuum: {
+    g: THREE.Group;
+    to: { x: number; z: number };
+    led: THREE.MeshBasicMaterial;
+  } | null = null;
   private wallSigns = new Map<string, THREE.Mesh>();
   private signNames = new Map<string, string>();
   private selection: Selection | null = null;
@@ -307,13 +402,27 @@ export class StudioScene implements HqWorldView {
       sign.position.set(x0 + 2.8, 1.92, 0.05);
       w.add(sign);
       this.wallSigns.set(room.id, sign);
-      for (let x = x0 + 6; x <= x1 - 1; x += 3) {
-        const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
-        this.windows.push(glass);
-        mesh(B(2.2, 0.9, 0.03), std('#7b6a58'), x, 1.65, 0.05, w, false);
-        mesh(B(2.08, 0.8, 0.03), glass, x, 1.65, 0.07, w, false);
-      }
+      if (room.id === 'direction') this.kpiWall(x0 + 7.5, x1 - 0.2);
+      else if (room.id === 'finance') this.livingWall(x0 + 6, x1);
+      else
+        for (let x = x0 + 6.5; x <= x1 - 1; x += 2.6) {
+          const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+          this.windows.push(glass);
+          mesh(B(2.3, 1.15, 0.03), std('#2b2b30', 0.5), x, 1.6, 0.05, w, false);
+          mesh(B(2.2, 1.05, 0.03), glass, x, 1.6, 0.07, w, false);
+          mesh(B(0.03, 1.05, 0.04), std('#2b2b30', 0.5), x, 1.6, 0.09, w, false);
+        }
     }
+    // Enseigne néon au-dessus de la Direction.
+    this.neon = new THREE.MeshBasicMaterial({
+      color: '#ff5fa2',
+      transparent: true,
+      map: neonTex('LIVING HQ'),
+    });
+    const neon = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), this.neon);
+    neon.position.set(18, 2.42, 0.06);
+    w.add(neon);
+    this.buildVacuum();
     for (const room of HQ_MAP.rooms) this.buildRoom(room);
     for (const f of HQ_MAP.furniture) this.buildFurniture(f);
     this.buildMeetingTable();
@@ -331,18 +440,7 @@ export class StudioScene implements HqWorldView {
     const m = new THREE.MeshStandardMaterial({
       roughness: 0.92,
       color: '#ffffff',
-      map: canvasTex(
-        64,
-        64,
-        (g) => {
-          g.fillStyle = '#ffffff';
-          g.fillRect(0, 0, 64, 64);
-          g.fillStyle = '#f1f1f1';
-          g.fillRect(0, 0, 32, 32);
-          g.fillRect(32, 32, 32, 32);
-        },
-        [w / 2, d / 2],
-      ),
+      map: carpetTex([w / 3, d / 3]),
     });
     m.color.set(pastel(base, 0.45));
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m);
@@ -352,6 +450,24 @@ export class StudioScene implements HqWorldView {
     plane.userData['roomId'] = room.id;
     this.world.add(plane);
     this.roomFloors.set(room.id, m);
+    // Liseré de zone (bande plus foncée au sol), comme un marquage d'open space.
+    const edge = new THREE.MeshStandardMaterial({
+      color: shade(pastel(base, 0.45), -0.08),
+      roughness: 0.9,
+    });
+    this.roomEdges.set(room.id, edge);
+    for (const [ex, ez, ew, ed] of [
+      [x0 + w / 2, y0 + 0.04, w, 0.08],
+      [x0 + w / 2, y0 + d - 0.04, w, 0.08],
+      [x0 + 0.04, y0 + d / 2, 0.08, d],
+      [x0 + w - 0.04, y0 + d / 2, 0.08, d],
+    ] as const) {
+      const strip = new THREE.Mesh(new THREE.PlaneGeometry(ew, ed), edge);
+      strip.rotation.x = -Math.PI / 2;
+      strip.position.set(ex, 0.013, ez);
+      strip.receiveShadow = true;
+      this.world.add(strip);
+    }
     // Cloisons basses le long des murs du local, portes ouvertes.
     if (room.walls) {
       const doors = new Set(room.doors.map((t) => `${t.x},${t.y}`));
@@ -413,10 +529,35 @@ export class StudioScene implements HqWorldView {
         mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x - 0.47, 0.37, z, w);
         mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x + 0.47, 0.37, z, w);
         mesh(B(1.0, 0.38, 0.04), std('#4f7a62', 0.9), x, 0.96, back, w);
-        mesh(B(0.56, 0.34, 0.04), std('#25272d', 0.4), x, 1.03, back + dir * 0.14, w);
-        mesh(B(0.06, 0.18, 0.06), std('#25272d'), x, 0.86, back + dir * 0.12, w);
+        // Double écran sur bras, ou écran + ordinateur portable.
+        const dual = (f.x + f.y) % 2 === 0;
         const sm = new THREE.MeshBasicMaterial({ color: '#2a3442' });
-        mesh(B(0.5, 0.28, 0.01), sm, x, 1.03, back + dir * 0.165, w, false);
+        for (const ox of dual ? [-0.22, 0.22] : [0]) {
+          const mon = mesh(
+            B(0.42, 0.27, 0.03),
+            std('#1d1f24', 0.4),
+            x + ox,
+            1.03,
+            back + dir * 0.14,
+            w,
+          );
+          mon.rotation.y = dual ? -ox * 0.6 * dir : 0;
+          const sc = mesh(B(0.38, 0.23, 0.01), sm, x + ox, 1.03, back + dir * 0.158, w, false);
+          sc.rotation.y = mon.rotation.y;
+        }
+        mesh(B(0.04, 0.2, 0.04), std('#9a9aa2', 0.3), x, 0.86, back + dir * 0.12, w);
+        if (!dual) {
+          mesh(B(0.3, 0.015, 0.21), std('#c9ccd2', 0.3), x + 0.3, 0.785, z + dir * 0.05, w);
+          const lid = mesh(
+            B(0.3, 0.2, 0.012),
+            std('#c9ccd2', 0.3),
+            x + 0.3,
+            0.88,
+            z - dir * 0.05,
+            w,
+          );
+          lid.rotation.x = dir * 0.25;
+        }
         if (seat) this.screens.set(`${seat.x},${seat.y}`, sm);
         mesh(B(0.36, 0.02, 0.12), std('#e4e4e8', 0.5), x, 0.785, z + dir * 0.18, w);
         if ((f.x + f.y) % 3 === 0)
@@ -450,6 +591,21 @@ export class StudioScene implements HqWorldView {
         break;
       case 'round_table':
         if (this.firstOf(f)) this.roundTable(f);
+        break;
+      case 'foosball':
+        if (this.firstOf(f)) this.foosball(f);
+        break;
+      case 'arcade':
+        this.arcade(x, z);
+        break;
+      case 'bleacher':
+        if (this.firstOf(f)) this.bleacher(f);
+        break;
+      case 'bike_rack':
+        this.bike(x, z, (f.x + f.y) % 2 ? '#e05a3a' : '#2f6f9e');
+        break;
+      case 'fridge':
+        this.fridge(x, z);
         break;
       case 'plant':
         this.plant(
@@ -528,6 +684,74 @@ export class StudioScene implements HqWorldView {
     }
   }
 
+  /** Mur d'écrans : indicateurs RÉELS de l'entreprise (mis à jour au sync, jamais inventés). */
+  private kpiWall(xa: number, xb: number): void {
+    const wdt = xb - xa;
+    const tex = canvasTex(640, 220, (g) => drawKpis(g, null));
+    this.kpiScreen = { tex, key: '' };
+    mesh(
+      B(wdt + 0.12, 1.2, 0.05),
+      std('#1d1f24', 0.4),
+      (xa + xb) / 2,
+      1.6,
+      0.05,
+      this.world,
+      false,
+    );
+    const scr = new THREE.Mesh(
+      new THREE.PlaneGeometry(wdt, 1.08),
+      new THREE.MeshBasicMaterial({ map: tex }),
+    );
+    scr.position.set((xa + xb) / 2, 1.6, 0.085);
+    this.world.add(scr);
+  }
+  private livingWall(xa: number, xb: number): void {
+    mesh(B(xb - xa + 0.4, 1.5, 0.08), std('#5d4a38'), (xa + xb) / 2, 1.5, 0.05, this.world, false);
+    const leaf = [
+      std('#3f8a4a', 0.9),
+      std('#4f9a57', 0.9),
+      std('#2f7a44', 0.9),
+      std('#6aa85f', 0.9),
+    ];
+    for (let x = xa; x < xb; x += 0.22)
+      for (let y = 0.85; y < 2.2; y += 0.2) {
+        const k = Math.floor((x * 7 + y * 13) * 10) % 4;
+        const m = mesh(S(0.14), leaf[k]!, x + ((y * 10) % 2) * 0.1, y, 0.12, this.world, false);
+        m.scale.set(1, 0.8, 0.45);
+      }
+  }
+  private buildVacuum(): void {
+    const g = new THREE.Group();
+    g.position.set(20.5, 0, 10.5);
+    this.world.add(g);
+    mesh(C(0.2, 0.2, 0.07, 24), std('#f4f4f6', 0.4), 0, 0.05, 0, g);
+    const led = new THREE.MeshBasicMaterial({ color: '#5b6ee1' });
+    mesh(C(0.05, 0.05, 0.02, 10), led, 0, 0.095, 0.08, g, false);
+    this.vacuum = { g, to: { x: 20.5, z: 10.5 }, led };
+  }
+  private stepVacuum(dt: number, t: number): void {
+    const v = this.vacuum;
+    if (!v || this.reduced) return;
+    const p = v.g.position;
+    const dx = v.to.x - p.x;
+    const dz = v.to.z - p.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 0.05) {
+      // Nouvelle destination praticable dans l'atrium nord (aucun effet métier).
+      for (let k = 0; k < 12; k++) {
+        const c = { x: 4 + Math.random() * 26, z: 8.3 + Math.random() * 3.4 };
+        if (HQ_MAP.isWalkable({ x: Math.floor(c.x), y: Math.floor(c.z) })) {
+          v.to = c;
+          break;
+        }
+      }
+      return;
+    }
+    p.x += (dx / d) * 0.6 * dt;
+    p.z += (dz / d) * 0.6 * dt;
+    v.g.rotation.y = Math.atan2(dx, dz);
+    v.led.color.set(Math.sin(t / 250) > 0 ? '#5b6ee1' : '#a8b4ff');
+  }
   private signTex(name: string): THREE.CanvasTexture {
     return canvasTex(512, 84, (g) => {
       g.fillStyle = '#3a3530';
@@ -684,6 +908,117 @@ export class StudioScene implements HqWorldView {
     mesh(B(0.13, 0.22, 0.62), std(shade(c, -0.04)), 0.32, 0.48, 0.02, g);
     mesh(B(0.48, 0.07, 0.46), std(shade(c, 0.05), 0.95), 0, 0.44, 0.05, g);
   }
+  private foosball(f: Furniture): void {
+    const { cx, cz, w } = this.group(f);
+    mesh(B(w - 0.35, 0.22, 0.75), std('#7a5640', 0.6), cx, 0.8, cz, this.world);
+    mesh(B(w - 0.5, 0.01, 0.6), std('#3d8b4f', 0.8), cx, 0.915, cz, this.world);
+    for (const [dx, dz] of [
+      [-0.6, -0.3],
+      [0.6, -0.3],
+      [-0.6, 0.3],
+      [0.6, 0.3],
+    ] as const)
+      mesh(B(0.06, 0.7, 0.06), std('#5d4232'), cx + dx, 0.35, cz + dz, this.world);
+    for (let k = 0; k < 6; k++)
+      mesh(
+        C(0.012, 0.012, 1.0, 6),
+        std('#c9c9cf', 0.3),
+        cx - 0.55 + k * 0.22,
+        0.94,
+        cz,
+        this.world,
+        false,
+      ).rotation.x = Math.PI / 2;
+  }
+  private arcade(x: number, z: number): void {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = -Math.PI / 2;
+    this.world.add(g);
+    mesh(B(0.62, 1.7, 0.6), std('#5b2bb5', 0.5), 0, 0.85, 0, g);
+    const scr = new THREE.MeshBasicMaterial({ color: '#59e3ff' });
+    this.screensDecor.push(scr);
+    mesh(B(0.46, 0.38, 0.02), scr, 0, 1.25, 0.31, g, false);
+    mesh(B(0.5, 0.08, 0.22), std('#1f1f24'), 0, 0.92, 0.36, g);
+    mesh(
+      B(0.62, 0.18, 0.04),
+      new THREE.MeshBasicMaterial({ color: '#ff5fa2' }),
+      0,
+      1.6,
+      0.31,
+      g,
+      false,
+    );
+  }
+  private bleacher(f: Furniture): void {
+    const { cx, cz, w } = this.group(f);
+    // Gradins en bois (« town hall ») avec coussins colorés.
+    for (let k = 0; k < 3; k++) {
+      mesh(
+        B(w - 0.1, 0.22 * (k + 1), 0.34),
+        std('#d8b07a', 0.7),
+        cx,
+        0.11 * (k + 1),
+        cz + 0.34 - k * 0.34,
+        this.world,
+      );
+    }
+    const cush = ['#e98a52', '#5b8fd6', '#e8b84a', '#d65c7a'];
+    for (let i = 0; i < w * 2; i++)
+      mesh(
+        B(0.32, 0.05, 0.26),
+        std(cush[i % 4]!, 0.95),
+        f.x + 0.25 + i * 0.5,
+        0.25 + (i % 3) * 0.22,
+        cz + 0.34 - (i % 3) * 0.34,
+        this.world,
+      );
+  }
+  private bike(x: number, z: number, c: string): void {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = Math.PI / 2;
+    this.world.add(g);
+    for (const dz of [-0.32, 0.32]) {
+      const wheel = mesh(
+        geo('wheel', () => new THREE.TorusGeometry(0.2, 0.02, 6, 20)),
+        std('#1f1f24', 0.5),
+        0,
+        0.22,
+        dz,
+        g,
+      );
+      wheel.rotation.y = Math.PI / 2;
+    }
+    mesh(B(0.03, 0.03, 0.6), std(c, 0.5), 0, 0.42, 0, g);
+    mesh(B(0.03, 0.26, 0.03), std(c, 0.5), 0, 0.32, -0.08, g);
+    mesh(B(0.1, 0.03, 0.18), std('#1f1f24'), 0, 0.48, -0.08, g);
+  }
+  private fridge(x: number, z: number): void {
+    mesh(B(0.86, 1.8, 0.6), std('#dfe3e8', 0.3), x, 0.9, z, this.world);
+    const glass = new THREE.MeshStandardMaterial({
+      color: '#bfe6ff',
+      transparent: true,
+      opacity: 0.55,
+      roughness: 0.1,
+      emissive: '#000000',
+    });
+    this.lampShades.push(glass);
+    mesh(B(0.74, 1.6, 0.02), glass, x, 0.92, z + 0.31, this.world, false);
+    const cols = ['#ff7a59', '#ffd166', '#06d6a0', '#118ab2', '#ef476f'];
+    for (let r = 0; r < 4; r++)
+      for (let k = 0; k < 5; k++)
+        mesh(
+          C(0.035, 0.035, 0.2, 8),
+          std(cols[(k + r) % 5]!, 0.5),
+          x - 0.28 + k * 0.14,
+          0.32 + r * 0.38,
+          z + 0.2,
+          this.world,
+          false,
+        );
+  }
+
   private roundTable(f: Furniture): void {
     const { cx, cz } = this.group(f);
     const room = HQ_MAP.rooms.find((r) => r.id === f.roomId);
@@ -971,6 +1306,7 @@ export class StudioScene implements HqWorldView {
   sync(world: WorldSnapshot, sel: Selection | null, now: number): void {
     this.lastWorld = world;
     this.lastNow = now;
+    this.dirty = true;
     this.selection = sel;
     const animateSpawn = !this.firstSync && !this.reduced;
     const activeInv = new Map<string, InvocationView>();
@@ -1069,9 +1405,29 @@ export class StudioScene implements HqWorldView {
         mat.map = this.signTex(name);
         mat.needsUpdate = true;
       }
+      this.roomEdges
+        .get(room.id)
+        ?.color.set(
+          shade(
+            pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color), 0.45),
+            -0.08,
+          ),
+        );
       floor?.color.set(
         pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color), 0.45),
       );
+    }
+    // Mur d'écrans : chiffres réels du snapshot.
+    if (this.kpiScreen) {
+      const k = kpisOf(world);
+      const key = JSON.stringify(k);
+      if (key !== this.kpiScreen.key) {
+        this.kpiScreen.key = key;
+        const cv = this.kpiScreen.tex.image as HTMLCanvasElement;
+        const g = cv.getContext('2d');
+        if (g) drawKpis(g, k);
+        this.kpiScreen.tex.needsUpdate = true;
+      }
     }
     // Cadrage : l'aile d'extension n'est incluse que si un pôle y est installé.
     const annexUsed = world.departments.some((d) => d.roomId.startsWith('annex'));
@@ -1133,6 +1489,7 @@ export class StudioScene implements HqWorldView {
   setNight(on: boolean): void {
     this.night = on;
     this.applyLight();
+    this.dirty = true;
   }
   setInsets(i: { top: number; right: number; bottom: number; left: number }): void {
     if (JSON.stringify(i) === JSON.stringify(this.insets)) return;
@@ -1207,7 +1564,33 @@ export class StudioScene implements HqWorldView {
     this.homeDist = hi;
   }
 
+  /** Une image n'est utile que si un avatar bouge ou s'anime (sinon : aucune charge). */
+  private isAnimating(): boolean {
+    if (this.reduced) return this.beams.length > 0;
+    if (this.beams.length || (this.motion === 'fluide' && this.vacuum)) return true;
+    for (const av of this.avatars.values()) {
+      if (!av.g.visible) continue;
+      if (av.path.length) return true;
+      const act = av.agent.activity;
+      if (act === 'working' || act === 'using_tool' || act === 'thinking' || act === 'blocked')
+        return true;
+      if (av.intent?.life || av.intent?.mode === 'meeting' || av.intent?.mode === 'break')
+        return true;
+    }
+    return false;
+  }
+  setMotion(m: 'eco' | 'fluide'): void {
+    this.motion = m;
+    this.dirty = true;
+    this.resize();
+  }
+  setPaused(p: boolean): void {
+    this.paused = p;
+    this.dirty = true;
+  }
+
   private place(full = true): void {
+    this.dirty = true;
     const c = this.cam;
     c.position.set(
       this.target.x + this.dist * Math.cos(this.el) * Math.sin(this.az),
@@ -1223,7 +1606,10 @@ export class StudioScene implements HqWorldView {
     const w = this.host.clientWidth;
     const h = this.host.clientHeight;
     if (!w || !h) return;
-    this.renderer.setPixelRatio(this.lowPower ? 0.75 : Math.min(window.devicePixelRatio, 2));
+    this.dirty = true;
+    this.renderer.setPixelRatio(
+      this.lowPower ? 0.75 : Math.min(window.devicePixelRatio, this.motion === 'eco' ? 1.25 : 2),
+    );
     this.renderer.setSize(w, h, false);
     this.cam.aspect = w / h;
     this.cam.updateProjectionMatrix();
@@ -1243,6 +1629,7 @@ export class StudioScene implements HqWorldView {
     this.lamps.forEach((l) => (l.intensity = n ? 9 : 0));
     this.lampShades.forEach((m) => m.emissive.set(n ? '#ffcf8a' : '#000000'));
     this.windows.forEach((m) => m.color.set(n ? '#22335c' : '#cfe8ff'));
+    if (this.neon) this.neon.opacity = n ? 1 : 0.85;
   }
 
   // ------------------------------------------------------------------ interactions
@@ -1286,6 +1673,7 @@ export class StudioScene implements HqWorldView {
         if (this.hovered) this.hovered.hovered = false;
         this.hovered = av;
         if (av) av.hovered = true;
+        this.dirty = true;
         c.style.cursor = av ? 'pointer' : 'grab';
       }
     });
@@ -1344,11 +1732,14 @@ export class StudioScene implements HqWorldView {
   // ------------------------------------------------------------------ animation
   private frame(t: number): void {
     // Cadence plafonnée (≈30 img/s ; 8 en rendu logiciel) : le reste du temps va à l'interface.
-    const minGap = this.lowPower ? 125 : 30;
-    if (t - this.lastRender < minGap) {
+    const minGap = this.lowPower || this.motion === 'eco' ? 125 : 33;
+    const animating = this.isAnimating();
+    if (this.paused || t - this.lastRender < minGap || (!animating && !this.dirty)) {
+      if (!animating) this.last = t; // pas de saut d'animation à la reprise
       this.raf = requestAnimationFrame((x) => this.frame(x));
       return;
     }
+    this.dirty = false;
     this.lastRender = t;
     const dt = Math.min(this.lowPower ? 0.15 : 0.05, (t - (this.last || t)) / 1000);
     this.last = t;
@@ -1356,6 +1747,7 @@ export class StudioScene implements HqWorldView {
       this.step(av, dt);
       this.pose(av, dt);
     }
+    if (this.motion === 'fluide') this.stepVacuum(dt, t);
     for (let k = this.beams.length - 1; k >= 0; k--) {
       const b = this.beams[k]!;
       b.life -= dt;

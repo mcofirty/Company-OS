@@ -1,12 +1,19 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import type { WorldSnapshot } from '@company-os/contracts';
 import { api } from '../../lib/api';
 import type { HqWorldView, Selection } from '../../world/types';
 import { AgentCard, type AgentProfile } from '../panels/AgentCard';
 
-const CARD_W = 340;
+const CARD_W = 380;
 const GAP = 34; // distance au personnage
 
 /**
@@ -23,6 +30,7 @@ export function AgentPopover({
   onMission,
   onSelect,
   onClose,
+  details,
 }: {
   world: WorldSnapshot;
   agentId: string;
@@ -32,7 +40,10 @@ export function AgentPopover({
   onMission: (agentId: string) => void;
   onSelect: (s: Selection) => void;
   onClose: () => void;
+  /** Travail en cours, historique et réglages (inspecteur de l'agent), dans un onglet. */
+  details?: ReactNode;
 }) {
+  const [tab, setTab] = useState<'card' | 'work'>('card');
   const box = useRef<HTMLDivElement>(null);
   const [version, setVersion] = useState(0);
   const [remote, setRemote] = useState<{
@@ -103,17 +114,38 @@ export function AgentPopover({
       <button className="popover-close" onClick={onClose} aria-label="Fermer la fiche">
         ✕
       </button>
-      <AgentCard
-        world={world}
-        agent={agent}
-        grants={remote?.grants ?? null}
-        profile={remote?.profile ?? null}
-        canEdit={canEdit}
-        canMission={canMission && world.org.mode === 'live' && agent.status === 'active'}
-        onMission={() => onMission(agent.id)}
-        onSelect={onSelect}
-        onProfileSaved={() => setVersion((v) => v + 1)}
-      />
+      <div className="popover-tabs" role="tablist" aria-label="Fiche de l’agent">
+        <button
+          role="tab"
+          aria-selected={tab === 'card'}
+          onClick={() => setTab('card')}
+          data-testid="popover-tab-card"
+        >
+          Fiche
+        </button>
+        <button
+          role="tab"
+          aria-selected={tab === 'work'}
+          onClick={() => setTab('work')}
+          data-testid="popover-tab-work"
+        >
+          Travail & réglages
+        </button>
+      </div>
+      {tab === 'work' && details}
+      {tab === 'card' && (
+        <AgentCard
+          world={world}
+          agent={agent}
+          grants={remote?.grants ?? null}
+          profile={remote?.profile ?? null}
+          canEdit={canEdit}
+          canMission={canMission && world.org.mode === 'live' && agent.status === 'active'}
+          onMission={() => onMission(agent.id)}
+          onSelect={onSelect}
+          onProfileSaved={() => setVersion((v) => v + 1)}
+        />
+      )}
     </div>
   );
 }

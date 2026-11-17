@@ -61,7 +61,7 @@ test('Fiche agent à côté de son personnage, qui suit l’avatar', async ({ pa
     if (!p) throw new Error('avatar absent');
     pos = p;
     await page.mouse.click(cBox.x + p.x, cBox.y + p.y);
-    await expect(page.getByTestId('inspector-title')).toHaveText('Mei', { timeout: 1500 });
+    await expect(page.getByTestId('agent-card-name')).toHaveText('Mei', { timeout: 1500 });
   }).toPass({ timeout: 20_000 });
   const pop = page.getByTestId('agent-popover');
   await expect(pop).toBeVisible();

@@ -12,9 +12,16 @@ export interface DisplayPrefs {
   /** Opacité des panneaux en verre (0,3 à 0,95). */
   glass: number;
   night: boolean;
+  /** Économie : rendu seulement quand ça bouge, cadence réduite (par défaut). */
+  motion: 'eco' | 'fluide';
 }
 const KEY = 'hq-display';
-export const DEFAULT_DISPLAY: DisplayPrefs = { renderer: '3d', glass: 0.72, night: false };
+export const DEFAULT_DISPLAY: DisplayPrefs = {
+  renderer: '3d',
+  glass: 0.72,
+  night: false,
+  motion: 'eco',
+};
 
 export function parseDisplay(raw: string | null): DisplayPrefs {
   try {
@@ -26,6 +33,7 @@ export function parseDisplay(raw: string | null): DisplayPrefs {
           ? Math.min(0.95, Math.max(0.3, v.glass))
           : DEFAULT_DISPLAY.glass,
       night: v.night === true,
+      motion: v.motion === 'fluide' ? 'fluide' : 'eco',
     };
   } catch {
     return DEFAULT_DISPLAY;

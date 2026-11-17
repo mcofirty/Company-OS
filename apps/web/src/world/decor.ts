@@ -684,7 +684,13 @@ export function furnitureSprite(scene: Phaser.Scene, f: Furniture, room: Room | 
     case 'high_table':
       return texture(scene, 'cafe_table', TILE_SPEC, drawCafeTable);
     case 'booth':
+    case 'arcade':
+    case 'fridge':
       return texture(scene, 'server', TILE_SPEC, drawServer);
+    case 'foosball':
+    case 'bleacher':
+    case 'bike_rack':
+      return texture(scene, 'cafe_table', TILE_SPEC, drawCafeTable);
     case 'pingpong':
       return texture(scene, 'mtable:0', TILE_SPEC, (c) => drawMeetingTile(c, 0));
   }
