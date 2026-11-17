@@ -24,6 +24,7 @@ export const ALL_EVENT_TYPES = [
   'task.failed',
   'task.blocked',
   'task.cancelled',
+  'task.retry_scheduled',
   'agent.run.started',
   'agent.run.completed',
   'tool.invocation.requested',
@@ -113,6 +114,15 @@ export const Payloads = {
     agentId: SlugIdSchema,
     reasonCode: z.string().max(64),
     safeSummary: SafeText,
+  }),
+  /** Erreur technique passagère : la mission est remise en file pour un nouvel essai automatique. */
+  'task.retry_scheduled': z.object({
+    taskId: Uuid,
+    agentId: SlugIdSchema,
+    reasonCode: z.string().max(64),
+    /** Numéro de l'essai automatique (1 ou 2). */
+    attempt: z.number().int().min(1).max(5),
+    notBefore: z.iso.datetime(),
   }),
   /** Annulation humaine d'une tâche en file ou bloquée ; `retriedAs` = tâche qui la remplace. */
   'task.cancelled': z.object({
@@ -390,6 +400,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.resumed'),
   variant('agent.deactivated'),
   variant('task.cancelled'),
+  variant('task.retry_scheduled'),
   variant('tool.connector.updated'),
   variant('agent.grants.updated'),
   variant('agent.profile.updated'),

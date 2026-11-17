@@ -1,4 +1,11 @@
-import { condition, defineSignal, proxyActivities, setHandler, sleep } from '@temporalio/workflow';
+import {
+  condition,
+  defineSignal,
+  isCancellation,
+  proxyActivities,
+  setHandler,
+  sleep,
+} from '@temporalio/workflow';
 import { agentLoop, type ApprovalDecision, type LoopOutcome } from '@company-os/agents/loop';
 import type { Activities } from '../activities';
 
@@ -55,24 +62,40 @@ export async function agentTaskWorkflow(input: { runId: string }): Promise<LoopO
     }
   };
   const prepared = await prepareRun(input);
-  const outcome = await agentLoop(
-    {
-      now: () => Date.now(), // horloge déterministe dans un workflow Temporal
-      modelStep: (i) => modelStep({ runId: input.runId, ...i }),
-      toolStep: (i) => toolStep({ runId: input.runId, ...i }),
-      waitForApproval,
-      // Attente durable des missions déléguées (4 h max) : aucun appel modèle pendant l'attente.
-      waitForTasks: async ({ taskIds }) => {
-        const deadline = Date.now() + 4 * 3600_000;
-        for (;;) {
-          const r = await checkTasks({ runId: input.runId, taskIds });
-          if (r.done || Date.now() > deadline) return r.content;
-          await sleep('30 seconds');
-        }
+  let outcome: LoopOutcome;
+  try {
+    outcome = await agentLoop(
+      {
+        now: () => Date.now(), // horloge déterministe dans un workflow Temporal
+        modelStep: (i) => modelStep({ runId: input.runId, ...i }),
+        toolStep: (i) => toolStep({ runId: input.runId, ...i }),
+        waitForApproval,
+        // Attente durable des missions déléguées (4 h max) : aucun appel modèle pendant l'attente.
+        waitForTasks: async ({ taskIds }) => {
+          const deadline = Date.now() + 4 * 3600_000;
+          for (;;) {
+            const r = await checkTasks({ runId: input.runId, taskIds });
+            if (r.done || Date.now() > deadline) return r.content;
+            await sleep('30 seconds');
+          }
+        },
       },
-    },
-    { taskMessage: prepared.taskMessage, limits: prepared.limits },
-  );
+      { taskMessage: prepared.taskMessage, limits: prepared.limits },
+    );
+  } catch (err) {
+    if (isCancellation(err)) throw err;
+    // Activité en échec après ses essais (service indisponible, réseau) : la mission ne reste jamais
+    // « en cours » indéfiniment ; elle est close en erreur technique, puis réessayée automatiquement.
+    outcome = {
+      status: 'failed',
+      reasonCode: 'TECHNICAL_ERROR',
+      summary: 'Erreur technique (service indisponible ou réseau) après plusieurs essais.',
+      result: null,
+      steps: 0,
+      costMicros: 0,
+      lastEventId: null,
+    };
+  }
   await finishRun({ runId: input.runId, outcome });
   return outcome;
 }

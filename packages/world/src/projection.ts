@@ -342,6 +342,25 @@ export function applyEvent(
       w = { ...w, tasks: trimTasks(w.tasks) };
       break;
     }
+    case 'task.retry_scheduled': {
+      const p = e.payload;
+      w = patchTask(w, p.taskId, () => ({
+        status: 'queued',
+        endedAt: null,
+        failureCode: p.reasonCode,
+        resultSummary: `Nouvel essai automatique (${p.attempt}) après une erreur technique`,
+      }));
+      w = patchAgent(w, p.agentId, (a) =>
+        a.currentTaskId === p.taskId
+          ? {
+              currentTaskId: null,
+              lastTaskEndedAt: at,
+              activity: a.status === 'paused' ? 'paused' : 'queued',
+            }
+          : {},
+      );
+      break;
+    }
     case 'task.failed':
     case 'task.blocked':
       w = patchTask(w, e.payload.taskId, () => ({

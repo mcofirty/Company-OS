@@ -333,3 +333,10 @@ restaurations demandées depuis le cockpit passent par un script root exécuté 
 (`host-agent.sh`). L'API (conteneur non root) n'a ni socket Docker ni accès aux sauvegardes : elle écrit
 une demande JSON (admin seulement, nom de fichier validé, confirmation explicite pour restaurer) et lit
 un état publié. Surface d'attaque minimale : l'agent n'exécute que trois actions prévues.
+
+ADR-068 — **Reprise automatique des erreurs techniques.** Une mission close par une erreur technique
+(`PROVIDER_ERROR`, `TECHNICAL_ERROR`, surcharge, délai) est remise en file (blocked → queued, événement
+`task.retry_scheduled`) avec un délai (1 min puis 5 min), deux fois au plus ; aucune notification
+pendant ces essais. Au-delà, ou pour une erreur non technique (refus, budget, validation), la mission
+est bloquée et l'humain est prévenu. Le workflow Temporal ne laisse plus une mission « en cours » si
+une activité échoue après ses propres essais : il la clôt en `TECHNICAL_ERROR`.

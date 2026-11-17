@@ -265,6 +265,7 @@ export async function startNextTask(
       where: {
         orgId,
         status: 'queued',
+        OR: [{ notBefore: null }, { notBefore: { lte: now } }],
         agent: { status: 'active', currentTaskId: null, activity: { not: 'in_meeting' } },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -425,6 +426,13 @@ export async function finishTask(
   const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {
     const { tx } = ctx;
     const o = input.outcome;
+    // Erreur technique passagère : nouvel essai automatique (2 au plus) avant de déranger l'humain.
+    if (o.status !== 'succeeded' && TRANSIENT_CODES.has(o.reasonCode)) {
+      const cur = await tx.task.findFirstOrThrow({ where: { id: input.taskId, orgId: ctx.orgId } });
+      if (cur.autoRetries < MAX_AUTO_RETRIES) {
+        return scheduleAutoRetry(ctx, input, cur.autoRetries + 1, o.reasonCode, o.safeSummary);
+      }
+    }
     const isEnd = o.status !== 'blocked';
     const updated = await transitionTask(ctx, input.taskId, o.status, {
       endedAt: isEnd ? now : null,
@@ -524,6 +532,97 @@ export async function finishTask(
     return taskView(updated);
   });
   return result;
+}
+
+/** Codes d'échec techniques (réseau, surcharge, délai) : réessayés automatiquement. */
+export const TRANSIENT_CODES = new Set([
+  'PROVIDER_ERROR',
+  'TECHNICAL_ERROR',
+  'RATE_LIMITED',
+  'OVERLOADED',
+  'TIMEOUT',
+]);
+export const MAX_AUTO_RETRIES = 2;
+/** Délai avant chaque nouvel essai : 1 min, puis 5 min. */
+export const AUTO_RETRY_DELAYS_MS = [60_000, 5 * 60_000] as const;
+
+async function scheduleAutoRetry(
+  ctx: OrgTxContext,
+  input: { taskId: string; runId: string; causationId: string | null },
+  attempt: number,
+  reasonCode: string,
+  summary: string,
+): Promise<TaskView> {
+  const { tx, now } = ctx;
+  const notBefore = new Date(now.getTime() + (AUTO_RETRY_DELAYS_MS[attempt - 1] ?? 300_000));
+  await transitionTask(ctx, input.taskId, 'blocked', {
+    failureCode: reasonCode,
+    resultSummary: summary,
+  });
+  const updated = await transitionTask(ctx, input.taskId, 'queued', {
+    autoRetries: attempt,
+    notBefore,
+    resultSummary: `Nouvel essai automatique (${attempt}) après une erreur technique`,
+  });
+  const run = await tx.agentRun.update({
+    where: { id: input.runId },
+    data: { status: 'failed', endedAt: now, outcomeSummary: summary, failureCode: reasonCode },
+  });
+  const runDone = ctx.emit({
+    ...base,
+    type: 'agent.run.completed',
+    aggregateType: 'agent_run',
+    aggregateId: run.id,
+    aggregateVersion: 2,
+    correlationId: updated.correlationId,
+    causationId: input.causationId,
+    actor: { kind: 'agent', id: updated.agentId },
+    provenance: updated.provenance,
+    payload: {
+      runId: run.id,
+      agentId: updated.agentId,
+      taskId: updated.id,
+      status: 'failed',
+      stepCount: run.stepCount,
+      usage: {
+        llmCalls: run.llmCalls,
+        inputTokens: run.inputTokens,
+        outputTokens: run.outputTokens,
+        costMicros: run.costMicros,
+        costSource:
+          run.costSource === 'estimated' || run.costSource === 'measured' ? run.costSource : 'none',
+        model: run.model,
+      },
+    },
+  });
+  ctx.emit({
+    ...base,
+    type: 'task.retry_scheduled',
+    aggregateType: 'task',
+    aggregateId: updated.id,
+    aggregateVersion: updated.version,
+    correlationId: updated.correlationId,
+    causationId: runDone,
+    actor: { kind: 'system', id: 'task-runner' },
+    provenance: updated.provenance,
+    payload: {
+      taskId: updated.id,
+      agentId: updated.agentId,
+      reasonCode,
+      attempt,
+      notBefore: notBefore.toISOString(),
+    },
+  });
+  await tx.agent.update({
+    where: { id: updated.agentId },
+    data: {
+      currentTaskId: null,
+      lastTaskEndedAt: now,
+      activity: 'queued',
+      version: { increment: 1 },
+    },
+  });
+  return taskView(updated);
 }
 
 /** Tâches `running` à reprendre après un redémarrage du worker. */

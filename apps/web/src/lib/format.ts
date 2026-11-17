@@ -208,6 +208,12 @@ export function describe(
         tone: 'success',
         icon: '▶',
       };
+    case 'task.retry_scheduled':
+      return {
+        text: `${agentName(e.payload.agentId)} · erreur technique (${e.payload.reasonCode}) : nouvel essai automatique ${e.payload.attempt}/2`,
+        tone: 'neutral',
+        icon: '↻',
+      };
     case 'task.cancelled':
       return {
         text: `${agentName(e.payload.agentId)} · tâche annulée${e.payload.retriedAs ? ' et relancée' : ''} · ${e.payload.reason}`,

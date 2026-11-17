@@ -207,6 +207,9 @@ model Task {
   parentTaskId   String?      @map("parent_task_id") @db.Uuid
   /// Niveau de modèle imposé pour cette mission (economy | balanced | quality | auto), sinon null.
   modelTier      String?      @map("model_tier")
+  /// Reprise automatique après une erreur technique : essais faits, et pas avant cette date.
+  autoRetries    Int          @default(0) @map("auto_retries")
+  notBefore      DateTime?    @map("not_before") @db.Timestamptz(3)
   depth          Int          @default(0)
   /// Plafond de coût de CETTE exécution (mission récurrente), en micro-USD.
   costCapMicros  Int?         @map("cost_cap_micros")
