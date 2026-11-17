@@ -12,6 +12,7 @@ import type { HqScene, Selection } from '../world/HqScene';
 import { AlertCenter } from './cockpit/AlertCenter';
 import { BackendSettings } from './cockpit/BackendSettings';
 import { LoginPanel } from './cockpit/LoginPanel';
+import { hasOwnerSession, ownerLogout } from '../lib/owner';
 import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
 import { Timeline } from './cockpit/Timeline';
@@ -37,6 +38,9 @@ export function Cockpit() {
   const replay = useReplay();
   const [selection, setSelection] = useState<Selection | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Lu après le montage (stockage du navigateur) : pas d'écart avec le rendu serveur.
+  const [ownerSignedIn, setOwnerSignedIn] = useState(false);
+  useEffect(() => setOwnerSignedIn(hasOwnerSession(getBackend().url)), []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [dept, setDept] = useState<string | null>(null);
   const [links, setLinks] = useState(false);
@@ -238,6 +242,16 @@ export function Cockpit() {
           >
             ⚙
           </button>
+          {ownerSignedIn && (
+            <button
+              onClick={ownerLogout}
+              title="Se déconnecter"
+              aria-label="Se déconnecter"
+              data-testid="owner-logout"
+            >
+              ⏻
+            </button>
+          )}
         </nav>
         <main className="world-pane">
           {replay.active && <ReplayBar replay={replay} />}

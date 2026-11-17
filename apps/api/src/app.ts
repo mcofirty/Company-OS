@@ -7,6 +7,7 @@ import { z } from 'zod';
 import type { ErrorCode } from '@company-os/contracts';
 import { DomainError, relayOutbox, type Db } from '@company-os/db';
 import { startSpan } from '@company-os/policies';
+import { registerOwnerLogin } from './login';
 import { registerAuth, type AuthConfig } from './auth';
 import { attachRealtime, broadcast, type Io } from './realtime';
 import { registerV1, type ApprovalSignaler } from './routes/v1';
@@ -35,6 +36,8 @@ export interface AppOptions {
   signalApproval?: ApprovalSignaler;
   /** Connecteurs MCP : clé de chiffrement des jetons, accès réseau privé (tests). */
   connectors?: ConnectorSettings;
+  /** Proxys de confiance devant l'API (adresse réelle du client pour les limites). */
+  trustProxy?: number;
   /** Requêtes /v1 par minute et par client (IP). Défaut 1200. */
   rateLimitPerMinute?: number;
 }
@@ -51,6 +54,8 @@ export async function buildApp(
         }
       : false,
     genReqId: () => randomUUID(),
+    // N proxys de confiance (Caddy) : l'adresse réelle du client sert aux limites de connexion.
+    trustProxy: (_address: string, hop: number) => hop < (opts.trustProxy ?? 0),
   });
   await app.register(cors, {
     origin: opts.corsOrigin,
@@ -145,8 +150,15 @@ export async function buildApp(
           audience: opts.auth.oidc.settings.audience,
           scope: opts.auth.oidc.settings.scope,
         }
-      : { mode: opts.auth.accessToken ? ('token' as const) : ('dev' as const) },
+      : {
+          mode: opts.auth.owner
+            ? ('password' as const)
+            : opts.auth.accessToken
+              ? ('token' as const)
+              : ('dev' as const),
+        },
   }));
+  registerOwnerLogin(app, opts.auth.owner);
 
   registerV1(app, db, opts.signalApproval, { hideDemoOrg: opts.auth.hideDemoOrg ?? false });
   registerConnectors(app, db, opts.connectors ?? { secretKey: null, allowPrivateNetwork: false });

@@ -69,21 +69,41 @@ Le script installe Docker et le pare-feu, génère les mots de passe, construit 
 (10 à 20 minutes la première fois), crée l'organisation de démonstration et votre organisation
 LIVE, et programme une sauvegarde quotidienne.
 
-À la fin, il affiche **l'adresse du cockpit et votre jeton d'accès**. Copiez le jeton dans votre
-gestionnaire de mots de passe.
+À la fin, il propose de **créer votre connexion** (répondez `o`) : voir §5.
 
-## 5. Se connecter
+## 5. Votre connexion : mot de passe + code du téléphone
 
+Seule une personne qui connaît votre mot de passe **et** qui a votre téléphone peut ouvrir le
+cockpit. Installez d'abord une application d'authentification sur le téléphone (Google
+Authenticator, Microsoft Authenticator, 1Password, Bitwarden…).
+
+1. Le script demande un mot de passe (10 caractères minimum, deux fois ; rien ne s'affiche).
+2. Il affiche un **QR code** : dans l'application du téléphone, « + » → « Scanner un QR code ».
+   (Impossible de scanner ? « Saisir une clé de configuration » avec la clé affichée dessous.)
+3. Tapez le code à 6 chiffres que l'application affiche : le script vérifie que tout est bon.
+
+Ensuite, pour vous connecter :
 1. Ouvrez l'adresse du cockpit (`https://hq.…`). Si la page ne répond pas tout de suite, attendez
    une à deux minutes (obtention du certificat HTTPS).
-2. « Connexion requise » → **« Saisir le jeton d'accès »** :
-   - URL de l'API : l'adresse `https://api.…` affichée par le script ;
-   - Jeton : celui affiché par le script.
+2. Saisissez le mot de passe, puis le code du téléphone : la connexion part toute seule au 6ᵉ
+   chiffre. « Rester connecté sur cet appareil » vous évite de recommencer pendant 30 jours
+   (décochez-le sur un ordinateur partagé : la session dure alors 12 h dans cet onglet).
 3. En haut, sélecteur d'organisation → **LIVE · votre entreprise** → **« + Agent »**, puis
-   **« Confier une mission »**.
+   **« Confier une mission »**. Bouton **⏻** (en haut à droite) : se déconnecter.
 
-Le cockpit Vercel (company-os-web-ten.vercel.app) peut aussi se connecter à ce serveur avec la
-même URL et le même jeton (⚙).
+**Protections** : après 5 essais ratés, attente imposée (1 min, puis doublée à chaque échec) ;
+un code ne sert qu'une fois ; le message d'erreur ne dit pas si c'est le mot de passe ou le code
+qui est faux.
+
+**Téléphone perdu, mot de passe oublié, ou doute** : depuis le terminal du serveur, relancez
+```bash
+bash /opt/company-os/infra/deploy/set-login.sh
+```
+Nouveau mot de passe, nouveau QR code, et **tous les appareils sont déconnectés**.
+
+*Sans connexion créée* (réponse `n`), le cockpit demande le jeton d'accès affiché par le script
+(⚙ → URL de l'API + jeton). Ce jeton se copie et se partage : préférez la connexion ci-dessus,
+qui le supprime.
 
 ## 6. Au quotidien
 

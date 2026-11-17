@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { DEMO_ORG, DEV_ADMIN, DomainError, type Db } from '@company-os/db';
+import { verifySession } from '@company-os/policies';
 import type { OidcVerifier } from './oidc';
 
 export type Role = 'admin' | 'operator' | 'viewer';
@@ -10,7 +11,7 @@ export interface Principal {
   role: Role;
   displayName: string;
   /** Mode d'authentification ayant produit ce principal (audit, /v1/me). */
-  via: 'oidc' | 'token' | 'dev';
+  via: 'oidc' | 'token' | 'session' | 'dev';
 }
 
 const LOCAL = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
@@ -24,10 +25,21 @@ export interface AuthConfig {
    * Défini => le principal de développement est désactivé.
    */
   accessToken?: string;
+  /**
+   * Connexion « propriétaire unique » (mot de passe + code TOTP, ADR-053). Exclusive du jeton
+   * d'accès : quand elle est configurée, seule une session ouverte par ce formulaire est acceptée.
+   */
+  owner?: OwnerLogin;
   /** Production : jetons JWT d'un fournisseur OIDC, utilisateurs et rôles lus en base. */
   oidc?: OidcVerifier;
   /** Serveur de production : les organisations de démonstration sont masquées et refusées. */
   hideDemoOrg?: boolean;
+}
+
+export interface OwnerLogin {
+  passwordHash: string;
+  totpSecret: string;
+  sessionSecret: string;
 }
 
 export interface Credentials {
@@ -59,9 +71,26 @@ export async function resolvePrincipal(
   c: Credentials,
   db: Db,
 ): Promise<Principal> {
-  const configured = !!cfg.accessToken || !!cfg.oidc;
+  const configured = !!cfg.accessToken || !!cfg.oidc || !!cfg.owner;
   if (configured) {
     if (!c.bearer) throw new DomainError('UNAUTHORIZED', 'Authentification requise');
+    if (
+      cfg.owner &&
+      verifySession(c.bearer, cfg.owner.sessionSecret, cfg.owner.passwordHash, Date.now())
+    ) {
+      return withOrgChoice(
+        db,
+        c.orgHeader,
+        {
+          userId: DEV_ADMIN.id,
+          orgId: DEMO_ORG.id,
+          role: 'admin',
+          displayName: 'Propriétaire',
+          via: 'session',
+        },
+        cfg.hideDemoOrg,
+      );
+    }
     if (cfg.accessToken && sameSecret(c.bearer, cfg.accessToken)) {
       return withOrgChoice(
         db,
@@ -80,7 +109,10 @@ export async function resolvePrincipal(
       const id = await cfg.oidc.verify(c.bearer); // lève UNAUTHORIZED si invalide
       return principalFromDirectory(db, id.subject, c.orgHeader);
     }
-    throw new DomainError('UNAUTHORIZED', 'Jeton invalide');
+    throw new DomainError(
+      'UNAUTHORIZED',
+      cfg.owner ? 'Session expirée ou invalide : reconnectez-vous' : 'Jeton invalide',
+    );
   }
   if (!cfg.allowDevPrincipal || c.forwarded || !isLocalAddress(c.remoteAddress)) {
     throw new DomainError('UNAUTHORIZED', 'Authentification requise');

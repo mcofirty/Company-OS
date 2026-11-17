@@ -3,6 +3,37 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-17 (12) — Connexion propriétaire : mot de passe + code du téléphone
+
+### Réalisé
+- ADR-053 : connexion « propriétaire unique » sans fournisseur externe. `POST /auth/login` (mot de passe
+  scrypt + code TOTP RFC 6238, un code ne sert qu'une fois, message d'échec unique), jeton de session
+  HMAC (12 h ou 30 j « rester connecté »), invalidé par tout changement de mot de passe ou de secret.
+  Freins : 5 essais puis attente doublée par adresse ; 30 échecs/h => 15 min pour tous. `TRUST_PROXY`
+  (Caddy) pour l'adresse réelle. Refus de démarrer si `API_ACCESS_TOKEN` coexiste avec ce mode.
+- Cockpit : écran « Bienvenue au QG » (mot de passe, code à 6 chiffres validé tout seul, compatible
+  gestionnaires de mots de passe et saisie automatique du code), bouton ⏻ de déconnexion.
+- Serveur : `infra/deploy/set-login.sh` (mot de passe saisi deux fois, QR code dans le terminal,
+  vérification d'un code avant d'enregistrer, suppression du jeton partageable, redémarrage de l'API) ;
+  proposé à la fin d'`install.sh`. CLI `packages/db/src/owner-cli.ts` (secrets par stdin uniquement).
+- Guide `docs/DEPLOIEMENT-HOSTINGER.md` §5 réécrit.
+
+### Tests (exécutés le 2026-11-17)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 162/162 + 14 nouveaux (connexion API, Socket.IO,
+  rejeu, freins, jetons forgés/expirés/ancien mot de passe, configuration ; TOTP vecteurs RFC 6238).
+- `pnpm e2e` : 25/25 (dont `owner-login.spec.ts`). Un premier passage complet a eu un échec
+  intermittent de `live.spec.ts` (réussi seul puis au passage complet suivant, sans modification).
+- Image `admin` de production construite : `owner-cli generate|verify` par stdin dans le conteneur,
+  QR affiché, valeurs générées acceptées par `docker compose config` et `loadConfig` (production).
+  `shellcheck -S warning` OK.
+
+### Écarts connus
+- `set-login.sh` non exécuté de bout en bout sur un vrai VPS (testé par morceaux ici).
+- Compteurs de freins en mémoire : remis à zéro au redémarrage de l'API.
+
+### Prochaine tâche exacte
+Sur le VPS : `update.sh` puis `set-login.sh`, vérifier la connexion depuis le téléphone et le PC.
+
 ## Session 2026-11-16 (11) — Connecteurs MCP en libre-service (Phase B) + refonte graphique
 
 ### Réalisé

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseSecretKey } from '@company-os/policies';
+import { base32Decode, isPasswordHash, parseSecretKey } from '@company-os/policies';
 import type { AuthConfig } from './auth';
 import { createOidcVerifier, type OidcSettings } from './oidc';
 
@@ -18,6 +18,14 @@ export const EnvSchema = z.object({
   API_ACCESS_TOKEN: optional(
     z.string().min(32, 'API_ACCESS_TOKEN doit faire au moins 32 caractères'),
   ),
+  /** Connexion propriétaire (bash infra/deploy/set-login.sh) : les trois vont ensemble. */
+  OWNER_PASSWORD_HASH: optional(z.string().refine(isPasswordHash, 'empreinte scrypt attendue')),
+  OWNER_TOTP_SECRET: optional(z.string().min(16)),
+  OWNER_SESSION_SECRET: optional(
+    z.string().min(32, 'OWNER_SESSION_SECRET doit faire au moins 32 caractères'),
+  ),
+  /** Nombre de proxys de confiance devant l'API (Caddy sur le VPS : 1). Vide = aucun. */
+  TRUST_PROXY: optional(z.coerce.number().int().min(1).max(5)),
   OIDC_ISSUER: optional(z.url()),
   OIDC_AUDIENCE: optional(z.string().min(1)),
   OIDC_CLIENT_ID: optional(z.string().min(1)),
@@ -61,11 +69,30 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
   if (oidcCount !== 0 && oidcCount !== 3) {
     problems.push('OIDC incomplet : OIDC_ISSUER, OIDC_AUDIENCE et OIDC_CLIENT_ID vont ensemble');
   }
+  const ownerVars = [env.OWNER_PASSWORD_HASH, env.OWNER_TOTP_SECRET, env.OWNER_SESSION_SECRET];
+  const ownerCount = ownerVars.filter(Boolean).length;
+  if (ownerCount !== 0 && ownerCount !== 3) {
+    problems.push(
+      'Connexion propriétaire incomplète : OWNER_PASSWORD_HASH, OWNER_TOTP_SECRET et OWNER_SESSION_SECRET vont ensemble (relancer set-login.sh)',
+    );
+  }
+  if (env.OWNER_TOTP_SECRET) {
+    try {
+      if (base32Decode(env.OWNER_TOTP_SECRET).length < 10) throw new Error('court');
+    } catch {
+      problems.push('OWNER_TOTP_SECRET invalide (base32, 16 caractères minimum)');
+    }
+  }
+  if (ownerCount === 3 && env.API_ACCESS_TOKEN) {
+    problems.push(
+      'Connexion propriétaire active : retirer API_ACCESS_TOKEN (un jeton partageable contournerait le mot de passe)',
+    );
+  }
   const corsOrigin = env.WEB_ORIGIN.split(',')
     .map((o) => o.trim())
     .filter(Boolean);
   if (env.NODE_ENV === 'production') {
-    if (oidcCount !== 3 && !env.API_ACCESS_TOKEN) {
+    if (oidcCount !== 3 && !env.API_ACCESS_TOKEN && ownerCount !== 3) {
       problems.push('Production : configurer OIDC (ou API_ACCESS_TOKEN pour un usage personnel)');
     }
     if (env.OIDC_ISSUER && !env.OIDC_ISSUER.startsWith('https://')) {
@@ -99,7 +126,15 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
           scope: env.OIDC_SCOPE,
         }
       : undefined;
-  const authConfigured = !!oidc || !!env.API_ACCESS_TOKEN;
+  const owner =
+    ownerCount === 3
+      ? {
+          passwordHash: env.OWNER_PASSWORD_HASH!,
+          totpSecret: env.OWNER_TOTP_SECRET!,
+          sessionSecret: env.OWNER_SESSION_SECRET!,
+        }
+      : undefined;
+  const authConfigured = !!oidc || !!env.API_ACCESS_TOKEN || !!owner;
   return {
     env,
     corsOrigin,
@@ -112,6 +147,7 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
       allowDevPrincipal:
         !authConfigured && env.NODE_ENV !== 'production' && env.APP_MODE === 'demo',
       ...(env.API_ACCESS_TOKEN ? { accessToken: env.API_ACCESS_TOKEN } : {}),
+      ...(owner ? { owner } : {}),
       ...(oidc ? { oidc: createOidcVerifier(oidc) } : {}),
     },
   };

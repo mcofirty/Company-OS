@@ -135,6 +135,28 @@ EOF
 chmod 644 /etc/cron.d/company-os-backup
 bash "$APP_DIR/infra/deploy/backup.sh"
 
+if [ -z "$(envget OWNER_PASSWORD_HASH)" ]; then
+  say "Connexion au cockpit"
+  echo "Recommandé : un mot de passe + un code sur votre téléphone (personne d'autre ne peut entrer)."
+  read -r -p "Créer votre connexion maintenant ? (o/n) : " LOGIN_NOW </dev/tty
+  if [ "$LOGIN_NOW" = "o" ] || [ "$LOGIN_NOW" = "O" ]; then
+    bash "$APP_DIR/infra/deploy/set-login.sh"
+  fi
+fi
+
+if [ -n "$(envget OWNER_PASSWORD_HASH)" ]; then
+  LOGIN_TEXT=" Connexion : ouvrez le cockpit, saisissez votre mot de passe et le code
+ affiché par l'application de votre téléphone.
+ Refaire la connexion (téléphone perdu, mot de passe oublié) :
+   bash $APP_DIR/infra/deploy/set-login.sh"
+else
+  LOGIN_TEXT=" Connexion au cockpit : bouton « Saisir le jeton d'accès » (ou ⚙), puis
+   URL de l'API : https://$API_HOST
+   Jeton        : $API_ACCESS_TOKEN
+ Le jeton est aussi dans $ENV_FILE (à garder secret).
+ Plus sûr et plus simple : bash $APP_DIR/infra/deploy/set-login.sh"
+fi
+
 cat <<EOF
 
 ────────────────────────────────────────────────────────────────────
@@ -143,12 +165,9 @@ cat <<EOF
  Cockpit : https://$WEB_HOST
  API     : https://$API_HOST   (santé : https://$API_HOST/health/ready)
 
- Connexion au cockpit : bouton « Saisir le jeton d'accès » (ou ⚙), puis
-   URL de l'API : https://$API_HOST
-   Jeton        : $API_ACCESS_TOKEN
+$LOGIN_TEXT
  Ensuite : sélecteur d'organisation → « LIVE · ${ORG_NAME:-Ma Société} » → « + Agent ».
 
- Le jeton est aussi dans $ENV_FILE (à garder secret).
  Si le cockpit n'est pas joignable tout de suite : le certificat HTTPS peut
  prendre une à deux minutes. Journal : $(compose_cmd_text) logs caddy
 

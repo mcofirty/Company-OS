@@ -237,3 +237,15 @@ découvert est un `toolId` dynamique `mcp-xxxxxxxx` (ligne `tools` par organisat
 viennent de la politique (`read` => risque read ; sinon `external_write` => validation humaine). Défaut :
 validation à chaque appel. Jeton chiffré AES-256-GCM avec une clé d'environnement ; protection SSRF
 (HTTPS, IP publiques). Les droits d'un agent sont remplaçables par un admin (`agent.grants.updated`).
+
+ADR-053 — **Connexion « propriétaire unique » : mot de passe + TOTP, sans fournisseur externe.** Pour un
+serveur personnel, OIDC impose un compte chez un tiers ; le jeton `API_ACCESS_TOKEN` se copie et se partage.
+L'API vérifie un mot de passe (scrypt N=2¹⁵, empreinte sans `$` pour les fichiers .env de Compose) ET un code
+TOTP RFC 6238 (±30 s, un code ne sert qu'une fois), puis émet un jeton de session HMAC-SHA256 (12 h, ou 30 j
+« rester connecté ») dont la clé dérive du secret de session et de l'empreinte du mot de passe : changer le
+mot de passe déconnecte tous les appareils. Message d'échec unique, freins progressifs par adresse (5 essais
+libres puis 1, 2, 4… min, plafond 30) et global (30 échecs/h => 15 min), adresse réelle via `TRUST_PROXY=1`
+derrière Caddy. Exclusive du jeton partageable (refus de démarrer si les deux sont définis). Configuration par
+`infra/deploy/set-login.sh` (secrets par stdin, QR code dans le terminal, vérification d'un code avant
+d'enregistrer). Limites : compteurs en mémoire (remis à zéro au redémarrage de l'API), jeton de session en
+stockage navigateur (même modèle que ADR-035). Réversible : supprimer les trois variables `OWNER_*`.

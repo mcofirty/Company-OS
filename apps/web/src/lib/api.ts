@@ -1,5 +1,6 @@
 import { ApiErrorSchema } from '@company-os/contracts';
 import { sessionToken } from './oidc';
+import { ownerToken } from './owner';
 
 const DEFAULT_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
 const STORAGE_KEY = 'companyos.backend';
@@ -74,10 +75,11 @@ export function setOrg(orgId: string | null): void {
   }
 }
 
-/** Jeton à présenter à l'API : jeton d'accès saisi (tunnel) ou session OIDC de cet onglet. */
+/** Jeton à présenter à l'API : jeton saisi (tunnel), session propriétaire ou session OIDC. */
 export function authToken(backend: BackendConfig = getBackend()): string | null {
   if (backend.token) return backend.token;
-  return typeof window !== 'undefined' ? sessionToken(backend.url) : null;
+  if (typeof window === 'undefined') return null;
+  return ownerToken(backend.url) ?? sessionToken(backend.url);
 }
 
 export class ApiFailure extends Error {

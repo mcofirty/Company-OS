@@ -9,7 +9,7 @@ import * as oauth from 'oauth4webapi';
  * CSRF ; pas de jeton de rafraîchissement : à expiration, nouvelle connexion (ADR-035).
  */
 export interface AuthPublicConfig {
-  mode: 'oidc' | 'token' | 'dev';
+  mode: 'oidc' | 'password' | 'token' | 'dev';
   issuer?: string;
   clientId?: string;
   audience?: string;

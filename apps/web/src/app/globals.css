@@ -1369,6 +1369,43 @@ kbd {
   font-size: 13px;
   color: var(--ink-soft);
 }
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+.login-form h2,
+.login-form p {
+  margin: 0;
+}
+.login-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.login-form input[type='password'],
+.login-form input[type='text'] {
+  font: inherit;
+  padding: 9px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.login-form .otp-input {
+  font-size: 22px;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.login-form label.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+}
+.login-form .hint {
+  font-size: 12px;
+}
 .bench {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -1752,4 +1789,7 @@ kbd {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-soft);
+}
+.login-form .hint code {
+  white-space: nowrap;
 }

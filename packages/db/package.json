@@ -13,6 +13,7 @@
     "seed": "tsx src/seed-cli.ts",
     "users": "tsx src/access-cli.ts",
     "live:init": "tsx src/live-cli.ts",
+    "owner": "tsx src/owner-cli.ts",
     "ops": "tsx src/ops/backup-cli.ts",
     "reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@types/pg": "^8.23.1",
+    "@types/qrcode": "1.5.6",
     "prisma": "7.10.1"
   },
   "dependencies": {
@@ -31,6 +33,7 @@
     "@prisma/adapter-pg": "7.10.1",
     "@prisma/client": "7.10.1",
     "dotenv": "^18.0.10",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "qrcode": "1.5.4"
   }
 }

@@ -98,6 +98,11 @@ services:
       <<: *server-env
       API_HOST: 0.0.0.0
       API_PORT: '4000'
+      # Connexion propriétaire (infra/deploy/set-login.sh) : transmise à l'API seulement.
+      OWNER_PASSWORD_HASH: ${OWNER_PASSWORD_HASH:-}
+      OWNER_TOTP_SECRET: ${OWNER_TOTP_SECRET:-}
+      OWNER_SESSION_SECRET: ${OWNER_SESSION_SECRET:-}
+      TRUST_PROXY: ${TRUST_PROXY:-}
     ports: ['${API_PUBLISH:-127.0.0.1:4000}:4000']
 
   worker:
