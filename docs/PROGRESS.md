@@ -15,7 +15,8 @@ Pour chaque changement : horodatage UTC, commit (si disponible), tâches termin�
 
 ### Tests (exécutés le 2026-11-27)
 - `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 206/206 (dont recrutement multi-pôles / manager).
-- `pnpm e2e` : 26/26 avant le cockpit téléphone (6 min) ; `mobile.spec.ts` : OK. Série complète : voir commit suivant.
+- `pnpm e2e` : 26/27 (6,7 min) avec `mobile.spec.ts` ; l'échec « M4 — alerte acquittée » (clic
+  d'acquittement non pris en compte en 5 s) passe en relance 2/2 : instabilité connue, à surveiller.
 - Rappel e2e local : arrêter tout `pnpm dev` lancé à la main (sans `CONNECTOR_SECRET_KEY`), sinon
   Playwright le réutilise et les tests connecteurs / notifications échouent.
 
