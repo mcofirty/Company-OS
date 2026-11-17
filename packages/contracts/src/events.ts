@@ -42,6 +42,7 @@ export const ALL_EVENT_TYPES = [
   'tool.connector.updated',
   'agent.grants.updated',
   'agent.profile.updated',
+  'agent.reporting.updated',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -269,6 +270,13 @@ export const Payloads = {
     skills: z.array(z.string().min(1).max(30)).max(8),
     routines: z.array(z.string().min(1).max(120)).max(6),
   }),
+  /** Hiérarchie modifiée par un administrateur humain : rattachement et/ou rôle de manager. */
+  'agent.reporting.updated': z.object({
+    agentId: SlugIdSchema,
+    managerId: SlugIdSchema.nullable(),
+    role: AgentRoleSchema,
+    reason: z.string().max(200),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -323,6 +331,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('tool.connector.updated'),
   variant('agent.grants.updated'),
   variant('agent.profile.updated'),
+  variant('agent.reporting.updated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

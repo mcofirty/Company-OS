@@ -78,11 +78,11 @@ describe('domaine', () => {
     expect(canTransitionTask('failed', 'queued')).toBe(true);
     expect(canTransitionTask('created', 'succeeded')).toBe(false);
   });
-  it('catalogue : 8 outils démo + plateforme + 3 outils réels (live), ids uniques', () => {
-    expect(TOOL_CATALOG).toHaveLength(12);
-    expect(new Set(TOOL_CATALOG.map((t) => t.id)).size).toBe(12);
+  it('catalogue : 8 outils démo + plateforme + 4 outils réels (live), ids uniques', () => {
+    expect(TOOL_CATALOG).toHaveLength(13);
+    expect(new Set(TOOL_CATALOG.map((t) => t.id)).size).toBe(13);
     const live = TOOL_CATALOG.filter((t) => toolAvailableIn(t, 'live')).map((t) => t.id);
-    expect(live.sort()).toEqual(['company', 'library', 'web']);
+    expect(live.sort()).toEqual(['company', 'library', 'team', 'web']);
     // Aucun outil réel dans la démo, aucun outil fictif en live (sans autorisation explicite).
     expect(TOOL_CATALOG.filter((t) => toolAvailableIn(t, 'demo')).map((t) => t.id)).not.toContain(
       'web',

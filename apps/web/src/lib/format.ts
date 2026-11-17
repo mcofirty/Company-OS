@@ -233,6 +233,12 @@ export function describe(
         icon: '⇄',
       };
     }
+    case 'agent.reporting.updated':
+      return {
+        text: `${agentName(e.payload.agentId)} ${e.payload.managerId ? `rattaché à ${agentName(e.payload.managerId)}` : 'rattaché directement à l’administrateur'}${e.payload.role === 'manager' ? ' · manager' : ''} · ${e.payload.reason}`,
+        tone: 'accent',
+        icon: '⑂',
+      };
     case 'agent.profile.updated':
       return {
         text: `Fiche de ${agentName(e.payload.agentId)} mise à jour · ${e.payload.skills.length} compétence(s)`,

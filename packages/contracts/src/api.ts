@@ -42,6 +42,15 @@ export const UpdateAgentProfileRequestSchema = z
   .strict();
 export type UpdateAgentProfileRequest = z.infer<typeof UpdateAgentProfileRequestSchema>;
 
+/** Hiérarchie : rattachement (null = directement à l'administrateur) et rôle. */
+export const UpdateReportingRequestSchema = z
+  .object({
+    managerId: z.string().min(1).max(64).nullable(),
+    role: z.enum(['manager', 'specialist']),
+  })
+  .strict();
+export type UpdateReportingRequest = z.infer<typeof UpdateReportingRequestSchema>;
+
 /** Création d'un agent par un administrateur (organisation live). Droits listés explicitement. */
 export const CreateAgentRequestSchema = z
   .object({

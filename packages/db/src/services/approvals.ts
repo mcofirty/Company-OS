@@ -153,6 +153,126 @@ export async function proposeAgentHire(
   return result;
 }
 
+const slugName = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30) || 'agent';
+
+/**
+ * Un manager (organisation live) propose un subordonné direct. Rien n'est créé avant la décision
+ * d'un administrateur humain. Droits demandés ⊆ droits du manager, sans l'outil Équipe ni les
+ * actions de plateforme (pas d'escalade, pas de recrutement en chaîne sans décision humaine).
+ */
+export async function proposeSubordinate(
+  db: Db,
+  input: {
+    orgId: string;
+    managerAgentId: string;
+    taskId: string | null;
+    name: string;
+    title: string;
+    goal: string;
+    instructions: string;
+    tools: string;
+    justification: string;
+    idempotencyKey: string;
+    correlationId: string;
+    causationId: string | null;
+    now?: Date;
+  },
+): Promise<{ approval: ApprovalView }> {
+  const now = input.now ?? new Date();
+  const { result } = await withOrgTx(db, input.orgId, now, async (ctx) => {
+    const { tx, orgId } = ctx;
+    const prior = await tx.approvalRequest.findUnique({
+      where: { orgId_idempotencyKey: { orgId, idempotencyKey: input.idempotencyKey } },
+    });
+    if (prior) return { approval: approvalView(prior) };
+    if (ctx.mode !== 'live') {
+      throw new DomainError('POLICY_DENIED', 'Recrutement par un manager : organisations live');
+    }
+    const manager = await tx.agent.findFirst({
+      where: { id: input.managerAgentId, orgId, deletedAt: null },
+      include: { grants: true, department: true },
+    });
+    if (!manager || manager.role !== 'manager') {
+      throw new DomainError('POLICY_DENIED', 'Seul un agent manager peut proposer un subordonné');
+    }
+    const name = input.name.trim().slice(0, 40);
+    const title = input.title.trim().slice(0, 60);
+    if (name.length < 2 || title.length < 2) {
+      throw new DomainError('VALIDATION_ERROR', 'Nom et intitulé du poste requis');
+    }
+    const pending = await tx.approvalRequest.count({
+      where: { orgId, kind: 'agent_hire', status: 'pending', agentId: manager.id },
+    });
+    if (pending >= 3) {
+      throw new DomainError('CONFLICT', 'Déjà 3 propositions en attente de décision humaine');
+    }
+    const own = new Map(manager.grants.map((g) => [g.toolId, new Set(g.actions)]));
+    const grants: Record<string, string[]> = {};
+    for (const raw of input.tools
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)) {
+      const [toolId, action] = raw.split('.');
+      if (!toolId || !action) continue;
+      if (toolId === 'team' || toolId === 'platform') {
+        throw new DomainError('POLICY_DENIED', `${raw} : outil non transmissible`);
+      }
+      if (!own.get(toolId)?.has(action)) {
+        throw new DomainError('POLICY_DENIED', `${raw} : le manager ne possède pas ce droit`);
+      }
+      grants[toolId] = [...new Set([...(grants[toolId] ?? []), action])];
+    }
+    const count = await tx.agent.count({ where: { orgId } });
+    const payload: HirePayload = {
+      agentId: `${slugName(name)}-${randomUUID().slice(0, 6)}`,
+      name,
+      title,
+      role: 'specialist',
+      departmentId: manager.departmentId,
+      roomId: manager.department.roomId,
+      managerId: manager.id,
+      avatarId: `avatar-0${(count % 8) + 1}`,
+      grants,
+      budgetMicros: 1_000_000,
+      goal: input.goal.trim().slice(0, 300) || title,
+      instructions: input.instructions.trim().slice(0, 3000),
+    };
+    const row = await tx.approvalRequest.create({
+      data: {
+        id: randomUUID(),
+        orgId,
+        kind: 'agent_hire',
+        agentId: manager.id,
+        taskId: input.taskId,
+        riskReason: `${manager.name} propose de recruter un subordonné : création d'identité et de droits, décision humaine obligatoire. Motif : ${input.justification.slice(0, 160)}`,
+        safePreview: {
+          name,
+          title,
+          department: manager.department.name,
+          manager: manager.name,
+          goal: payload.goal ?? '',
+          tools: Object.entries(grants).map(([t, a]) => `${t}:${a.join('+')}`),
+          monthlyBudgetUsd: 1,
+        },
+        payload: payload as unknown as object,
+        idempotencyKey: input.idempotencyKey,
+        requestedAt: now,
+        deadlineAt: new Date(now.getTime() + 72 * 3600_000),
+      },
+    });
+    emitRequested(ctx, row, input.correlationId, input.causationId);
+    return { approval: approvalView(row) };
+  });
+  return result;
+}
+
 function emitRequested(
   ctx: OrgTxContext,
   row: {
@@ -329,6 +449,9 @@ interface HirePayload {
   avatarId: string;
   grants: Record<string, string[]>;
   budgetMicros: number;
+  /** Recrutement par un manager (live) : objectif et consignes rédigés par lui. */
+  goal?: string;
+  instructions?: string;
 }
 
 async function hireFromProposal(
@@ -366,8 +489,10 @@ async function hireFromProposal(
     correlationId,
     initialVersion: {
       promptVersion: PROMPT_VERSION,
-      instructions: instructionsFor(p.roomId, p.role),
-      goal: `${p.title} — ${p.roomId}`,
+      instructions: p.instructions
+        ? `${instructionsFor(p.roomId, p.role)}\n\nConsignes de son manager (validées par un administrateur) :\n${p.instructions}`
+        : instructionsFor(p.roomId, p.role),
+      goal: p.goal ?? `${p.title} — ${p.roomId}`,
       modelPolicy: { model: 'claude-opus-5-5', effort: 'medium', maxTokens: 8000 },
       limits: { maxSteps: 8, maxDurationMs: 5 * 60_000, maxCostMicros: 500_000 },
     },

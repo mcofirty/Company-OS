@@ -179,11 +179,12 @@ describe('Live encadré — API', () => {
 
   it('outils : une org live ne voit que des outils réels ; documents consultables par l’API', async () => {
     const tools = (await req('GET', '/v1/tools', { org: orgId })).json().data as { id: string }[];
-    expect(tools.map((t) => t.id).sort()).toEqual(['company', 'library', 'web']);
+    expect(tools.map((t) => t.id).sort()).toEqual(['company', 'library', 'team', 'web']);
     const boot = (await req('GET', '/v1/bootstrap', { org: orgId })).json().data;
     expect(boot.tools.map((t: { id: string }) => t.id).sort()).toEqual([
       'company',
       'library',
+      'team',
       'web',
     ]);
     // La démo garde ses outils fictifs, sans les outils réels.

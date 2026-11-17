@@ -185,7 +185,7 @@ export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorS
       actorId: p.userId,
       agentId: id,
       grants,
-      validateCatalog: (g, allowDemoTools) => validateGrants(g, { allowDemoTools }),
+      validateCatalog: (g, allowDemoTools, role) => validateGrants(g, { allowDemoTools, role }),
     });
     return { data: { agentId: id, grants: saved }, meta };
   });

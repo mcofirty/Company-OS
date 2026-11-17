@@ -18,3 +18,4 @@ export * from './services/live';
 export * from './services/documents';
 export * from './services/status';
 export * from './services/connectors';
+export * from './services/hierarchy';

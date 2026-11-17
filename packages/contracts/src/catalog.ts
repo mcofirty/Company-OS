@@ -415,6 +415,59 @@ TOOL_CATALOG.push(
   },
 );
 
+/**
+ * Équipe (organisations live, managers seulement) : un manager pilote SES subordonnés directs.
+ * Recruter = proposition soumise à un administrateur humain (rien n'est créé avant décision) ;
+ * droits demandés ⊆ droits du manager, jamais l'outil Équipe lui-même.
+ */
+export const TEAM_TOOL_ID = 'team';
+TOOL_CATALOG.push({
+  id: TEAM_TOOL_ID,
+  name: 'Équipe (managers)',
+  code: 'EQP',
+  category: 'coordination',
+  color: '#c9a227',
+  availability: 'live',
+  actions: [
+    {
+      action: 'list',
+      kind: 'read',
+      risk: 'read',
+      label: 'Voir son équipe et ses résultats',
+      input: { field: 'focus', description: '« tout » ou un identifiant de subordonné' },
+    },
+    {
+      action: 'assign',
+      kind: 'write',
+      risk: 'internal_write',
+      label: 'Confier une mission à un subordonné direct',
+      input: { field: 'assigneeAgentId', description: 'Identifiant d’un subordonné direct' },
+      moreInputs: [
+        { field: 'title', description: 'Titre court de la mission' },
+        { field: 'instructions', description: 'Consignes précises et résultat attendu' },
+      ],
+    },
+    {
+      action: 'recruit',
+      kind: 'write',
+      risk: 'internal_write',
+      label: 'Proposer un subordonné (validation admin obligatoire)',
+      input: { field: 'name', description: 'Prénom du nouvel agent' },
+      moreInputs: [
+        { field: 'title', description: 'Intitulé du poste' },
+        { field: 'goal', description: 'Son job : objectif permanent en une phrase' },
+        { field: 'instructions', description: 'Consignes de travail (ton, règles, livrables)' },
+        {
+          field: 'tools',
+          description:
+            'Outils demandés, séparés par des virgules, au format outil.action (parmi VOS outils)',
+        },
+        { field: 'justification', description: 'Pourquoi ce recrutement est nécessaire' },
+      ],
+    },
+  ],
+});
+
 /** L'outil existe-t-il pour ce mode d'organisation ? */
 export const toolAvailableIn = (
   t: Pick<ToolCatalogEntry, 'availability'>,

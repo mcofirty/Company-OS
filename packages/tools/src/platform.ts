@@ -9,6 +9,9 @@ import {
   listDocuments,
   saveDocument,
   proposeAgentHire,
+  proposeSubordinate,
+  assignToReport,
+  teamOf,
   startMeeting,
   type Db,
 } from '@company-os/db';
@@ -282,3 +285,110 @@ PLATFORM_ADAPTERS.push(
 
 export const findPlatformAdapter = (toolId: string, action: string): PlatformAdapter | undefined =>
   PLATFORM_ADAPTERS.find((a) => a.toolId === toolId && a.action === action);
+
+/** Garde-fou d'exécution : l'outil Équipe n'agit que pour un agent manager (revérifié ici). */
+async function assertManager(ctx: PlatformContext): Promise<void> {
+  const me = await ctx.db.agent.findUnique({ where: { id: ctx.agentId } });
+  if (!me || me.role !== 'manager') {
+    throw new ToolError('POLICY_DENIED', false, 'Outil Équipe réservé aux managers');
+  }
+}
+
+/** Outil Équipe (organisations live) : un manager pilote ses subordonnés directs. */
+PLATFORM_ADAPTERS.push(
+  {
+    toolId: 'team',
+    action: 'list',
+    kind: 'internal',
+    inputSchema: z.object({ focus: str(80) }).strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    summarize: (o: unknown) => (o as Out).summary,
+    async invoke(ctx, input) {
+      await assertManager(ctx);
+      const t = await teamOf(ctx.db, ctx.orgId, ctx.agentId, input['focus']);
+      return {
+        summary: `Équipe : ${t.reports.length} subordonné(s), ${t.pendingHires} recrutement(s) en attente`,
+        data: t,
+      };
+    },
+  },
+  {
+    toolId: 'team',
+    action: 'assign',
+    kind: 'internal',
+    inputSchema: z
+      .object({ assigneeAgentId: str(64), title: str(120), instructions: str(4000) })
+      .strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    summarize: (o: unknown) => (o as Out).summary,
+    async invoke(ctx, input) {
+      await assertManager(ctx);
+      try {
+        const { task } = await assignToReport(ctx.db, {
+          orgId: ctx.orgId,
+          managerId: ctx.agentId,
+          assigneeAgentId: input['assigneeAgentId']!,
+          title: input['title']!,
+          instructions: input['instructions']!,
+          parentTaskId: ctx.taskId,
+          idempotencyKey: `inv:${ctx.invocationId}`,
+          causationId: ctx.causationId,
+        });
+        return {
+          summary: `Mission « ${task.title} » confiée à ${task.agentId}`.slice(0, 200),
+          data: { taskId: task.id, status: task.status },
+        };
+      } catch (e) {
+        return asToolError(e);
+      }
+    },
+  },
+  {
+    toolId: 'team',
+    action: 'recruit',
+    kind: 'internal',
+    inputSchema: z
+      .object({
+        name: str(40),
+        title: str(60),
+        goal: str(300),
+        instructions: str(3000),
+        tools: z.string().max(1000),
+        justification: str(300),
+      })
+      .strict(),
+    outputSchema: Out,
+    simulatedLatencyMs: 0,
+    summarize: (o: unknown) => (o as Out).summary,
+    async invoke(ctx, input) {
+      await assertManager(ctx);
+      try {
+        const { approval } = await proposeSubordinate(ctx.db, {
+          orgId: ctx.orgId,
+          managerAgentId: ctx.agentId,
+          taskId: ctx.taskId,
+          name: input['name']!,
+          title: input['title']!,
+          goal: input['goal']!,
+          instructions: input['instructions']!,
+          tools: input['tools'] ?? '',
+          justification: input['justification']!,
+          idempotencyKey: `inv:${ctx.invocationId}`,
+          correlationId: ctx.correlationId,
+          causationId: ctx.causationId,
+        });
+        return {
+          summary: `Recrutement de ${input['name']} proposé : en attente de décision humaine`.slice(
+            0,
+            200,
+          ),
+          data: { approvalId: approval.id, status: approval.status },
+        };
+      } catch (e) {
+        return asToolError(e);
+      }
+    },
+  },
+);

@@ -71,7 +71,7 @@ export async function initLiveOrg(
 /** Droits demandés validés contre le catalogue : `high_impact` et actions de plateforme refusés. */
 export function validateGrants(
   grants: Record<string, string[]>,
-  opts: { allowDemoTools?: boolean } = {},
+  opts: { allowDemoTools?: boolean; role?: string } = {},
 ): Record<string, string[]> {
   const out: Record<string, string[]> = {};
   for (const [toolId, actions] of Object.entries(grants)) {
@@ -83,6 +83,9 @@ export function validateGrants(
         'POLICY_DENIED',
         `${tool.name} : outil de démonstration (données fictives), indisponible en LIVE`,
       );
+    }
+    if (toolId === 'team' && opts.role !== 'manager') {
+      throw new DomainError('POLICY_DENIED', 'Outil Équipe réservé aux agents managers');
     }
     if (toolId === 'platform') {
       throw new DomainError(
@@ -150,7 +153,7 @@ export async function createAgentByAdmin(
         Object.entries(req.grants).filter(([id]) => isConnectorToolId(id) === connector),
       );
     const grants = {
-      ...validateGrants(pick(false), { allowDemoTools: org.allowDemoTools }),
+      ...validateGrants(pick(false), { allowDemoTools: org.allowDemoTools, role: req.role }),
       // Outils de connecteurs MCP de CETTE organisation (actifs, non désactivés).
       ...(await validateConnectorGrants(tx, orgId, pick(true))),
     };

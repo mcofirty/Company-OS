@@ -7,6 +7,7 @@ import {
   CreateAgentRequestSchema,
   CreateTaskRequestSchema,
   UpdateAgentProfileRequestSchema,
+  UpdateReportingRequestSchema,
   IdempotencyKeySchema,
   SystemControlRequestSchema,
   ApprovalStatusSchema,
@@ -35,6 +36,7 @@ import {
   meetingView,
   createAgentByAdmin,
   updateAgentProfile,
+  updateReporting,
   orgsOfUser,
   cancelTask,
   retryTask,
@@ -88,6 +90,7 @@ export function registerV1(
           createMission: operator && live,
           manageConnectors: admin && live,
           editProfile: admin,
+          manageHierarchy: admin,
         },
       },
       meta,
@@ -192,6 +195,16 @@ export function registerV1(
       },
       meta,
     };
+  });
+
+  /** Organigramme : rattachement et rôle d'un agent (administrateur humain seulement). */
+  app.post('/v1/agents/:id/reporting', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = SlugParam.parse(req.params);
+    const body = UpdateReportingRequestSchema.parse(req.body);
+    await updateReporting(db, { orgId: p.orgId, actorId: p.userId, agentId: id, ...body });
+    return { data: { agentId: id, ...body }, meta };
   });
 
   /** Fiche d'un agent (compétences, tâches habituelles) : administrateur seulement. */

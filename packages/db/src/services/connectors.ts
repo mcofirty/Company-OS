@@ -410,6 +410,7 @@ export async function replaceAgentGrants(
     validateCatalog: (
       g: Record<string, string[]>,
       allowDemoTools: boolean,
+      role: string,
     ) => Record<string, string[]>;
   },
 ): Promise<Record<string, string[]>> {
@@ -427,7 +428,7 @@ export async function replaceAgentGrants(
       Object.entries(input.grants).filter(([id]) => isConnectorToolId(id)),
     );
     const grants = {
-      ...input.validateCatalog(catalog, org.allowDemoTools),
+      ...input.validateCatalog(catalog, org.allowDemoTools, agent.role),
       ...(await validateConnectorGrants(ctx.tx, ctx.orgId, connectors)),
     };
     await ctx.tx.agentToolGrant.deleteMany({ where: { agentId: agent.id } });

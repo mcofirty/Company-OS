@@ -358,5 +358,6 @@ export interface Me {
     ackAlert: boolean;
     manageConnectors?: boolean;
     editProfile?: boolean;
+    manageHierarchy?: boolean;
   };
 }

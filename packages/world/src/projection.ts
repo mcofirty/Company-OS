@@ -368,6 +368,12 @@ export function applyEvent(
     }
     case 'agent.grants.updated':
     case 'agent.profile.updated':
+      break;
+    case 'agent.reporting.updated':
+      w = patchAgent(w, e.payload.agentId, () => ({
+        managerId: e.payload.managerId,
+        role: e.payload.role,
+      }));
       break; // journal / audit seulement : les droits ne font pas partie de la projection
   }
   const alert = alertFromEvent(e);
