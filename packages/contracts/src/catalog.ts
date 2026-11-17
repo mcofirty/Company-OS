@@ -462,7 +462,7 @@ TOOL_CATALOG.push({
       action: 'recruit',
       kind: 'write',
       risk: 'internal_write',
-      label: 'Proposer un subordonné (validation admin obligatoire)',
+      label: 'Proposer un nouvel agent sous vos ordres (validation humaine obligatoire)',
       input: { field: 'name', description: 'Prénom du nouvel agent' },
       moreInputs: [
         { field: 'title', description: 'Intitulé du poste' },
@@ -474,6 +474,16 @@ TOOL_CATALOG.push({
             'Outils demandés, séparés par des virgules, au format outil.action (parmi VOS outils)',
         },
         { field: 'justification', description: 'Pourquoi ce recrutement est nécessaire' },
+        {
+          field: 'department',
+          description:
+            'Pôle d’affectation (nom exact) ; vide = votre pôle. Autre pôle : réservé aux agents rattachés directement au dirigeant',
+        },
+        {
+          field: 'role',
+          description:
+            '« specialist » (défaut) ou « manager » (manager : réservé aux agents rattachés directement au dirigeant)',
+        },
       ],
     },
   ],

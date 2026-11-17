@@ -167,6 +167,15 @@ const slugName = (s: string): string =>
  * d'un administrateur humain. Droits demandés ⊆ droits du manager, sans l'outil Équipe ni les
  * actions de plateforme (pas d'escalade, pas de recrutement en chaîne sans décision humaine).
  */
+/** Comparaison tolérante des noms de pôle (casse, accents, espaces). */
+function norm(v: string): string {
+  return v
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+}
+
 export async function proposeSubordinate(
   db: Db,
   input: {
@@ -179,6 +188,10 @@ export async function proposeSubordinate(
     instructions: string;
     tools: string;
     justification: string;
+    /** Pôle d'affectation (nom, identifiant ou zone) ; vide = celui du manager. */
+    department?: string;
+    /** « specialist » (défaut) ou « manager ». */
+    role?: string;
     idempotencyKey: string;
     correlationId: string;
     causationId: string | null;
@@ -201,6 +214,38 @@ export async function proposeSubordinate(
     });
     if (!manager || manager.role !== 'manager') {
       throw new DomainError('POLICY_DENIED', 'Seul un agent manager peut proposer un subordonné');
+    }
+    // Agent rattaché directement au dirigeant humain (ex. assistant personnel) : peut proposer un
+    // agent dans n'importe quel pôle, y compris un manager. Les autres : un spécialiste de leur pôle.
+    const topLevel = manager.managerId === null;
+    const role: 'specialist' | 'manager' =
+      (input.role ?? '').trim().toLowerCase() === 'manager' ? 'manager' : 'specialist';
+    if (role === 'manager' && !topLevel) {
+      throw new DomainError(
+        'POLICY_DENIED',
+        'Proposer un manager : réservé aux agents rattachés directement au dirigeant',
+      );
+    }
+    let target = manager.department;
+    const wanted = norm(input.department ?? '');
+    if (wanted && wanted !== norm(manager.department.name)) {
+      const all = await tx.department.findMany({ where: { orgId } });
+      const found = all.find(
+        (d) => norm(d.name) === wanted || norm(d.id) === wanted || norm(d.roomId) === wanted,
+      );
+      if (!found) {
+        throw new DomainError(
+          'VALIDATION_ERROR',
+          `Pôle inconnu « ${input.department} ». Pôles : ${all.map((d) => d.name).join(', ')}`,
+        );
+      }
+      if (found.id !== manager.departmentId && !topLevel) {
+        throw new DomainError(
+          'POLICY_DENIED',
+          'Recruter dans un autre pôle : réservé aux agents rattachés directement au dirigeant',
+        );
+      }
+      target = found;
     }
     const name = input.name.trim().slice(0, 40);
     const title = input.title.trim().slice(0, 60);
@@ -234,9 +279,9 @@ export async function proposeSubordinate(
       agentId: `${slugName(name)}-${randomUUID().slice(0, 6)}`,
       name,
       title,
-      role: 'specialist',
-      departmentId: manager.departmentId,
-      roomId: manager.department.roomId,
+      role,
+      departmentId: target.id,
+      roomId: target.roomId,
       managerId: manager.id,
       avatarId: `avatar-0${(count % 8) + 1}`,
       grants,
@@ -251,11 +296,12 @@ export async function proposeSubordinate(
         kind: 'agent_hire',
         agentId: manager.id,
         taskId: input.taskId,
-        riskReason: `${manager.name} propose de recruter un subordonné : création d'identité et de droits, décision humaine obligatoire. Motif : ${input.justification.slice(0, 160)}`,
+        riskReason: `${manager.name} propose de recruter ${name} (${role === 'manager' ? 'manager' : 'spécialiste'}, ${target.name}) : création d'identité et de droits, décision humaine obligatoire. Motif : ${input.justification.slice(0, 160)}`,
         safePreview: {
           name,
           title,
-          department: manager.department.name,
+          department: target.name,
+          role: role === 'manager' ? 'Manager' : 'Spécialiste',
           manager: manager.name,
           goal: payload.goal ?? '',
           tools: Object.entries(grants).map(([t, a]) => `${t}:${a.join('+')}`),
@@ -442,7 +488,7 @@ interface HirePayload {
   agentId: string;
   name: string;
   title: string;
-  role: 'specialist';
+  role: 'specialist' | 'manager';
   departmentId: string;
   roomId: string;
   managerId: string | null;

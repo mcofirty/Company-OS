@@ -50,6 +50,7 @@ export function AgentPopover({
   onPin,
   onLifecycle,
   toast,
+  docked = false,
 }: {
   world: WorldSnapshot;
   agentId: string;
@@ -67,6 +68,8 @@ export function AgentPopover({
   onPin?: () => void;
   onLifecycle: (agentId: string, action: 'pause' | 'resume', reason: string) => Promise<void>;
   toast: (t: { text: string; tone: 'info' | 'danger' | 'success' }) => void;
+  /** Téléphone : fiche à plat dans une feuille, sans suivi de l'avatar. */
+  docked?: boolean;
 }) {
   const [tab, setTab] = useState<'card' | 'work'>('card');
   const tabRef = useRef(tab);
@@ -97,6 +100,7 @@ export function AgentPopover({
 
   // Suivi de l'avatar : position écran du personnage -> position de la fiche (sans re-rendu React).
   useLayoutEffect(() => {
+    if (docked) return;
     let raf = 0;
     const place = (): void => {
       const el = box.current;
@@ -145,12 +149,17 @@ export function AgentPopover({
     };
     raf = requestAnimationFrame(place);
     return () => cancelAnimationFrame(raf);
-  }, [agentId, scene]);
+  }, [agentId, scene, docked]);
 
   const agent = world.agents.find((a) => a.id === agentId);
   if (!agent) return null;
   return (
-    <div ref={box} className="agent-popover" style={{ width: CARD_W }} data-testid="agent-popover">
+    <div
+      ref={box}
+      className={`agent-popover${docked ? ' docked' : ''}`}
+      style={docked ? undefined : { width: CARD_W }}
+      data-testid="agent-popover"
+    >
       {onPin && (
         <button
           className={`popover-pin ${pinned ? 'on' : ''}`}

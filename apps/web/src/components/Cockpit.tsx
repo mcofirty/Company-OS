@@ -18,7 +18,7 @@ import { LoginPanel } from './cockpit/LoginPanel';
 import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
 import { ActivityFeed } from './cockpit/ActivityFeed';
-import { MobileView } from './cockpit/MobileView';
+import { MobileCockpit } from './cockpit/MobileCockpit';
 import { AppBar } from './cockpit/AppBar';
 import { Onboarding, WelcomeBanner } from './cockpit/Welcome';
 import { DeliverablesPage } from './pages/Deliverables';
@@ -559,22 +559,24 @@ export function Cockpit() {
               )}
             </div>
           )}
-          <WorldViewport
-            world={world}
-            selection={selection}
-            now={now}
-            onSelect={select}
-            onEmptyRoom={() => controls.caps.manageDepartments && setDeptDialog(true)}
-            renderer={display.renderer}
-            onFallback={() => {
-              setDisplay({ renderer: '2d' });
-              toast({ text: '3D indisponible sur cet appareil : affichage 2D', tone: 'info' });
-            }}
-            onReady={(s) => {
-              scene.current = s;
-              setSceneReady((n) => n + 1);
-            }}
-          />
+          {!isMobile && (
+            <WorldViewport
+              world={world}
+              selection={selection}
+              now={now}
+              onSelect={select}
+              onEmptyRoom={() => controls.caps.manageDepartments && setDeptDialog(true)}
+              renderer={display.renderer}
+              onFallback={() => {
+                setDisplay({ renderer: '2d' });
+                toast({ text: '3D indisponible sur cet appareil : affichage 2D', tone: 'info' });
+              }}
+              onReady={(s) => {
+                scene.current = s;
+                setSceneReady((n) => n + 1);
+              }}
+            />
+          )}
           {view === 'office' && (
             <WorldControls
               prefs={display}
@@ -648,6 +650,7 @@ export function Cockpit() {
           {world &&
             view === 'office' &&
             !uiHidden &&
+            !isMobile &&
             // Fiches épinglées (2 max) + fiche de l'agent sélectionné, chacune à côté de son avatar.
             [
               ...pinned,
@@ -756,7 +759,92 @@ export function Cockpit() {
           <ToolWall world={world} now={now} onSelect={select} dept={dept} />
         </aside>
         <ActivityFeed world={world} onSelect={select} dept={dept} />
-        {isMobile && <MobileView world={world} onDecide={onDecide} onSelect={select} />}
+        {isMobile && (
+          <MobileCockpit
+            world={world}
+            now={now}
+            connected={connection === 'live'}
+            selection={selection}
+            onSelect={setSelection}
+            onDecide={onDecide}
+            onSystem={async (pause) => {
+              try {
+                await hq.setSystemPaused(pause);
+              } catch (err) {
+                fail(err);
+              }
+            }}
+            renderDetail={(sel) => inspectorFor(sel)}
+            renderAgent={(id, close) =>
+              world ? (
+                <AgentPopover
+                  world={world}
+                  agentId={id}
+                  scene={scene}
+                  now={now}
+                  docked
+                  canEdit={controls.caps.editProfile ?? false}
+                  canMission={controls.caps.createMission}
+                  onMission={(agentId) => setMissionFor(agentId)}
+                  onSelect={select}
+                  pinned={false}
+                  onClose={close}
+                  onLifecycle={onLifecycle}
+                  toast={toast}
+                  details={inspectorFor({ kind: 'agent', id })}
+                />
+              ) : null
+            }
+            renderPage={(p, close) =>
+              !world ? null : p === 'org' ? (
+                <OrgChart
+                  asPage
+                  world={world}
+                  canEdit={(controls.caps.manageHierarchy ?? false) && !replay.active}
+                  onClose={close}
+                  onSelect={select}
+                />
+              ) : p === 'missions' ? (
+                <MissionsPage
+                  world={world}
+                  now={now}
+                  tab={missionsTab}
+                  onTab={setMissionsTab}
+                  onSelect={select}
+                  onNewMission={() => setMissionFor('')}
+                  toast={toast}
+                />
+              ) : p === 'deliverables' ? (
+                <DeliverablesPage world={world} onSelect={select} />
+              ) : (
+                <SettingsPage
+                  world={world}
+                  section={settingsSection}
+                  onSection={setSettingsSection}
+                  onClose={close}
+                  onBackend={() => setSettingsOpen(true)}
+                  toast={toast}
+                />
+              )
+            }
+            orgSwitcher={
+              hq.me && !replay.active ? (
+                <OrgSwitcher
+                  orgs={hq.me.orgs}
+                  current={hq.me.orgId}
+                  onChange={(id) => {
+                    setOrg(id);
+                    window.location.reload();
+                  }}
+                />
+              ) : null
+            }
+            onNewMission={(agentId) => setMissionFor(agentId ?? '')}
+            onNewAgent={() => setAgentFormOpen(true)}
+            onNewDepartment={() => setDeptDialog(true)}
+            onConvene={() => setConveneOpen(true)}
+          />
+        )}
         {searchOpen && world && (
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}

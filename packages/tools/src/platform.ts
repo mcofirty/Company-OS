@@ -41,6 +41,12 @@ const Out = z.object({
 });
 type Out = z.infer<typeof Out>;
 const str = (max = 200) => z.string().min(1).max(max);
+/** Texte libre du modèle : espaces retirés, tronqué à `max` (jamais refusé pour sa longueur). */
+const clip = (max: number, min = 0) =>
+  z
+    .string()
+    .transform((v) => v.trim().slice(0, max))
+    .refine((v) => v.length >= min, 'Champ requis');
 
 /** Traduit une erreur métier en erreur d'outil (code court, non rejouable). */
 function asToolError(err: unknown): never {
@@ -384,12 +390,15 @@ PLATFORM_ADAPTERS.push(
     kind: 'internal',
     inputSchema: z
       .object({
-        name: str(40),
-        title: str(60),
-        goal: str(300),
-        instructions: str(3000),
-        tools: z.string().max(1000),
-        justification: str(300),
+        // Textes rédigés par le modèle : raccourcis plutôt que refusés (un refus bloquait la mission).
+        name: clip(40, 1),
+        title: clip(60, 1),
+        goal: clip(300),
+        instructions: clip(3000),
+        tools: clip(1000),
+        justification: clip(300),
+        department: clip(60).optional(),
+        role: clip(20).optional(),
       })
       .strict(),
     outputSchema: Out,
@@ -408,6 +417,8 @@ PLATFORM_ADAPTERS.push(
           instructions: input['instructions']!,
           tools: input['tools'] ?? '',
           justification: input['justification']!,
+          department: input['department'] ?? '',
+          role: input['role'] ?? '',
           idempotencyKey: `inv:${ctx.invocationId}`,
           correlationId: ctx.correlationId,
           causationId: ctx.causationId,

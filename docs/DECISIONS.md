@@ -366,3 +366,17 @@ plus petit attribue le premier poste libre, sinon la salle d'attente. Sol unique
 tapis à motifs teintés par la couleur réelle du pôle ; décor sans effet métier. Les portraits des
 fiches, de l'équipe, de l'organigramme et de la vue téléphone sont des SVG générés depuis l'apparence
 et l'humeur réelle de l'agent (plus de rendu 3D hors écran).
+
+ADR-071 — **Cockpit téléphone et recrutement par les agents de tête.**
+- Sur écran étroit (≤ 760 px), un cockpit tactile remplace la carte : accueil (chiffres, alertes,
+  validations, missions, plan en direct), à valider, équipe, missions, ＋ nouvelle mission, « Plus »
+  (organigramme, livrables, récurrentes / objectifs / chaînes, activité, réglages, organisation, pause
+  système). Fiches et pages existantes sont réutilisées dans des feuilles plein écran : mêmes données,
+  mêmes droits, aucun écran parallèle à maintenir. Le QG 3D n'est pas chargé sur téléphone. Style
+  iOS (police système, listes groupées, barres en verre dépoli, mode sombre) ; sans flou si la
+  machine n'a pas de carte graphique.
+- Outil Équipe `recruit` : les textes rédigés par le modèle sont raccourcis au lieu d'être refusés
+  (un refus de longueur bloquait la mission). Un agent rattaché directement au dirigeant humain peut
+  proposer un agent dans n'importe quel pôle, y compris un manager (ex. un DG proposé par l'assistant) ;
+  les autres managers proposent un spécialiste de leur pôle. Validation humaine inchangée, droits
+  transmis ⊆ droits du proposant, outil Équipe jamais transmis.

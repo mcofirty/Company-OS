@@ -3,6 +3,25 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-27 (23) — Cockpit téléphone, recrutement par l'assistant, performances 3D
+
+### Réalisé
+- Cockpit téléphone complet (ADR-071) : 5 onglets + bouton ＋, fiches et pages en plein écran,
+  style iOS en verre dépoli ; le QG 3D n'est plus chargé sur téléphone.
+- Recrutement par un agent : champs tolérants (troncature) ; agent rattaché au dirigeant → autre
+  pôle et rôle manager possibles (validation humaine).
+- 3D : décor fixe fusionné par matériau (3 800 → 750 appels de dessin ; rendu logiciel 2,8 s →
+  19 ms par image) ; lampes de nuit masquées de jour (compilation des shaders allégée).
+
+### Tests (exécutés le 2026-11-27)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 206/206 (dont recrutement multi-pôles / manager).
+- `pnpm e2e` : 26/26 avant le cockpit téléphone (6 min) ; `mobile.spec.ts` : OK. Série complète : voir commit suivant.
+- Rappel e2e local : arrêter tout `pnpm dev` lancé à la main (sans `CONNECTOR_SECRET_KEY`), sinon
+  Playwright le réutilise et les tests connecteurs / notifications échouent.
+
+### Prochaine tâche
+- Déployer sur le VPS (`cd /opt/company-os && git pull && bash infra/deploy/update.sh`) et tester sur téléphone.
+
 ## Session 2026-11-27 (22) — QG « Campus » et portraits 2D
 
 ### Réalisé

@@ -149,6 +149,87 @@ describe('Équipe d’un manager (live)', () => {
     expect(snap.agents.find((a) => a.id === hugo.id)?.managerId).toBe(mgr);
   });
 
+  it('agent rattaché au dirigeant : propose un manager dans un autre pôle ; textes longs raccourcis', async () => {
+    const { agentId: top } = await hire('Romain', 'manager', {
+      team: ['list', 'assign', 'recruit'],
+      company: ['status'],
+    });
+    const runId = await runOf(top);
+    const long = 'Piloter tous les pôles et rendre compte chaque semaine. '.repeat(20); // > 300
+    const ok = await call(runId, top, 'recruit', {
+      name: 'Iris',
+      title: 'Directrice générale',
+      goal: long,
+      instructions: 'Coordonner les responsables de pôle.',
+      tools: 'company.status',
+      justification: long,
+      department: 'finance',
+      role: 'manager',
+    });
+    expect(ok.status).toBe('succeeded');
+    const ap = await db.approvalRequest.findFirstOrThrow({ where: { orgId, kind: 'agent_hire' } });
+    expect(ap.safePreview).toMatchObject({ name: 'Iris', department: 'Finance', role: 'Manager' });
+    await decideApproval(db, {
+      orgId,
+      approvalId: ap.id,
+      decision: 'approved',
+      reviewer: admin,
+      reason: 'DG validé',
+    });
+    const iris = await db.agent.findFirstOrThrow({ where: { orgId, name: 'Iris' } });
+    expect(iris).toMatchObject({ role: 'manager', managerId: top });
+    expect(iris.departmentId).toBe(`${orgId.slice(0, 8)}-finance`);
+
+    const unknown = await call(runId, top, 'recruit', {
+      name: 'Zoé',
+      title: 'Analyste',
+      goal: 'Analyser',
+      instructions: 'Analyser les chiffres.',
+      tools: '',
+      justification: 'Besoin',
+      department: 'Pôle imaginaire',
+      role: 'specialist',
+    });
+    expect(unknown).toMatchObject({ status: 'failed', errorCode: 'VALIDATION_ERROR' });
+  });
+
+  it('manager non rattaché au dirigeant : ni autre pôle, ni manager', async () => {
+    const { agentId: boss } = await hire('Nadia', 'manager', { company: ['status'] });
+    const { agentId: mgr } = await hire('Paul', 'manager', {
+      team: ['list', 'assign', 'recruit'],
+      company: ['status'],
+    });
+    await updateReporting(db, {
+      orgId,
+      actorId: DEV_ADMIN.id,
+      agentId: mgr,
+      managerId: boss,
+      role: 'manager',
+    });
+    const runId = await runOf(mgr);
+    const base = {
+      title: 'Commercial',
+      goal: 'Vendre',
+      instructions: 'Relancer les prospects.',
+      tools: 'company.status',
+      justification: 'Charge',
+    };
+    const other = await call(runId, mgr, 'recruit', {
+      ...base,
+      name: 'Léo',
+      department: 'Finance',
+      role: 'specialist',
+    });
+    expect(other).toMatchObject({ status: 'failed', errorCode: 'POLICY_DENIED' });
+    const manager = await call(runId, mgr, 'recruit', {
+      ...base,
+      name: 'Lina-Rose',
+      department: '',
+      role: 'manager',
+    });
+    expect(manager).toMatchObject({ status: 'failed', errorCode: 'POLICY_DENIED' });
+  });
+
   it('un manager ne pilote que ses subordonnés directs', async () => {
     const { agentId: a } = await hire('Inès', 'manager', { team: ['assign'] });
     const { agentId: other } = await hire('Léo', 'specialist', { company: ['status'] });
