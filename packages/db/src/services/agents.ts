@@ -150,3 +150,37 @@ export async function hasGrant(
   const g = await db.agentToolGrant.findUnique({ where: { agentId_toolId: { agentId, toolId } } });
   return g?.actions.includes(action) ?? false;
 }
+
+/**
+ * Fiche d'un agent (compétences, tâches habituelles) modifiée par un administrateur humain.
+ * Affichage seulement : n'accorde aucun droit et ne change pas les consignes du modèle.
+ */
+export async function updateAgentProfile(
+  db: Db,
+  input: { orgId: string; actorId: string; agentId: string; skills: string[]; routines: string[] },
+): Promise<void> {
+  await withOrgTx(db, input.orgId, new Date(), async (ctx) => {
+    const agent = await ctx.tx.agent.findFirst({
+      where: { id: input.agentId, orgId: ctx.orgId, deletedAt: null },
+    });
+    if (!agent) throw new DomainError('NOT_FOUND', 'Agent introuvable');
+    const skills = [...new Set(input.skills.map((s) => s.trim()).filter(Boolean))].slice(0, 8);
+    const routines = input.routines
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+    await ctx.tx.agent.update({ where: { id: agent.id }, data: { skills, routines } });
+    ctx.emit({
+      classification: 'internal',
+      aggregateType: 'agent',
+      aggregateId: agent.id,
+      aggregateVersion: agent.version,
+      correlationId: crypto.randomUUID(),
+      causationId: null,
+      actor: { kind: 'user', id: input.actorId },
+      provenance: ctx.mode,
+      type: 'agent.profile.updated',
+      payload: { agentId: agent.id, skills, routines },
+    });
+  });
+}

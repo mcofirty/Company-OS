@@ -41,6 +41,7 @@ export const ALL_EVENT_TYPES = [
   'world.layout.updated',
   'tool.connector.updated',
   'agent.grants.updated',
+  'agent.profile.updated',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -262,6 +263,12 @@ export const Payloads = {
     agentId: SlugIdSchema,
     grants: z.record(z.string().max(64), z.array(z.string().max(64)).max(200)),
   }),
+  /** Fiche d'un agent modifiée par un administrateur (affichage seulement, aucun droit). */
+  'agent.profile.updated': z.object({
+    agentId: SlugIdSchema,
+    skills: z.array(z.string().min(1).max(30)).max(8),
+    routines: z.array(z.string().min(1).max(120)).max(6),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -315,6 +322,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('task.cancelled'),
   variant('tool.connector.updated'),
   variant('agent.grants.updated'),
+  variant('agent.profile.updated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

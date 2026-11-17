@@ -1554,3 +1554,202 @@ kbd {
   display: grid;
   gap: 8px;
 }
+
+/* ---------- Fiche agent ---------- */
+.agent-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  margin: 4px 0 14px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-muted) 100%);
+  border: 1px solid var(--outline);
+  box-shadow: var(--shadow);
+}
+.agent-card-top {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  align-items: start;
+  padding-right: 22px; /* bouton fermer */
+}
+.agent-card .portrait {
+  width: 96px;
+  height: 124px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+}
+.portrait-canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+.agent-card-id {
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-width: 0;
+}
+.agent-card-id h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.dept-chip {
+  border: 0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.18);
+}
+.agent-card-title {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+.chief-chip {
+  background: #fdf0b8;
+  color: #6b5410;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  margin-top: 2px;
+}
+.agent-card-reports {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 12.5px;
+}
+.agent-card-reports a {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+}
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.status-pill:not(:disabled) {
+  cursor: pointer;
+}
+.status-pill:not(:disabled):hover {
+  border-color: var(--accent);
+}
+.status-pill .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+}
+.card-block h3 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.card-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  border-radius: 9px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.tool-chip:hover {
+  border-color: var(--accent);
+}
+.card-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.team-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.team-faces .face {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--outline);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+}
+.team-faces .face:hover {
+  border-color: var(--accent);
+}
+.agent-card-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.agent-card-actions .btn {
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 12px;
+}
+.agent-card-actions .btn:only-child {
+  grid-column: 1 / -1;
+}
+.btn.dark {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
+}
+.btn.light {
+  background: var(--surface);
+}
+.profile-editor {
+  display: grid;
+  gap: 8px;
+}
+.profile-editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+}
+.details-title {
+  margin: 4px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}

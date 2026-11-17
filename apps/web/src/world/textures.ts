@@ -593,6 +593,32 @@ function drawAvatar(s: Grid, v: Variant, view: AvatarView, frame: AvatarFrame): 
   if (front) drawFace(s, v, r);
 }
 
+/**
+ * Dessine un avatar sur un canvas 2D quelconque (fiche agent du cockpit, hors Phaser).
+ * `crop: 'head'` ne garde que la tête et les épaules (vignettes d'équipe).
+ */
+export function drawAvatarPortrait(
+  ctx: CanvasRenderingContext2D,
+  avatarId: string,
+  scale: number,
+  crop: 'full' | 'head' = 'full',
+): { w: number; h: number } {
+  const v = AVATAR_VARIANTS[avatarId] ?? Object.values(AVATAR_VARIANTS)[0]!;
+  const grid = new Grid(AVATAR_W, AVATAR_H);
+  drawAvatar(grid, v, 'front', 'idle');
+  grid.outline();
+  const [x0, y0, w, h] = crop === 'head' ? [4, 0, 14, 15] : [0, 0, AVATAR_W, AVATAR_H];
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const c = grid.get(x0 + x, y0 + y);
+      if (c === null) continue;
+      ctx.fillStyle = css(c);
+      ctx.fillRect(x * scale, y * scale, scale, scale);
+    }
+  }
+  return { w: w * scale, h: h * scale };
+}
+
 export function makeCanvas(
   scene: Phaser.Scene,
   key: string,

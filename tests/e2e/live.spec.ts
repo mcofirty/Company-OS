@@ -50,6 +50,8 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await page
     .getByTestId('agent-instructions')
     .fill('Toujours vouvoyer et citer la source utilisée.');
+  await page.getByTestId('agent-skills').fill('Support client, Remboursements');
+  await page.getByTestId('agent-routines').fill('Répond aux tickets du jour');
   await page.getByTestId('grant-company-status').check();
   await page.getByTestId('grant-library-save_document').check();
   // Aucun outil fictif proposé en LIVE.
@@ -58,6 +60,15 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await page.getByTestId('agent-submit').click();
   await expect(page.getByTestId('inspector-title')).toHaveText('Camille', { timeout: 15_000 });
   await expect(page.getByTestId('team-list')).toHaveCount(0); // l'inspecteur remplace la liste
+  // Fiche agent : pôle, compétences, outils accordés, tâches habituelles, actions.
+  const card = page.getByTestId('agent-card');
+  await expect(card).toContainText('Operations');
+  await expect(card).toContainText('Remboursements');
+  await expect(card).toContainText('Répond aux tickets du jour');
+  await expect(card).toContainText('Entreprise', { timeout: 10_000 });
+  await expect(card).toContainText('Au poste');
+  await expect(page.getByTestId('agent-dept')).toBeVisible();
+  await page.screenshot({ path: 'docs/screenshots/agent-card-1440.png' });
 
   await page.getByTestId('agent-mission').click();
   await page.getByTestId('mission-title').fill('Réponse type remboursement');

@@ -233,6 +233,12 @@ export function describe(
         icon: '⇄',
       };
     }
+    case 'agent.profile.updated':
+      return {
+        text: `Fiche de ${agentName(e.payload.agentId)} mise à jour · ${e.payload.skills.length} compétence(s)`,
+        tone: 'neutral',
+        icon: '✎',
+      };
     case 'agent.grants.updated':
       return {
         text: `Droits de ${agentName(e.payload.agentId)} modifiés par un administrateur · ${Object.keys(e.payload.grants).length} outil(s)`,

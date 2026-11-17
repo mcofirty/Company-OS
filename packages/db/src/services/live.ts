@@ -189,6 +189,11 @@ export async function createAgentByAdmin(
         limits: { maxSteps: 8, maxDurationMs: 5 * 60_000, maxCostMicros: 500_000 },
       },
     });
+    // Fiche (affichage) : compétences et tâches habituelles saisies par l'administrateur.
+    await tx.agent.update({
+      where: { id: agentId },
+      data: { skills: req.skills, routines: req.routines },
+    });
     await tx.budget.create({
       data: {
         id: randomUUID(),

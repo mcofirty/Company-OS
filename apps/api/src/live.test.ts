@@ -108,6 +108,41 @@ describe('Live encadré — API', () => {
     expect(bad.json().error.code).toBe('POLICY_DENIED');
   });
 
+  it('fiche agent : compétences et tâches habituelles, modifiables par un admin seulement', async () => {
+    const { agentId } = (
+      await req('POST', '/v1/agents', {
+        org: orgId,
+        payload: { ...agentBody(), skills: ['Prospection'], routines: ['Relance le lundi'] },
+      })
+    ).json().data;
+    const card = (await req('GET', `/v1/agents/${agentId}`, { org: orgId })).json().data;
+    expect(card.profile).toEqual({
+      goal: 'Préparer les relances',
+      skills: ['Prospection'],
+      routines: ['Relance le lundi'],
+    });
+    const body = { skills: ['Négociation', 'CRM'], routines: ['Point pipeline le vendredi'] };
+    expect(
+      (
+        await req('POST', `/v1/agents/${agentId}/profile`, {
+          org: orgId,
+          role: 'operator',
+          payload: body,
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect(
+      (await req('POST', `/v1/agents/${agentId}/profile`, { org: orgId, payload: body }))
+        .statusCode,
+    ).toBe(200);
+    const after = (await req('GET', `/v1/agents/${agentId}`, { org: orgId })).json().data;
+    expect(after.profile).toMatchObject(body);
+    const ev = await db.eventLog.findFirstOrThrow({
+      where: { orgId, type: 'agent.profile.updated' },
+    });
+    expect(ev.payload).toMatchObject({ agentId, ...body });
+  });
+
   it('mission libre via l’API : validation, puis création dans l’org live', async () => {
     const { agentId } = (
       await req('POST', '/v1/agents', { org: orgId, payload: agentBody() })

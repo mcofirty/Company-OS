@@ -367,6 +367,7 @@ export function applyEvent(
       break;
     }
     case 'agent.grants.updated':
+    case 'agent.profile.updated':
       break; // journal / audit seulement : les droits ne font pas partie de la projection
   }
   const alert = alertFromEvent(e);

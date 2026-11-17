@@ -48,6 +48,8 @@ const newAgent = (
       instructions: 'Ton chaleureux, toujours proposer un rendez-vous de 20 minutes.',
       monthlyBudgetUsd: 3,
       avatarId: 'avatar-04',
+      skills: [],
+      routines: [],
     },
   });
 const mission = {
@@ -150,6 +152,8 @@ describe('Live encadré — organisation, agents définis par un humain, mission
           instructions: 'Consignes suffisamment longues.',
           monthlyBudgetUsd: 1,
           avatarId: 'avatar-01',
+          skills: [],
+          routines: [],
         },
       }),
     ).rejects.toMatchObject({ code: 'POLICY_DENIED' });

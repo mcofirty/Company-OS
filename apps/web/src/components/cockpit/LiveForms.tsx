@@ -99,6 +99,8 @@ export function AgentForm({
   const [budget, setBudget] = useState(5);
   const [avatarId, setAvatarId] = useState('avatar-01');
   const [grants, setGrants] = useState<Record<string, string[]>>({});
+  const [skills, setSkills] = useState('');
+  const [routines, setRoutines] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,6 +122,16 @@ export function AgentForm({
           instructions,
           monthlyBudgetUsd: budget,
           avatarId,
+          skills: skills
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 8),
+          routines: routines
+            .split('\n')
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 6),
         },
         key,
       );
@@ -214,6 +226,29 @@ export function AgentForm({
                 </option>
               ))}
             </select>
+          </label>
+        </div>
+        <div className="row2">
+          <label>
+            Compétences <span className="muted">(fiche, séparées par des virgules)</span>
+            <input
+              value={skills}
+              onChange={(e) => setSkills(e.target.value)}
+              maxLength={300}
+              placeholder="ex. Prospection, Négociation, CRM"
+              data-testid="agent-skills"
+            />
+          </label>
+          <label>
+            Tâches habituelles <span className="muted">(une par ligne)</span>
+            <textarea
+              value={routines}
+              onChange={(e) => setRoutines(e.target.value)}
+              rows={2}
+              maxLength={800}
+              placeholder={'ex. Relance les prospects chaque lundi'}
+              data-testid="agent-routines"
+            />
           </label>
         </div>
         <label>

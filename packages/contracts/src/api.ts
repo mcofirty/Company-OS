@@ -34,6 +34,14 @@ export const CreateTaskRequestSchema = z
     path: ['agentId'],
   });
 
+export const AgentSkillsSchema = z.array(z.string().trim().min(1).max(30)).max(8);
+export const AgentRoutinesSchema = z.array(z.string().trim().min(1).max(120)).max(6);
+/** Mise à jour de la fiche d'un agent (administrateur). */
+export const UpdateAgentProfileRequestSchema = z
+  .object({ skills: AgentSkillsSchema, routines: AgentRoutinesSchema })
+  .strict();
+export type UpdateAgentProfileRequest = z.infer<typeof UpdateAgentProfileRequestSchema>;
+
 /** Création d'un agent par un administrateur (organisation live). Droits listés explicitement. */
 export const CreateAgentRequestSchema = z
   .object({
@@ -51,6 +59,9 @@ export const CreateAgentRequestSchema = z
       .string()
       .regex(/^avatar-\d{2}$/)
       .default('avatar-01'),
+    /** Fiche : compétences (étiquettes) et tâches habituelles (affichage seulement). */
+    skills: AgentSkillsSchema.default([]),
+    routines: AgentRoutinesSchema.default([]),
   })
   .strict();
 export type CreateAgentRequest = z.infer<typeof CreateAgentRequestSchema>;

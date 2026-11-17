@@ -6,6 +6,7 @@ import {
   CancelTaskRequestSchema,
   CreateAgentRequestSchema,
   CreateTaskRequestSchema,
+  UpdateAgentProfileRequestSchema,
   IdempotencyKeySchema,
   SystemControlRequestSchema,
   ApprovalStatusSchema,
@@ -33,6 +34,7 @@ import {
   approvalView,
   meetingView,
   createAgentByAdmin,
+  updateAgentProfile,
   orgsOfUser,
   cancelTask,
   retryTask,
@@ -85,6 +87,7 @@ export function registerV1(
           createAgent: admin && live,
           createMission: operator && live,
           manageConnectors: admin && live,
+          editProfile: admin,
         },
       },
       meta,
@@ -158,7 +161,7 @@ export function registerV1(
       include: { grants: true },
     });
     if (!agent) throw new DomainError('NOT_FOUND', 'Agent introuvable');
-    const [tasks, invocations] = await Promise.all([
+    const [tasks, invocations, version] = await Promise.all([
       db.task.findMany({
         where: { orgId: p.orgId, agentId: id },
         orderBy: { createdAt: 'desc' },
@@ -169,16 +172,36 @@ export function registerV1(
         orderBy: { requestedAt: 'desc' },
         take: 10,
       }),
+      db.agentVersion.findFirst({
+        where: { agentId: id, version: agent.activeVersion },
+        select: { goal: true },
+      }),
     ]);
     return {
       data: {
         agent: agentView(agent),
         grants: agent.grants.map((g) => ({ toolId: g.toolId, actions: g.actions })),
+        // Fiche : mission de l'agent (objectif de sa version active), compétences, habitudes.
+        profile: {
+          goal: version?.goal ?? null,
+          skills: agent.skills ?? [],
+          routines: agent.routines ?? [],
+        },
         recentTasks: tasks.map(taskView),
         recentInvocations: invocations.map(invocationView),
       },
       meta,
     };
+  });
+
+  /** Fiche d'un agent (compétences, tâches habituelles) : administrateur seulement. */
+  app.post('/v1/agents/:id/profile', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = SlugParam.parse(req.params);
+    const body = UpdateAgentProfileRequestSchema.parse(req.body);
+    await updateAgentProfile(db, { orgId: p.orgId, actorId: p.userId, agentId: id, ...body });
+    return { data: { agentId: id }, meta };
   });
 
   app.get('/v1/tasks', async (req) => {

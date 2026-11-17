@@ -109,6 +109,9 @@ model Agent {
   deletedAt       DateTime?    @map("deleted_at") @db.Timestamptz(3)
   version         Int          @default(1)
   activeVersion   Int          @default(1) @map("active_version")
+  /// Fiche (affichage) : compétences et tâches habituelles, saisies par un administrateur humain.
+  skills          String[]     @default([])
+  routines        String[]     @default([])
 
   grants      AgentToolGrant[]
   versions    AgentVersion[]

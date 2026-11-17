@@ -357,5 +357,6 @@ export interface Me {
     systemControl: boolean;
     ackAlert: boolean;
     manageConnectors?: boolean;
+    editProfile?: boolean;
   };
 }
