@@ -183,6 +183,12 @@ export function describe(
         tone: 'neutral',
         icon: '✎',
       };
+    case 'department.moved':
+      return {
+        text: `Plateau réorganisé · ${e.payload.moves.length > 1 ? 'deux pôles échangent leur zone' : 'un pôle change de zone'}`,
+        tone: 'neutral',
+        icon: '⇄',
+      };
     case 'chain.updated':
       return {
         text: `Chaîne « ${e.payload.title} » · ${

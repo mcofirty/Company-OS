@@ -20,6 +20,7 @@ export function WorldControls({
   onView,
   uiHidden,
   onToggleUi,
+  onPresent,
 }: {
   prefs: DisplayPrefs;
   onPrefs: (p: Partial<DisplayPrefs>) => void;
@@ -27,6 +28,7 @@ export function WorldControls({
   onView: (v: CameraView) => void;
   uiHidden: boolean;
   onToggleUi: () => void;
+  onPresent?: () => void;
 }) {
   const is3d = prefs.renderer === '3d';
   return (
@@ -112,6 +114,16 @@ export function WorldControls({
             </span>
           </span>
         </>
+      )}
+      {is3d && onPresent && !uiHidden && (
+        <button
+          className="wc-btn"
+          onClick={onPresent}
+          title="Plein écran, sans interface : la caméra visite les pôles actifs (idéal sur un écran au mur)"
+          data-testid="present"
+        >
+          ▶ Présentation
+        </button>
       )}
       <button
         className="wc-btn"

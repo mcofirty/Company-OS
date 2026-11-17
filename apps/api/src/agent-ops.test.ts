@@ -201,3 +201,39 @@ describe('Fonctionnement des agents', () => {
     expect(d.autoSavingsMicros).toBeGreaterThan(0);
   });
 });
+
+describe('Personnalisation du plateau', () => {
+  it('échange deux pôles de zone : postes réattribués, projection identique', async () => {
+    const a = await agent('Léo');
+    const before = await db.agent.findUniqueOrThrow({ where: { id: a } });
+    const fin = `${orgId.slice(0, 8)}-finance`;
+    const finDept = await db.department.findUniqueOrThrow({ where: { id: fin } });
+    const r = await call('POST', `/v1/departments/${dept}/move`, { roomId: finDept.roomId });
+    expect(r.statusCode).toBe(200);
+    const d1 = await db.department.findUniqueOrThrow({ where: { id: dept } });
+    const d2 = await db.department.findUniqueOrThrow({ where: { id: fin } });
+    expect(d1.roomId).toBe(finDept.roomId);
+    expect(d2.roomId).toBe('direction');
+    const after = await db.agent.findUniqueOrThrow({ where: { id: a } });
+    expect(after.deskAnchor).toBe(before.deskAnchor.replace('direction', finDept.roomId));
+    const snap = (await loadSnapshot(db, orgId))!;
+    expect(comparable(await foldAll(db, snap))).toEqual(comparable(snap));
+  });
+  it('identité visuelle : enregistrée, SVG refusé', async () => {
+    const ok = await call('POST', '/v1/branding', {
+      neonText: 'ACME',
+      neonColor: '#22c55e',
+      logo: 'data:image/png;base64,iVBORw0KGgo=',
+      zoneStyles: { direction: 'tech' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect((await call('GET', '/v1/branding')).json().data).toMatchObject({ neonText: 'ACME' });
+    const svg = await call('POST', '/v1/branding', {
+      neonText: 'ACME',
+      neonColor: '#22c55e',
+      logo: 'data:image/svg+xml;base64,PHN2Zz4=',
+      zoneStyles: {},
+    });
+    expect(svg.statusCode).toBe(400);
+  });
+});

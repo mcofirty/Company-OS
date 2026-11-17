@@ -1,4 +1,4 @@
-import type { AgentView, InvocationView } from '@company-os/contracts';
+import type { AgentView, InvocationView, TaskView } from '@company-os/contracts';
 import type { Tile, VisualIntent, WorldMap } from '@company-os/world';
 import { findPath } from '@company-os/world';
 
@@ -192,4 +192,24 @@ export function studioPath(
     i = j + 1;
   }
   return out;
+}
+
+/** Expression du personnage, tirée de l'état réel (jamais décorative). */
+export function moodOf(
+  a: AgentView,
+  now: number,
+  tasks: readonly Pick<TaskView, 'agentId' | 'status' | 'endedAt'>[],
+): 'neutral' | 'focus' | 'happy' | 'worried' {
+  if (a.activity === 'blocked' || a.activity === 'waiting_approval') return 'worried';
+  if (a.activity === 'working' || a.activity === 'using_tool' || a.activity === 'thinking')
+    return 'focus';
+  // Content pendant 2 minutes après une mission RÉUSSIE.
+  if (a.lastTaskEndedAt && now - Date.parse(a.lastTaskEndedAt) < 120_000) {
+    const last = tasks
+      .filter((t) => t.agentId === a.id && t.endedAt)
+      .sort((x, y) => (y.endedAt ?? '').localeCompare(x.endedAt ?? ''))[0];
+    if (last?.status === 'succeeded') return 'happy';
+    if (last && (last.status === 'failed' || last.status === 'blocked')) return 'worried';
+  }
+  return 'neutral';
 }

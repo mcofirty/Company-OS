@@ -43,6 +43,15 @@ export interface HqWorldView {
   setMotion?(m: 'eco' | 'fluide'): void;
   /** Rendu suspendu (onglet Bureau masqué par une page) : aucune charge. */
   setPaused?(p: boolean): void;
+  /** Mode présentation : la caméra visite les pôles actifs. */
+  setTour?(on: boolean): void;
+  /** Personnalisation : enseigne néon, logo, style de mobilier par zone. */
+  setBranding?(b: {
+    neonText: string;
+    neonColor: string;
+    logo: string | null;
+    zoneStyles: Record<string, 'modern' | 'cosy' | 'tech'>;
+  }): void;
   /** Marges occupées par l'interface flottante, en px : le cadrage les évite. */
   setInsets?(i: { top: number; right: number; bottom: number; left: number }): void;
 }

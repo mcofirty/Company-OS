@@ -11,7 +11,9 @@ import {
   type Tile,
   type VisualIntent,
 } from '@company-os/world';
-import { appearanceOf, bubbleFor, pastel, stateLabel, studioPath } from './studio';
+import { appearanceOf, bubbleFor, hash, moodOf, pastel, stateLabel, studioPath } from './studio';
+import { buildCharacter, outfitColor, type Character } from './character';
+import { brandIcon } from '../components/cockpit/AppIcon';
 import type { CameraView, HqWorldView, Selection, WorldCallbacks } from './types';
 
 /**
@@ -32,6 +34,7 @@ const VIEWS: Record<CameraView, { el: number; az: number; zoom: number }> = {
 
 interface Avatar {
   agent: AgentView;
+  ch: Character;
   g: THREE.Group;
   body: THREE.Group;
   legL: THREE.Group;
@@ -78,7 +81,6 @@ const B = (w: number, h: number, d: number) =>
 const C = (rt: number, rb: number, h: number, s = 18) =>
   geo(`c${rt}:${rb}:${h}:${s}`, () => new THREE.CylinderGeometry(rt, rb, h, s));
 const S = (r: number) => geo(`s${r}`, () => new THREE.SphereGeometry(r, 16, 12));
-const K = (r: number, l: number) => geo(`k${r}:${l}`, () => new THREE.CapsuleGeometry(r, l, 5, 12));
 
 function mesh(
   g: THREE.BufferGeometry,
@@ -141,14 +143,14 @@ function carpetTex(repeat: [number, number]): THREE.CanvasTexture {
     repeat,
   );
 }
-function neonTex(text: string): THREE.CanvasTexture {
+function neonTex(text: string, color = '#ff5fa2'): THREE.CanvasTexture {
   return canvasTex(512, 96, (g) => {
     g.clearRect(0, 0, 512, 96);
-    g.font = '800 64px Inter, system-ui, sans-serif';
+    g.font = `800 ${text.length > 12 ? 44 : 64}px Inter, system-ui, sans-serif`;
     g.textAlign = 'center';
-    g.shadowColor = '#ff5fa2';
+    g.shadowColor = color;
     g.shadowBlur = 18;
-    g.strokeStyle = '#ffd1e6';
+    g.strokeStyle = color;
     g.lineWidth = 3;
     g.strokeText(text, 256, 70);
     g.fillStyle = '#ffffff';
@@ -525,10 +527,12 @@ export class StudioScene implements HqWorldView {
         );
         const dir = seat ? Math.sign(seat.y - f.y) || 1 : 1; // +1 : siège côté +z
         const back = z - dir * 0.47;
-        mesh(B(0.98, 0.05, 0.86), std('#f6f4f0', 0.6), x, 0.75, z, w);
-        mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x - 0.47, 0.37, z, w);
-        mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x + 0.47, 0.37, z, w);
-        mesh(B(1.0, 0.38, 0.04), std('#4f7a62', 0.9), x, 0.96, back, w);
+        // Matériaux propres à la zone : le style choisi (moderne, chaleureux, tech) les recolore.
+        const zm = this.zoneMats(f.roomId ?? '');
+        mesh(B(0.98, 0.05, 0.86), zm.top, x, 0.75, z, w);
+        mesh(B(0.05, 0.73, 0.8), zm.leg, x - 0.47, 0.37, z, w);
+        mesh(B(0.05, 0.73, 0.8), zm.leg, x + 0.47, 0.37, z, w);
+        mesh(B(1.0, 0.38, 0.04), zm.part, x, 0.96, back, w);
         // Double écran sur bras, ou écran + ordinateur portable.
         const dual = (f.x + f.y) % 2 === 0;
         const sm = new THREE.MeshBasicMaterial({ color: '#2a3442' });
@@ -1126,62 +1130,15 @@ export class StudioScene implements HqWorldView {
   }
 
   // ------------------------------------------------------------------ avatars
-  private makeAvatar(agent: AgentView, at: { x: number; z: number }): Avatar {
+  private makeAvatar(
+    agent: AgentView,
+    at: { x: number; z: number },
+    deptColor: string | null,
+  ): Avatar {
     const ap = appearanceOf(agent.avatarId);
-    const mats: THREE.MeshStandardMaterial[] = [];
-    const m = (c: string, r = 0.85): THREE.MeshStandardMaterial => {
-      const x = new THREE.MeshStandardMaterial({ color: c, roughness: r });
-      mats.push(x);
-      return x;
-    };
-    const skin = m(ap.skin, 0.7);
-    const top = m(ap.top);
-    const pants = m(ap.pants);
-    const hair = m(ap.hair, 0.9);
-    const shoe = m('#2a2522', 0.6);
-    const eye = m('#1d1a18', 0.4);
-    const g = new THREE.Group();
-    const body = new THREE.Group();
-    g.add(body);
-    const hip = 0.53;
-    const legL = new THREE.Group();
-    const legR = new THREE.Group();
-    legL.position.set(-0.085, hip, 0);
-    legR.position.set(0.085, hip, 0);
-    for (const l of [legL, legR]) {
-      mesh(K(0.072, 0.36), pants, 0, -0.25, 0, l);
-      mesh(B(0.12, 0.07, 0.2), shoe, 0, -0.5, 0.04, l);
-      body.add(l);
-    }
-    const torso = mesh(K(0.165, 0.28), top, 0, 0.82, 0, body);
-    torso.scale.set(1, 1, 0.72);
-    const armL = new THREE.Group();
-    const armR = new THREE.Group();
-    armL.position.set(-0.215, 1.0, 0);
-    armR.position.set(0.215, 1.0, 0);
-    for (const a of [armL, armR]) {
-      mesh(K(0.052, 0.32), top, 0, -0.19, 0, a);
-      mesh(S(0.05), skin, 0, -0.4, 0, a);
-      body.add(a);
-    }
-    const head = new THREE.Group();
-    head.position.y = 1.25;
-    body.add(head);
-    mesh(S(0.13), skin, 0, 0, 0, head);
-    mesh(C(0.05, 0.05, 0.08, 10), skin, 0, -0.13, 0, head);
-    const cap = mesh(
-      geo('hair', () => new THREE.SphereGeometry(0.138, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.55)),
-      hair,
-      0,
-      0.012,
-      -0.008,
-      head,
-    );
-    cap.rotation.x = -0.25;
-    if (ap.style === 1) mesh(K(0.11, 0.14), hair, 0, -0.1, -0.07, head).scale.set(1.1, 1, 0.6);
-    if (ap.style === 2) mesh(S(0.06), hair, 0, 0.08, -0.14, head);
-    mesh(S(0.017), eye, -0.045, 0.01, 0.122, head);
-    mesh(S(0.017), eye, 0.045, 0.01, 0.122, head);
+    // Tenue aux couleurs du pôle (nuancée par personne), expressions selon l'état réel.
+    const ch = buildCharacter(ap, outfitColor(deptColor, ap.top, hash(agent.id)));
+    const { g, body, legL, legR, armL, armR, head, mats } = ch;
     const ring = new THREE.Mesh(
       geo('ring', () => new THREE.RingGeometry(0.3, 0.38, 28)),
       new THREE.MeshBasicMaterial({ color: '#7c60c9', transparent: true, opacity: 0.95 }),
@@ -1213,6 +1170,7 @@ export class StudioScene implements HqWorldView {
     this.labels.append(bubble, who, link);
     const av: Avatar = {
       agent,
+      ch,
       g,
       body,
       legL,
@@ -1327,7 +1285,11 @@ export class StudioScene implements HqWorldView {
             : intent
               ? { x: intent.anchor.x + 0.5, z: intent.anchor.y + 0.5 }
               : { x: 3.5, z: 23.5 };
-        av = this.makeAvatar(agent, start);
+        av = this.makeAvatar(
+          agent,
+          start,
+          world.departments.find((d) => d.id === agent.departmentId)?.color ?? null,
+        );
         if (animateSpawn) this.beam(start.x, start.z);
       }
       av.agent = agent;
@@ -1351,12 +1313,14 @@ export class StudioScene implements HqWorldView {
         av.bubbleSince = performance.now();
       }
       av.halo.visible = agent.activity === 'blocked';
+      const mood = moodOf(agent, now, world.tasks);
+      if (mood !== av.ch.mood) av.ch.setMood(mood);
       av.ring.visible = sel?.kind === 'agent' && sel.id === agent.id;
       this.setAlpha(av, this.highlight && agent.departmentId !== this.highlight ? 0.3 : 1);
     });
     for (const id of [...this.avatars.keys()])
       if (!world.agents.some((a) => a.id === id)) this.removeAvatar(id);
-    // Écrans des postes : état réel de l'agent assis à son bureau.
+    // Écrans des postes : état réel de l'agent assis à son bureau ; logo de l'appli utilisée.
     for (const [seat, sm] of this.screens) {
       const av = [...this.avatars.values()].find(
         (a) =>
@@ -1367,9 +1331,14 @@ export class StudioScene implements HqWorldView {
       const act = av?.agent.activity;
       const inv = av ? activeInv.get(av.agent.id) : undefined;
       const tool = inv ? tools.get(inv.toolId) : undefined;
+      const tex = act === 'using_tool' && tool ? this.appScreen(tool) : null;
+      if (sm.map !== tex) {
+        sm.map = tex;
+        sm.needsUpdate = true;
+      }
       sm.color.set(
-        act === 'using_tool' && tool
-          ? tool.color
+        tex
+          ? '#ffffff'
           : act === 'working' || act === 'thinking'
             ? '#9fe3c0'
             : act === 'blocked'
@@ -1444,6 +1413,114 @@ export class StudioScene implements HqWorldView {
       this.meetingPill.onclick = () => this.cb.onSelect({ kind: 'meeting', id: m.id });
     }
     this.firstSync = false;
+  }
+
+  private appScreens = new Map<string, THREE.CanvasTexture>();
+  /** Écran d'un bureau aux couleurs de l'application utilisée (logo de marque si connu). */
+  private appScreen(tool: {
+    id: string;
+    code: string;
+    color: string;
+    app?: string | null;
+  }): THREE.CanvasTexture {
+    const hit = this.appScreens.get(tool.id);
+    if (hit) return hit;
+    const icon = brandIcon(tool.app ?? null);
+    const tex = canvasTex(128, 72, (g) => {
+      g.fillStyle = icon?.hex ?? tool.color;
+      g.fillRect(0, 0, 128, 72);
+      g.fillStyle = 'rgba(255,255,255,0.12)';
+      g.fillRect(0, 0, 128, 10);
+      g.fillStyle = '#ffffff';
+      if (icon) {
+        g.save();
+        g.translate(64 - 22, 36 - 22 + 4);
+        g.scale(44 / 24, 44 / 24);
+        g.fill(new Path2D(icon.path));
+        g.restore();
+      } else {
+        g.font = '800 30px Inter, system-ui, sans-serif';
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillText(tool.code.slice(0, 4), 64, 40);
+      }
+    });
+    this.appScreens.set(tool.id, tex);
+    return tex;
+  }
+
+  /* ---------- personnalisation du QG ---------- */
+  private zoneMaterials = new Map<
+    string,
+    {
+      top: THREE.MeshStandardMaterial;
+      leg: THREE.MeshStandardMaterial;
+      part: THREE.MeshStandardMaterial;
+    }
+  >();
+  private zoneMats(roomId: string) {
+    let z = this.zoneMaterials.get(roomId);
+    if (!z) {
+      z = {
+        top: new THREE.MeshStandardMaterial({ color: '#f6f4f0', roughness: 0.6 }),
+        leg: new THREE.MeshStandardMaterial({ color: '#c99a62', roughness: 0.85 }),
+        part: new THREE.MeshStandardMaterial({ color: '#4f7a62', roughness: 0.9 }),
+      };
+      this.zoneMaterials.set(roomId, z);
+    }
+    return z;
+  }
+  private logoMesh: THREE.Mesh | null = null;
+
+  /** Enseigne néon (texte, couleur), logo au mur et style de mobilier par zone. */
+  setBranding(b: {
+    neonText: string;
+    neonColor: string;
+    logo: string | null;
+    zoneStyles: Record<string, 'modern' | 'cosy' | 'tech'>;
+  }): void {
+    if (this.neon) {
+      this.neon.map?.dispose();
+      this.neon.map = neonTex(b.neonText, b.neonColor);
+      this.neon.color.set('#ffffff');
+      this.neon.needsUpdate = true;
+    }
+    const STYLE = {
+      modern: ['#f6f4f0', '#c99a62', '#4f7a62'],
+      cosy: ['#c79a6b', '#8a5a3c', '#b5835a'],
+      tech: ['#2b2d33', '#1d1f24', '#5b6ee1'],
+    } as const;
+    for (const [roomId, z] of this.zoneMaterials) {
+      const [top, leg, part] = STYLE[b.zoneStyles[roomId] ?? 'modern'];
+      z.top.color.set(top);
+      z.leg.color.set(leg);
+      z.part.color.set(part);
+      z.part.emissive.set(b.zoneStyles[roomId] === 'tech' ? '#1b2a7a' : '#000000');
+    }
+    if (this.logoMesh) {
+      this.world.remove(this.logoMesh);
+      this.logoMesh = null;
+    }
+    if (b.logo) {
+      const img = new Image();
+      img.onload = () => {
+        const tex = new THREE.Texture(img);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        const h = 1.1;
+        const w = Math.min(2.4, (h * img.width) / Math.max(1, img.height));
+        const m = new THREE.Mesh(
+          new THREE.PlaneGeometry(w, h),
+          new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
+        );
+        m.position.set(15.2 - w / 2, 2.0, 0.07);
+        this.world.add(m);
+        this.logoMesh = m;
+        this.dirty = true;
+      };
+      img.src = b.logo;
+    }
+    this.dirty = true;
   }
 
   private setAlpha(av: Avatar, a: number): void {
@@ -1567,7 +1644,7 @@ export class StudioScene implements HqWorldView {
   /** Une image n'est utile que si un avatar bouge ou s'anime (sinon : aucune charge). */
   private isAnimating(): boolean {
     if (this.reduced) return this.beams.length > 0;
-    if (this.beams.length || (this.motion === 'fluide' && this.vacuum)) return true;
+    if (this.tour.on || this.beams.length || (this.motion === 'fluide' && this.vacuum)) return true;
     for (const av of this.avatars.values()) {
       if (!av.g.visible) continue;
       if (av.path.length) return true;
@@ -1579,6 +1656,55 @@ export class StudioScene implements HqWorldView {
     }
     return false;
   }
+  /* ---------- mode présentation : visite guidée des pôles actifs ---------- */
+  private tour = {
+    on: false,
+    next: 0,
+    idx: 0,
+    goal: null as null | { x: number; z: number; az: number },
+  };
+  setTour(on: boolean): void {
+    this.tour = { on, next: 0, idx: this.tour.idx, goal: null };
+    if (!on) this.home();
+    this.dirty = true;
+  }
+  private stepTour(t: number, dt: number): void {
+    if (!this.tour.on) return;
+    if (t >= this.tour.next) {
+      // Prochain pôle : d'abord ceux où des agents travaillent, sinon tous les pôles à tour de rôle.
+      const w = this.lastWorld;
+      const rooms = (w?.departments ?? [])
+        .map((d) => HQ_MAP.rooms.find((r) => r.id === d.roomId))
+        .filter((r): r is Room => !!r);
+      const busy = rooms.filter((r) =>
+        (w?.agents ?? []).some(
+          (a) =>
+            ['working', 'using_tool', 'thinking'].includes(a.activity) &&
+            HQ_MAP.anchors[a.deskAnchor]?.roomId === r.id,
+        ),
+      );
+      const pool = busy.length ? busy : rooms;
+      const room = pool[this.tour.idx++ % Math.max(1, pool.length)];
+      if (room) {
+        this.tour.goal = {
+          x: (room.rect.x0 + room.rect.x1 + 1) / 2,
+          z: (room.rect.y0 + room.rect.y1 + 1) / 2,
+          az: this.tour.idx % 2 ? 0.35 : -0.35,
+        };
+      }
+      this.tour.next = t + 8000;
+    }
+    const g = this.tour.goal;
+    if (!g) return;
+    const k = Math.min(1, dt * 0.9);
+    this.target.x += (g.x - this.target.x) * k;
+    this.target.z += (g.z - this.target.z) * k;
+    this.az += (g.az - this.az) * k;
+    this.el += (0.82 - this.el) * k;
+    this.dist += (this.homeDist * 0.42 - this.dist) * k;
+    this.place();
+  }
+
   setMotion(m: 'eco' | 'fluide'): void {
     this.motion = m;
     this.dirty = true;
@@ -1748,6 +1874,7 @@ export class StudioScene implements HqWorldView {
       this.pose(av, dt);
     }
     if (this.motion === 'fluide') this.stepVacuum(dt, t);
+    this.stepTour(t, dt);
     for (let k = this.beams.length - 1; k >= 0; k--) {
       const b = this.beams[k]!;
       b.life -= dt;

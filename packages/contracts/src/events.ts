@@ -29,6 +29,7 @@ export const ALL_EVENT_TYPES = [
   'objective.updated',
   'agent.feedback.recorded',
   'chain.updated',
+  'department.moved',
   'agent.run.started',
   'agent.run.completed',
   'tool.invocation.requested',
@@ -384,6 +385,20 @@ export const Payloads = {
     capacity: z.number().int().min(0).max(50),
     change: z.enum(['created', 'updated']),
   }),
+  /** Réorganisation du plateau : pôles déplacés (ou échangés), postes des agents réattribués. */
+  'department.moved': z.object({
+    moves: z
+      .array(
+        z.object({
+          departmentId: z.string().min(1).max(64),
+          roomId: z.string().min(1).max(64),
+          /** agentId -> nouveau poste. */
+          desks: z.record(z.string(), z.string().max(64)),
+        }),
+      )
+      .min(1)
+      .max(2),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -440,6 +455,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('objective.updated'),
   variant('agent.feedback.recorded'),
   variant('chain.updated'),
+  variant('department.moved'),
   variant('tool.connector.updated'),
   variant('agent.grants.updated'),
   variant('agent.profile.updated'),

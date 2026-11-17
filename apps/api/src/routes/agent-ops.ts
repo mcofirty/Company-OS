@@ -7,6 +7,9 @@ import {
   createObjective,
   decideChain,
   listChains,
+  moveDepartment,
+  getBranding,
+  saveBranding,
   listObjectives,
   recordFeedback,
   startChain,
@@ -107,6 +110,42 @@ export function registerAgentOps(app: FastifyInstance, db: Db): void {
       .parse(req.body);
     await decideChain(db, { orgId: p.orgId, actorId: p.userId, chainId: id, decision });
     return { data: { decided: decision }, meta };
+  });
+
+  // ---------- Plateau : déplacer / échanger des zones, personnalisation ----------
+  app.post('/v1/departments/:id/move', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = z.object({ id: z.string().min(1).max(64) }).parse(req.params);
+    const { roomId } = z
+      .object({ roomId: z.string().min(1).max(64) })
+      .strict()
+      .parse(req.body);
+    await moveDepartment(db, { orgId: p.orgId, actorId: p.userId, departmentId: id, roomId });
+    return { data: { moved: true }, meta };
+  });
+  app.get('/v1/branding', async (req) => {
+    const p = principalOf(req);
+    return { data: await getBranding(db, p.orgId), meta };
+  });
+  app.post('/v1/branding', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const body = z
+      .object({
+        neonText: z.string().trim().min(1).max(20),
+        neonColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        // Image matricielle seulement (jamais de SVG : aucun script possible), 200 Ko au plus.
+        logo: z
+          .string()
+          .max(280_000)
+          .regex(/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/)
+          .nullable(),
+        zoneStyles: z.record(z.string().max(64), z.enum(['modern', 'cosy', 'tech'])),
+      })
+      .strict()
+      .parse(req.body);
+    return { data: await saveBranding(db, p.orgId, body), meta };
   });
 
   // ---------- Coûts ----------

@@ -39,6 +39,8 @@ model Organization {
   killSwitch     Boolean  @default(false) @map("kill_switch")
   /// Organisation live : outils de démonstration (données fictives) autorisés ? Non par défaut.
   allowDemoTools Boolean  @default(false) @map("allow_demo_tools")
+  /// Personnalisation du QG (affichage) : { neonText, neonColor, logo, zoneStyles }.
+  branding       Json?
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   memberships Membership[]

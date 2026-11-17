@@ -9,6 +9,7 @@ import { useTheme, type ThemeChoice } from '../../lib/theme';
 import { ConnectorsPanel } from '../cockpit/Connectors';
 import { ServerSettings } from './ServerSettings';
 import { CostsPanel } from './AgentOps';
+import { HqCustomize } from './HqCustomize';
 
 type NotifyEvent = 'approval' | 'completed' | 'failed' | 'schedule' | 'daily';
 interface NotificationView {
@@ -94,7 +95,12 @@ export function SettingsPage({
         )}
         {current === 'notifications' && <NotificationsSettings toast={toast} />}
         {current === 'budgets' && <BudgetsSettings world={world} toast={toast} />}
-        {current === 'appearance' && <AppearanceSettings />}
+        {current === 'appearance' && (
+          <>
+            <AppearanceSettings />
+            {caps.manageDepartments && <HqCustomize world={world} toast={toast} />}
+          </>
+        )}
         {current === 'server' && <ServerSettings toast={toast} />}
         {current === 'costs' && <CostsPanel world={world} />}
       </div>

@@ -3407,7 +3407,7 @@ kbd {
   inset: calc(var(--gap) * 3 + 58px + 44px) calc(var(--side-w) + var(--gap) * 2)
     calc(128px + var(--gap) * 2) calc(var(--gap) * 2 + var(--rail-w));
   border-radius: 14px;
-  background: rgba(var(--glass-rgb), max(0.9, var(--ga)));
+  background: rgba(var(--glass-rgb), 0.96);
   -webkit-backdrop-filter: blur(18px) saturate(1.4);
   backdrop-filter: blur(18px) saturate(1.4);
   border: 1px solid var(--glass-line);
@@ -3706,7 +3706,7 @@ kbd {
 [data-lowgpu] .cockpit.immersive .page {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
-  background: rgba(var(--glass-rgb), max(0.9, var(--ga)));
+  background: rgba(var(--glass-rgb), 0.96);
 }
 /* Ordre d'empilement : onglets et applis au-dessus des pôles ; fiche agent au-dessus des panneaux. */
 .cockpit.immersive .world-pane .view-bar {
@@ -4205,4 +4205,114 @@ kbd {
   display: grid;
   gap: 6px;
   margin: 8px 0;
+}
+.portrait-3d {
+  display: block;
+  object-fit: contain;
+}
+.team-faces .face .portrait-3d {
+  border-radius: 50%;
+}
+.hq-customize {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.hq-customize .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.logo-preview {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.zones-table select {
+  max-width: 220px;
+}
+/* ---------- Vue téléphone (repensée) ---------- */
+@media (max-width: 760px) {
+  .cockpit.immersive {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+  .cockpit.immersive .topbar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    left: auto;
+    right: auto;
+    height: auto;
+    margin: 8px;
+  }
+  .mobile-tabs {
+    position: sticky;
+    top: 70px;
+    z-index: 20;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+    padding: 4px;
+    border-radius: 14px;
+    background: var(--surface);
+    border: 1px solid var(--outline);
+  }
+  .mobile-tabs button {
+    border: 0;
+    background: none;
+    padding: 10px 4px;
+    border-radius: 10px;
+    font-weight: 650;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+  .mobile-tabs button.on {
+    background: var(--accent);
+    color: #fff;
+  }
+  .mobile-cards {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 10px;
+  }
+  .mobile-cards li {
+    background: var(--surface);
+    border: 1px solid var(--outline);
+    border-radius: 14px;
+    padding: 14px;
+    font-size: 15px;
+  }
+  .mobile-cards p {
+    margin: 6px 0;
+  }
+  .mobile-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .mobile-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  .mobile-actions .btn {
+    padding: 14px;
+    font-size: 16px;
+    text-align: center;
+  }
+  .mobile-reader {
+    padding: 14px;
+  }
+  .mobile-doc {
+    white-space: pre-wrap;
+    font-size: 16px;
+    line-height: 1.6;
+  }
 }

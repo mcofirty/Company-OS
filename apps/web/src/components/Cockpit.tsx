@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TaskKind } from '@company-os/contracts';
-import { ApiFailure, getBackend, setOrg } from '../lib/api';
+import { api, ApiFailure, getBackend, setOrg } from '../lib/api';
 import { ControlsContext, controlsFrom } from '../lib/controls';
 import { useHq } from '../lib/useHq';
 import { useMetrics, type MetricsWindow } from '../lib/useMetrics';
@@ -11,6 +11,7 @@ import { useReplay } from '../lib/useReplay';
 import type { CameraView, HqWorldView, Selection } from '../world/types';
 import { useDisplay } from '../lib/display';
 import { WorldControls } from './cockpit/WorldControls';
+import { BRANDING_EVENT, type Branding } from './pages/HqCustomize';
 import { AlertCenter } from './cockpit/AlertCenter';
 import { BackendSettings } from './cockpit/BackendSettings';
 import { LoginPanel } from './cockpit/LoginPanel';
@@ -104,6 +105,26 @@ export function Cockpit() {
   const [display, setDisplay] = useDisplay();
   const [camView, setCamView] = useState<CameraView>('top');
   const [uiHidden, setUiHidden] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  // Fin du mode présentation : sortie du plein écran (Échap) ou interface réaffichée.
+  useEffect(() => {
+    if (!presenting) return;
+    const stop = (): void => {
+      if (document.fullscreenElement) return;
+      setPresenting(false);
+      setUiHidden(false);
+      scene.current?.setTour?.(false);
+    };
+    document.addEventListener('fullscreenchange', stop);
+    return () => document.removeEventListener('fullscreenchange', stop);
+  }, [presenting]);
+  useEffect(() => {
+    if (presenting && !uiHidden) {
+      setPresenting(false);
+      scene.current?.setTour?.(false);
+      if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    }
+  }, [presenting, uiHidden]);
   /** Fiches d'agents épinglées (restent ouvertes pour suivre leur travail), 2 au plus. */
   const [pinned, setPinned] = useState<string[]>([]);
   const [sceneReady, setSceneReady] = useState(0);
@@ -153,6 +174,21 @@ export function Cockpit() {
   useEffect(() => scene.current?.setNight?.(display.night), [display.night, sceneReady]);
   useEffect(() => scene.current?.setView?.(camView), [camView, sceneReady]);
   useEffect(() => scene.current?.setMotion?.(display.motion), [display.motion, sceneReady]);
+  // Personnalisation du QG (enseigne, logo, styles de zones) : chargée puis appliquée en direct.
+  const [branding, setBranding] = useState<Branding | null>(null);
+  const orgKey = hq.me?.orgId ?? null;
+  useEffect(() => {
+    if (!orgKey) return;
+    api<Branding>('/v1/branding')
+      .then((r) => setBranding(r.data))
+      .catch(() => undefined);
+    const on = (e: Event) => setBranding((e as CustomEvent<Branding>).detail);
+    window.addEventListener(BRANDING_EVENT, on);
+    return () => window.removeEventListener(BRANDING_EVENT, on);
+  }, [orgKey]);
+  useEffect(() => {
+    if (branding) scene.current?.setBranding?.(branding);
+  }, [branding, sceneReady]);
   // Une page (Missions, Livrables…) recouvre le bureau : rendu 3D suspendu.
   useEffect(() => scene.current?.setPaused?.(view !== 'office'), [view, sceneReady]);
   const hasWorld = world !== null;
@@ -547,6 +583,12 @@ export function Cockpit() {
               onView={setCamView}
               uiHidden={uiHidden}
               onToggleUi={() => setUiHidden((v) => !v)}
+              onPresent={() => {
+                setUiHidden(true);
+                scene.current?.setTour?.(true);
+                setPresenting(true);
+                void root.current?.requestFullscreen?.().catch(() => undefined);
+              }}
             />
           )}
           {world && view === 'office' && !replay.active && (

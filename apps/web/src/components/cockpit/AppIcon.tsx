@@ -141,3 +141,10 @@ export function AppIcon({
     </span>
   );
 }
+
+/** Icône de marque d'une application (pour les écrans 3D des bureaux), ou null. */
+export function brandIcon(appId: string | null | undefined): { path: string; hex: string } | null {
+  const preset = appId ? appById(appId) : undefined;
+  const icon = preset?.icon ? ICONS[preset.icon] : undefined;
+  return icon ? { path: icon.path, hex: `#${icon.hex}` } : null;
+}

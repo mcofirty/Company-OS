@@ -298,3 +298,98 @@ export async function endDueMeetings(db: Db, now = new Date()): Promise<number> 
   }
   return due.length;
 }
+
+/* =========================================================================
+ * Réorganisation du plateau (déplacer / échanger des zones) et personnalisation
+ * ========================================================================= */
+
+/** Postes équivalents dans une autre zone : même numéro de poste (`<zone>-desk-NN`). */
+function deskIn(roomId: string, anchor: string): string | null {
+  const m = /-desk-(\d{2})$/.exec(anchor);
+  return m ? `${roomId}-desk-${m[1]}` : null;
+}
+
+/**
+ * Déplace un pôle vers une autre zone du plateau. Zone libre : simple déplacement ; zone occupée par
+ * un autre pôle : les deux pôles échangent leur zone. Les agents gardent leur numéro de poste.
+ */
+export async function moveDepartment(
+  db: Db,
+  input: { orgId: string; actorId: string; departmentId: string; roomId: string },
+): Promise<void> {
+  await withOrgTx(db, input.orgId, new Date(), async (ctx) => {
+    const { tx, orgId } = ctx;
+    const room = HQ_MAP.rooms.find((r) => r.id === input.roomId);
+    if (!room || room.kind !== 'department')
+      throw new DomainError('VALIDATION_ERROR', 'Zone de travail invalide');
+    const dept = await tx.department.findFirst({ where: { id: input.departmentId, orgId } });
+    if (!dept) throw new DomainError('NOT_FOUND', 'Pôle introuvable');
+    if (dept.roomId === room.id) return;
+    const other = await tx.department.findFirst({ where: { orgId, roomId: room.id } });
+    const plan = [{ d: dept, to: room.id }, ...(other ? [{ d: other, to: dept.roomId }] : [])];
+    // Libère d'abord les zones (contrainte d'unicité des postes), puis réattribue.
+    const moves: { departmentId: string; roomId: string; desks: Record<string, string> }[] = [];
+    const agentsOf = new Map<string, { id: string; deskAnchor: string }[]>();
+    for (const { d } of plan) {
+      const list = await tx.agent.findMany({
+        where: { orgId, departmentId: d.id, deletedAt: null },
+        select: { id: true, deskAnchor: true },
+      });
+      agentsOf.set(d.id, list);
+      for (const a of list)
+        if (deskIn(d.roomId, a.deskAnchor))
+          await tx.agent.update({ where: { id: a.id }, data: { deskAnchor: `moving-${a.id}` } });
+    }
+    for (const { d, to } of plan) {
+      await tx.department.update({ where: { id: d.id }, data: { roomId: to } });
+      const desks: Record<string, string> = {};
+      for (const a of agentsOf.get(d.id) ?? []) {
+        const next = deskIn(to, a.deskAnchor);
+        if (!next) continue; // agent en salle d'attente : inchangé
+        desks[a.id] = next;
+        await tx.agent.update({ where: { id: a.id }, data: { deskAnchor: next } });
+      }
+      moves.push({ departmentId: d.id, roomId: to, desks });
+    }
+    ctx.emit({
+      classification: 'internal',
+      type: 'department.moved',
+      aggregateType: 'department',
+      aggregateId: dept.id,
+      aggregateVersion: 1,
+      correlationId: randomUUID(),
+      causationId: null,
+      actor: { kind: 'user', id: input.actorId },
+      provenance: ctx.mode,
+      payload: { moves },
+    });
+  });
+}
+
+export interface Branding {
+  neonText: string;
+  neonColor: string;
+  /** Image PNG/JPEG/WebP en data URL (≤ 200 Ko), ou null. */
+  logo: string | null;
+  /** Style de mobilier par zone : moderne, chaleureux (bois), tech (sombre et néons). */
+  zoneStyles: Record<string, 'modern' | 'cosy' | 'tech'>;
+}
+export const DEFAULT_BRANDING: Branding = {
+  neonText: 'LIVING HQ',
+  neonColor: '#ff5fa2',
+  logo: null,
+  zoneStyles: {},
+};
+
+export async function getBranding(db: Db, orgId: string): Promise<Branding> {
+  const org = await db.organization.findUnique({
+    where: { id: orgId },
+    select: { branding: true },
+  });
+  return { ...DEFAULT_BRANDING, ...((org?.branding as Partial<Branding> | null) ?? {}) };
+}
+
+export async function saveBranding(db: Db, orgId: string, b: Branding): Promise<Branding> {
+  await db.organization.update({ where: { id: orgId }, data: { branding: b as object } });
+  return b;
+}

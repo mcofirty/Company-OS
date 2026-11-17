@@ -5,6 +5,7 @@ import type { AgentView, WorldSnapshot } from '@company-os/contracts';
 import { api, ApiFailure } from '../../lib/api';
 import { TASK_STATUS_LABEL } from '../../lib/format';
 import { drawAvatarPortrait } from '../../world/textures';
+import { moodOf } from '../../world/studio';
 import type { Selection } from '../../world/HqScene';
 import { ToolIcon } from '../common';
 
@@ -14,7 +15,60 @@ export interface AgentProfile {
   routines: string[];
 }
 
-/** Portrait pixel-art de l'avatar (même dessin que dans le QG), net à toute taille. */
+/**
+ * Portrait 3D de l'agent (même personnage, tenue et expression que sur la carte), rendu une fois en
+ * image ; repli sur le portrait pixel-art si la 3D est indisponible.
+ */
+export function Portrait3D({
+  world,
+  agent,
+  size,
+  crop = 'bust',
+}: {
+  world: WorldSnapshot;
+  agent: AgentView;
+  size: number;
+  crop?: 'bust' | 'head';
+}) {
+  const color = world.departments.find((d) => d.id === agent.departmentId)?.color ?? null;
+  const mood = moodOf(agent, Date.now(), world.tasks);
+  const [url, setUrl] = useState<string | null>(null);
+  const [fallback, setFallback] = useState(false);
+  useEffect(() => {
+    let off = false;
+    void import('../../world/portrait3d').then(({ portraitDataUrl }) => {
+      if (off) return;
+      const u = portraitDataUrl(agent.avatarId, agent.id, color, mood, crop);
+      if (u) setUrl(u);
+      else setFallback(true);
+    });
+    return () => {
+      off = true;
+    };
+  }, [agent.avatarId, agent.id, color, mood, crop]);
+  if (fallback)
+    return (
+      <Portrait
+        avatarId={agent.avatarId}
+        scale={crop === 'head' ? 2 : 3}
+        crop={crop === 'head' ? 'head' : 'full'}
+      />
+    );
+  return url ? (
+    <img
+      src={url}
+      alt=""
+      width={size}
+      height={size}
+      className="portrait-3d"
+      data-testid="portrait-3d"
+    />
+  ) : (
+    <span style={{ width: size, height: size, display: 'inline-block' }} />
+  );
+}
+
+/** Portrait pixel-art de l'avatar (repli sans 3D), net à toute taille. */
 export function Portrait({
   avatarId,
   scale,
@@ -161,7 +215,7 @@ export function AgentCard({
     <article className="agent-card" data-testid="agent-card">
       <div className="agent-card-top">
         <div className="portrait" style={{ background: tint(dept?.color, 0.18) }}>
-          <Portrait avatarId={agent.avatarId} scale={3} />
+          <Portrait3D world={world} agent={agent} size={132} />
         </div>
         <div className="agent-card-id">
           {dept && (
@@ -320,7 +374,7 @@ export function AgentCard({
                 style={{ background: tint(dept?.color, 0.16) }}
                 onClick={() => onSelect({ kind: 'agent', id: a.id })}
               >
-                <Portrait avatarId={a.avatarId} scale={2} crop="head" />
+                <Portrait3D world={world} agent={a} size={40} crop="head" />
               </button>
             ))}
           </div>

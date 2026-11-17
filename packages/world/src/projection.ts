@@ -423,6 +423,19 @@ export function applyEvent(
       };
       break;
     }
+    case 'department.moved': {
+      for (const m of e.payload.moves) {
+        w = {
+          ...w,
+          departments: w.departments.map((d) =>
+            d.id === m.departmentId ? { ...d, roomId: m.roomId } : d,
+          ),
+        };
+        for (const [agentId, desk] of Object.entries(m.desks))
+          w = patchAgent(w, agentId, () => ({ deskAnchor: desk }));
+      }
+      break;
+    }
     case 'schedule.updated':
       break; // audit : les planifications sont lues par l'API
     case 'agent.version.updated':
