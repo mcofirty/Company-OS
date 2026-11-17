@@ -73,6 +73,7 @@ const startMission = async (grants: Record<string, string[]>) => {
       instructions: 'Toujours citer la note consultée dans la réponse.',
       monthlyBudgetUsd: 2,
       avatarId: 'avatar-02',
+      modelTier: 'quality',
       skills: [],
       routines: [],
     },

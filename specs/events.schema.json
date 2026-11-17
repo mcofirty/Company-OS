@@ -20,7 +20,7 @@
         "tool.invocation.requested", "tool.invocation.started", "tool.invocation.succeeded", "tool.invocation.failed", "tool.invocation.rejected",
         "meeting.started", "meeting.completed", "approval.requested", "approval.decided",
         "budget.threshold_reached", "system.paused", "system.resumed", "world.layout.updated",
-        "tool.connector.updated", "agent.grants.updated", "agent.profile.updated", "agent.reporting.updated", "agent.deleted"
+        "tool.connector.updated", "agent.grants.updated", "agent.profile.updated", "agent.reporting.updated", "agent.deleted", "agent.version.updated", "budget.updated", "schedule.updated"
       ]
     },
     "aggregateType": {"type": "string", "minLength": 1, "maxLength": 64},

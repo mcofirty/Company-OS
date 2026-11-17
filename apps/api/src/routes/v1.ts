@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { loadPricing } from '@company-os/policies';
 import { z } from 'zod';
 import {
   toolAvailableIn,
@@ -8,6 +9,10 @@ import {
   CreateTaskRequestSchema,
   UpdateAgentProfileRequestSchema,
   UpdateReportingRequestSchema,
+  UpdateAgentVersionRequestSchema,
+  UpdateBudgetRequestSchema,
+  MODEL_TIERS,
+  ScheduleRequestSchema,
   IdempotencyKeySchema,
   SystemControlRequestSchema,
   ApprovalStatusSchema,
@@ -38,6 +43,13 @@ import {
   updateAgentProfile,
   updateReporting,
   deleteAgent,
+  agentVersions,
+  updateAgentVersion,
+  updateBudgetLimit,
+  listSchedules,
+  saveSchedule,
+  deleteSchedule,
+  runDueSchedules,
   orgsOfUser,
   cancelTask,
   retryTask,
@@ -93,6 +105,9 @@ export function registerV1(
           editProfile: admin,
           manageHierarchy: admin,
           deleteAgent: admin,
+          editAgent: admin,
+          editBudget: admin,
+          manageSchedules: admin && live,
         },
       },
       meta,
@@ -192,6 +207,9 @@ export function registerV1(
           skills: agent.skills ?? [],
           routines: agent.routines ?? [],
         },
+        // Versions (objectif, consignes de l'administrateur, modèle) : la première est l'active.
+        versions: await agentVersions(db, agent.id),
+        activeVersion: agent.activeVersion,
         recentTasks: tasks.map(taskView),
         recentInvocations: invocations.map(invocationView),
       },
@@ -220,6 +238,98 @@ export function registerV1(
       .parse(req.body);
     const r = await deleteAgent(db, { orgId: p.orgId, actorId: p.userId, agentId: id, reason });
     return { data: { agentId: id, deleted: true, ...r }, meta };
+  });
+
+  /** Nouvelle version d'un agent : objectif, consignes, niveau de modèle (administrateur). */
+  app.post('/v1/agents/:id/version', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = SlugParam.parse(req.params);
+    const body = UpdateAgentVersionRequestSchema.parse(req.body);
+    const r = await updateAgentVersion(db, {
+      orgId: p.orgId,
+      actorId: p.userId,
+      agentId: id,
+      goal: body.goal,
+      instructions: body.instructions,
+      modelTier: body.modelTier,
+      ...(body.note ? { note: body.note } : {}),
+    });
+    return { data: { agentId: id, ...r }, meta };
+  });
+
+  /** Niveaux de modèle et coût estimé d'une mission type (tarifs versionnés du serveur). */
+  app.get('/v1/models', async () => {
+    const pricing = loadPricing();
+    const IN = 40_000;
+    const OUT = 4_000;
+    return {
+      data: Object.entries(MODEL_TIERS).map(([tier, t]) => {
+        const price = pricing.models[t.model];
+        return {
+          tier,
+          model: t.model,
+          label: t.label,
+          hint: t.hint,
+          estimatedMissionUsd: price
+            ? Math.round(((IN * price.inputPerMTok + OUT * price.outputPerMTok) / 1e6) * 1000) /
+              1000
+            : null,
+        };
+      }),
+      meta: { ...meta, basis: `mission type ≈ ${IN} jetons lus, ${OUT} écrits` },
+    };
+  });
+
+  // ---------- Missions récurrentes ----------
+  app.get('/v1/schedules', async (req) => {
+    const p = principalOf(req);
+    const q = z.object({ agentId: z.string().max(64).optional() }).parse(req.query);
+    return { data: await listSchedules(db, p.orgId, q.agentId), meta };
+  });
+  app.post('/v1/schedules', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const body = ScheduleRequestSchema.parse(req.body);
+    const s = await saveSchedule(db, { orgId: p.orgId, actorId: p.userId, req: body });
+    return reply.status(201).send({ data: s, meta });
+  });
+  app.post('/v1/schedules/:id', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = ScheduleRequestSchema.parse(req.body);
+    return {
+      data: await saveSchedule(db, { orgId: p.orgId, actorId: p.userId, id, req: body }),
+      meta,
+    };
+  });
+  app.post('/v1/schedules/:id/delete', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    await deleteSchedule(db, { orgId: p.orgId, actorId: p.userId, id });
+    return { data: { id, deleted: true }, meta };
+  });
+  /** « Lancer maintenant » : une exécution immédiate, l'échéance suivante ne change pas. */
+  app.post('/v1/schedules/:id/run', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const own = await db.schedule.findFirst({ where: { id, orgId: p.orgId, deletedAt: null } });
+    if (!own) throw new DomainError('NOT_FOUND', 'Mission récurrente introuvable');
+    const r = await runDueSchedules(db, new Date(), { only: id, runNow: true, actorId: p.userId });
+    const s = await db.schedule.findUniqueOrThrow({ where: { id } });
+    return { data: { ...r, taskId: s.lastTaskId }, meta };
+  });
+
+  /** Plafond mensuel d'un budget (organisation ou agent) : administrateur, tracé. */
+  app.post('/v1/budgets', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const body = UpdateBudgetRequestSchema.parse(req.body);
+    const r = await updateBudgetLimit(db, { orgId: p.orgId, actorId: p.userId, ...body });
+    return { data: { ...body, ...r }, meta };
   });
 
   /** Fiche d'un agent (compétences, tâches habituelles) : administrateur seulement. */

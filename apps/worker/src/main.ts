@@ -7,7 +7,7 @@ import { ToolGateway } from '@company-os/tools';
 import { createActivities, liveProviderFromEnv } from './activities';
 import { createTemporalWorker, temporalLauncher } from './temporal';
 import { initTelemetry } from './telemetry';
-import { inlineLauncher, startOrgDispatchers, type RunLauncher } from './worker';
+import { inlineLauncher, startClock, startOrgDispatchers, type RunLauncher } from './worker';
 
 config({ path: path.resolve(import.meta.dirname, '../../../.env'), quiet: true });
 
@@ -69,6 +69,7 @@ const dispatcher = startOrgDispatchers(db, launcher, {
   },
   log,
 });
+const clock = startClock(db, { log });
 if (!liveProvider) {
   log('live provider missing', {
     effect: 'missions des organisations live refusées (PROVIDER_UNAVAILABLE) ; démo inchangée',
@@ -82,6 +83,7 @@ log('worker started', {
 
 const shutdown = async (): Promise<void> => {
   log('worker stopping');
+  await clock.stop();
   await dispatcher.stop();
   await stopWorker();
   await db.$disconnect();

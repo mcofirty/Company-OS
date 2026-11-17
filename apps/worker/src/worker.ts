@@ -1,5 +1,12 @@
 import { TaskKindSchema, type TaskKind } from '@company-os/contracts';
-import { createTask, listRunningTasks, startNextTask, type Db } from '@company-os/db';
+import {
+  createTask,
+  listRunningTasks,
+  rollBudgetPeriods,
+  runDueSchedules,
+  startNextTask,
+  type Db,
+} from '@company-os/db';
 import type { Activities } from './activities';
 import { runAgentTaskInline } from './inline';
 
@@ -194,6 +201,39 @@ export function startOrgDispatchers(
       stopped = true;
       clearInterval(timer);
       await Promise.all([...running.values()].map((d) => d.stop()));
+    },
+  };
+}
+
+/**
+ * Horloge du worker (toutes les 30 s) : missions récurrentes échues et remise à zéro mensuelle
+ * des budgets. Les tâches créées sont ensuite prises par les dispatchers habituels.
+ */
+export function startClock(
+  db: Db,
+  opts: { intervalMs?: number; log: (msg: string, extra?: Record<string, unknown>) => void },
+): { stop: () => Promise<void> } {
+  let running = false;
+  const tick = async (): Promise<void> => {
+    if (running) return;
+    running = true;
+    try {
+      const r = await runDueSchedules(db, new Date());
+      if (r.triggered + r.skipped > 0) opts.log('schedules', r);
+      const rolled = await rollBudgetPeriods(db, new Date());
+      if (rolled > 0) opts.log('budgets new period', { rolled });
+    } catch (err) {
+      opts.log('clock error', { error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      running = false;
+    }
+  };
+  const timer = setInterval(() => void tick(), opts.intervalMs ?? 30_000);
+  void tick();
+  return {
+    stop: async () => {
+      clearInterval(timer);
+      while (running) await new Promise((r) => setTimeout(r, 50));
     },
   };
 }

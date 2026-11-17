@@ -46,6 +46,7 @@ const hire = (name: string, role: 'manager' | 'specialist', grants: Record<strin
       instructions: 'Rendre compte chaque semaine avec des chiffres sourcés.',
       monthlyBudgetUsd: 2,
       avatarId: 'avatar-03',
+      modelTier: 'quality',
       skills: [],
       routines: [],
     },

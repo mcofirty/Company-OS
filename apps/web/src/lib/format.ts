@@ -233,6 +233,37 @@ export function describe(
         icon: '⇄',
       };
     }
+    case 'schedule.updated': {
+      const what = {
+        created: 'planifiée',
+        updated: 'modifiée',
+        paused: 'suspendue',
+        resumed: 'reprise',
+        deleted: 'supprimée',
+        triggered: 'lancée',
+        skipped: 'sautée (agent indisponible)',
+      }[e.payload.change];
+      return {
+        text: `Mission récurrente « ${e.payload.title} » ${what} · ${agentName(e.payload.agentId)}`,
+        tone: e.payload.change === 'skipped' ? 'warning' : 'accent',
+        icon: '⟳',
+      };
+    }
+    case 'agent.version.updated':
+      return {
+        text: `${agentName(e.payload.agentId)} · version ${e.payload.version} (${e.payload.model}) · ${e.payload.note}`,
+        tone: 'accent',
+        icon: '✎',
+      };
+    case 'budget.updated':
+      return {
+        text:
+          e.payload.reason === 'new_period'
+            ? `Nouveau mois : budget ${e.payload.scopeType === 'org' ? 'de l’organisation' : agentName(e.payload.scopeId)} remis à zéro`
+            : `Budget ${e.payload.scopeType === 'org' ? 'de l’organisation' : agentName(e.payload.scopeId)} : ${usd(e.payload.previousLimitMicros)} → ${usd(e.payload.limitMicros)} / mois`,
+        tone: 'neutral',
+        icon: '$',
+      };
     case 'agent.deleted':
       return {
         text: `Agent ${e.payload.agentId} supprimé · ${e.payload.reason}`,

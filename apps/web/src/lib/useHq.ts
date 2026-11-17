@@ -360,5 +360,8 @@ export interface Me {
     editProfile?: boolean;
     manageHierarchy?: boolean;
     deleteAgent?: boolean;
+    editAgent?: boolean;
+    editBudget?: boolean;
+    manageSchedules?: boolean;
   };
 }

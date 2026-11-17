@@ -46,7 +46,11 @@ export async function loadRunContext(db: Db, runId: string) {
       instructions: version.instructions,
       goal: version.goal,
       modelPolicy: version.modelPolicy as unknown as ModelPolicy,
-      limits: version.limits as unknown as RunLimits,
+      // Mission récurrente : plafond de coût fixé pour CETTE exécution (les budgets restent appliqués).
+      limits: {
+        ...(version.limits as unknown as RunLimits),
+        ...(run.task.costCapMicros !== null ? { maxCostMicros: run.task.costCapMicros } : {}),
+      },
     },
     grants: run.agent.grants.map((g) => ({ toolId: g.toolId, actions: g.actions })),
   };

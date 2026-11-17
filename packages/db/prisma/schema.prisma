@@ -206,6 +206,12 @@ model Task {
   /// Délégation : tâche parente (DAG, profondeur bornée, cycles refusés côté service).
   parentTaskId   String?      @map("parent_task_id") @db.Uuid
   depth          Int          @default(0)
+  /// Plafond de coût de CETTE exécution (mission récurrente), en micro-USD.
+  costCapMicros  Int?         @map("cost_cap_micros")
+  /// Mission récurrente d'origine.
+  scheduleId     String?      @map("schedule_id") @db.Uuid
+  /// « Demander une suite » : mission précédente dont celle-ci reprend le résultat.
+  followUpOf     String?      @map("follow_up_of") @db.Uuid
 
   runs        AgentRun[]
   invocations ToolInvocation[]
@@ -321,6 +327,8 @@ model Budget {
   hardStop       Boolean   @default(true) @map("hard_stop")
   alertThreshold Float     @default(0.8) @map("alert_threshold")
   alertedAt      DateTime? @map("alerted_at") @db.Timestamptz(3)
+  /// Début de la période en cours (1er du mois, UTC) : remise à zéro mensuelle de usedMicros.
+  periodStart    DateTime  @default(now()) @map("period_start") @db.Timestamptz(3)
 
   @@unique([orgId, scopeType, scopeId, period])
   @@map("budgets")
@@ -532,4 +540,54 @@ model ConnectorTool {
 
   @@id([connectorId, action])
   @@map("connector_tools")
+}
+
+/// Mission récurrente (planification décidée par un humain) : déclenchée par le worker.
+model Schedule {
+  id            String    @id @db.Uuid
+  orgId         String    @map("org_id") @db.Uuid
+  agentId       String    @map("agent_id")
+  title         String
+  instructions  String
+  /// daily | weekly | monthly
+  frequency     String
+  hour          Int
+  minute        Int
+  /// 1 = lundi … 7 = dimanche (hebdomadaire)
+  weekday       Int?
+  /// 1 … 28 (mensuelle)
+  monthDay      Int?      @map("month_day")
+  timezone      String    @default("Europe/Paris")
+  /// Plafond de coût par exécution (micro-USD).
+  maxCostMicros Int       @map("max_cost_micros")
+  enabled       Boolean   @default(true)
+  nextRunAt     DateTime  @map("next_run_at") @db.Timestamptz(3)
+  lastRunAt     DateTime? @map("last_run_at") @db.Timestamptz(3)
+  lastTaskId    String?   @map("last_task_id") @db.Uuid
+  runCount      Int       @default(0) @map("run_count")
+  createdBy     String    @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
+
+  @@index([enabled, nextRunAt])
+  @@index([orgId])
+  @@map("schedules")
+}
+
+/// Notifications de l'organisation (téléphone / email via ntfy) : adresse chiffrée.
+model NotificationSetting {
+  orgId       String   @id @map("org_id") @db.Uuid
+  /// URL du sujet ntfy (https://ntfy.sh/mon-sujet-secret), chiffrée (AES-256-GCM).
+  urlSealed   String   @map("url_sealed")
+  /// Jeton d'accès ntfy facultatif, chiffré.
+  tokenSealed String?  @map("token_sealed")
+  /// Email de transfert facultatif (fonction email de ntfy).
+  email       String?
+  /// Événements notifiés : approval, completed, failed, schedule
+  events      String[]
+  enabled     Boolean  @default(true)
+  updatedBy   String   @map("updated_by")
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
+
+  @@map("notification_settings")
 }

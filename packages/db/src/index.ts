@@ -20,3 +20,5 @@ export * from './services/status';
 export * from './services/connectors';
 export * from './services/hierarchy';
 export * from './services/purge';
+export * from './services/admin';
+export * from './services/schedules';

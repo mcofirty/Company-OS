@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { CreateAgentRequest, WorldSnapshot } from '@company-os/contracts';
 import { ApiFailure } from '../../lib/api';
+import { ModelTierSelect, type Tier } from './ModelTierSelect';
 
 const RISK_LABEL: Record<string, string> = {
   read: 'lecture',
@@ -100,6 +101,7 @@ export function AgentForm({
   const [avatarId, setAvatarId] = useState('avatar-01');
   const [grants, setGrants] = useState<Record<string, string[]>>({});
   const [skills, setSkills] = useState('');
+  const [modelTier, setModelTier] = useState<Tier>('quality');
   const [routines, setRoutines] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,6 +123,7 @@ export function AgentForm({
           goal,
           instructions,
           monthlyBudgetUsd: budget,
+          modelTier,
           avatarId,
           skills: skills
             .split(',')
@@ -206,12 +209,13 @@ export function AgentForm({
               <option value="manager">Manager</option>
             </select>
           </label>
+          <ModelTierSelect value={modelTier} onChange={setModelTier} />
           <label>
             Budget mensuel (USD, plafond dur)
             <input
               type="number"
               min={0.5}
-              max={50}
+              max={500}
               step={0.5}
               value={budget}
               onChange={(e) => setBudget(Number(e.target.value))}

@@ -32,6 +32,11 @@ export interface CreateTaskInput {
   causationId?: string | null;
   /** Mission libre (kind `custom`) : organisations live seulement, agent explicite. */
   mission?: Mission;
+  /** Plafond de coût de cette exécution (mission récurrente). */
+  costCapMicros?: number;
+  scheduleId?: string;
+  /** Suite d'une mission précédente. */
+  followUpOf?: string;
 }
 
 /** Crée une tâche démo (statut `queued`) et émet `task.created`. Idempotent par clé. */
@@ -142,6 +147,9 @@ export async function createTaskInTx(
       createdAt: now,
       parentTaskId: input.parentTaskId ?? null,
       depth,
+      costCapMicros: input.costCapMicros ?? null,
+      scheduleId: input.scheduleId ?? null,
+      followUpOf: input.followUpOf ?? null,
     },
   });
   if (agent.activity === 'idle') {

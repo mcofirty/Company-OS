@@ -377,6 +377,20 @@ export function applyEvent(
     case 'agent.grants.updated':
     case 'agent.profile.updated':
       break;
+    case 'schedule.updated':
+      break; // audit : les planifications sont lues par l'API
+    case 'agent.version.updated':
+      break; // audit : la version active est lue côté serveur au démarrage de chaque run
+    case 'budget.updated': {
+      const p = e.payload;
+      w = {
+        ...w,
+        budgets: w.budgets.map((b) =>
+          b.id === p.budgetId ? { ...b, limitMicros: p.limitMicros, usedMicros: p.usedMicros } : b,
+        ),
+      };
+      break;
+    }
     case 'agent.deleted':
       w = { ...w, agents: w.agents.filter((a) => a.id !== e.payload.agentId) };
       break;

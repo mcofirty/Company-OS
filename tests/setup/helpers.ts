@@ -16,7 +16,7 @@ export async function resetAndSeed(
 ): Promise<void> {
   await db.$executeRawUnsafe(
     `TRUNCATE outbox, event_log, alerts, llm_usage, meeting_participants, meetings, approval_requests,
-     tool_invocations, agent_runs, tasks, agent_tool_grants, documents, connector_tools, connectors,
+     tool_invocations, agent_runs, tasks, agent_tool_grants, documents, connector_tools, connectors, schedules, notification_settings,
      agent_versions, budgets, agents, departments, tools, memberships, users, idempotency_keys,
      organizations CASCADE`,
   );

@@ -44,6 +44,9 @@ export const ALL_EVENT_TYPES = [
   'agent.profile.updated',
   'agent.reporting.updated',
   'agent.deleted',
+  'agent.version.updated',
+  'budget.updated',
+  'schedule.updated',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -287,6 +290,32 @@ export const Payloads = {
     reason: z.string().min(1).max(200),
     reportsReassignedTo: SlugIdSchema.nullable(),
   }),
+  /** Nouvelle version d'un agent (objectif, consignes, modèle) décidée par un administrateur. */
+  'agent.version.updated': z.object({
+    agentId: SlugIdSchema,
+    version: z.number().int().min(2),
+    model: z.string().max(64),
+    note: z.string().max(200),
+  }),
+  /** Budget modifié : nouveau plafond (admin) ou nouvelle période mensuelle (remise à zéro). */
+  'budget.updated': z.object({
+    budgetId: Uuid,
+    scopeType: z.enum(['org', 'agent']),
+    scopeId: z.string().min(1).max(64),
+    limitMicros: z.number().int().min(0),
+    previousLimitMicros: z.number().int().min(0),
+    usedMicros: z.number().int().min(0),
+    reason: z.enum(['limit_changed', 'new_period']),
+  }),
+  /** Mission récurrente créée / modifiée / suspendue / supprimée / déclenchée (audit). */
+  'schedule.updated': z.object({
+    scheduleId: Uuid,
+    agentId: SlugIdSchema,
+    title: z.string().min(1).max(120),
+    change: z.enum(['created', 'updated', 'paused', 'resumed', 'deleted', 'triggered', 'skipped']),
+    nextRunAt: z.iso.datetime().nullable(),
+    taskId: Uuid.nullable(),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -343,6 +372,9 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.profile.updated'),
   variant('agent.reporting.updated'),
   variant('agent.deleted'),
+  variant('agent.version.updated'),
+  variant('budget.updated'),
+  variant('schedule.updated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

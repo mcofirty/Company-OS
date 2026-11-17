@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { instructionsFor, PROMPT_VERSION } from '@company-os/agents';
-import { TOOL_CATALOG, toolAvailableIn, type CreateAgentRequest } from '@company-os/contracts';
+import {
+  MODEL_TIERS,
+  TOOL_CATALOG,
+  toolAvailableIn,
+  type CreateAgentRequest,
+} from '@company-os/contracts';
 import { anchorsOfKind, HQ_MAP } from '@company-os/world';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
@@ -188,7 +193,7 @@ export async function createAgentByAdmin(
         promptVersion: PROMPT_VERSION,
         instructions: `${instructionsFor(dept.roomId, role)}\n\nConsignes de l’administrateur :\n${req.instructions}`,
         goal: req.goal,
-        modelPolicy: { model: LIVE_DEFAULT_MODEL, effort: 'medium', maxTokens: 8000 },
+        modelPolicy: { model: MODEL_TIERS[req.modelTier].model, effort: 'medium', maxTokens: 8000 },
         limits: { maxSteps: 8, maxDurationMs: 5 * 60_000, maxCostMicros: 500_000 },
       },
     });
