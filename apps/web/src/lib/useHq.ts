@@ -380,6 +380,7 @@ export interface Me {
     editBudget?: boolean;
     manageSchedules?: boolean;
     manageNotifications?: boolean;
+    manageServer?: boolean;
     manageDepartments?: boolean;
     conveneMeeting?: boolean;
   };

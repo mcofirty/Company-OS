@@ -40,6 +40,7 @@ const { app, relayOnce } = await buildApp({
   auth: cfg.auth,
   connectors: cfg.connectors,
   rateLimitPerMinute: env.RATE_LIMIT_PER_MIN,
+  opsDir: env.OPS_DIR ?? null,
   logger: true,
 });
 

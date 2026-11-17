@@ -32,6 +32,8 @@ export const EnvSchema = z.object({
   CONNECTOR_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
   /** Adresse publique de l'API (retour des connexions OAuth). */
   API_PUBLIC_URL: z.string().url().optional(),
+  /** Dossier d'échange avec l'agent hôte (VPS) : sauvegardes et mises à jour depuis le cockpit. */
+  OPS_DIR: z.string().optional(),
 });
 export type Env = z.infer<typeof EnvSchema>;
 

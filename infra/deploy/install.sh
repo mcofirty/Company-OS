@@ -133,6 +133,14 @@ cat >/etc/cron.d/company-os-backup <<EOF
 30 3 * * * root bash $APP_DIR/infra/deploy/backup.sh >> /var/log/company-os-backup.log 2>&1
 EOF
 chmod 644 /etc/cron.d/company-os-backup
+# Agent hôte : mises à jour automatiques, sauvegardes et restaurations demandées depuis le cockpit.
+if [ ! -f /etc/cron.d/company-os-agent ]; then
+  echo "* * * * * root bash $APP_DIR/infra/deploy/host-agent.sh >> /var/log/company-os-agent.log 2>&1" \
+    >/etc/cron.d/company-os-agent
+  chmod 644 /etc/cron.d/company-os-agent
+  echo "==> Mises à jour automatiques activées (désactiver : AUTO_UPDATE=false dans .env.production)"
+fi
+
 bash "$APP_DIR/infra/deploy/backup.sh"
 
 cat <<EOF

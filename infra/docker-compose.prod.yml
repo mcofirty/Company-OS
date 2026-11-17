@@ -100,7 +100,11 @@ services:
       <<: *server-env
       API_HOST: 0.0.0.0
       API_PORT: '4000'
+      OPS_DIR: /app/ops
     ports: ['${API_PUBLISH:-127.0.0.1:4000}:4000']
+    # Échange avec l'agent hôte (sauvegardes, mises à jour) : demandes et état, jamais Docker.
+    volumes:
+      - ../ops:/app/ops
 
   worker:
     <<: *server

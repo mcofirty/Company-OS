@@ -12,6 +12,7 @@ import { attachRealtime, broadcast, type Io } from './realtime';
 import { registerV1, type ApprovalSignaler } from './routes/v1';
 import { registerConnectors } from './routes/connectors';
 import { registerNotifications } from './routes/notifications';
+import { registerOps } from './routes/ops';
 import { createNotifier } from './notifier';
 import type { ConnectorSettings } from './config';
 
@@ -41,6 +42,8 @@ export interface AppOptions {
   webOrigin?: string;
   /** Tests : client HTTP des notifications. */
   notifyFetch?: typeof fetch;
+  /** Dossier d'échange avec l'agent hôte (sauvegardes, mises à jour) ; null en développement. */
+  opsDir?: string | null;
   /** Requêtes /v1 par minute et par client (IP). Défaut 1200. */
   rateLimitPerMinute?: number;
 }
@@ -156,6 +159,7 @@ export async function buildApp(
 
   registerV1(app, db, opts.signalApproval, { hideDemoOrg: opts.auth.hideDemoOrg ?? false });
   registerConnectors(app, db, opts.connectors ?? { secretKey: null, allowPrivateNetwork: false });
+  registerOps(app, opts.opsDir ?? null);
 
   const io = attachRealtime(app.server, db, opts.auth, opts.corsOrigin);
   const notifier = createNotifier(db, {

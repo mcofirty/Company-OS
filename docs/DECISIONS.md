@@ -327,3 +327,9 @@ nouvel essai après échec = un cran au-dessus ; garde-fou budget (< 20 % restan
 Haiku). Le choix et sa raison sont persistés (`agent_runs.model_reason`, `agent.run.started.routing`) et
 affichés (fil d'activité, fiche de l'agent). Le budget et le plafond par exécution s'appliquent au
 modèle effectivement retenu. Migration `20261122090000_model_routing`.
+
+ADR-067 — **Agent hôte pour les opérations serveur.** Mises à jour automatiques, sauvegardes et
+restaurations demandées depuis le cockpit passent par un script root exécuté par cron sur le VPS
+(`host-agent.sh`). L'API (conteneur non root) n'a ni socket Docker ni accès aux sauvegardes : elle écrit
+une demande JSON (admin seulement, nom de fichier validé, confirmation explicite pour restaurer) et lit
+un état publié. Surface d'attaque minimale : l'agent n'exécute que trois actions prévues.

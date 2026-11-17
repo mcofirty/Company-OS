@@ -118,6 +118,7 @@ export function registerV1(
           editBudget: admin,
           manageSchedules: admin && live,
           manageNotifications: admin && live,
+          manageServer: admin,
           manageDepartments: admin,
           conveneMeeting: operator,
         },

@@ -19,6 +19,14 @@ if ! grep -q '^CONNECTOR_SECRET_KEY=.\+' "$ENV_FILE"; then
   echo "CONNECTOR_SECRET_KEY=$(openssl rand -base64 32)" >> "$ENV_FILE"
   echo "==> Clé de chiffrement des connecteurs créée dans $ENV_FILE (à conserver)"
 fi
+# Agent hôte : mises à jour automatiques, sauvegardes et restaurations demandées depuis le cockpit.
+if [ ! -f /etc/cron.d/company-os-agent ]; then
+  echo "* * * * * root bash $APP_DIR/infra/deploy/host-agent.sh >> /var/log/company-os-agent.log 2>&1" \
+    >/etc/cron.d/company-os-agent
+  chmod 644 /etc/cron.d/company-os-agent
+  echo "==> Mises à jour automatiques activées (désactiver : AUTO_UPDATE=false dans .env.production)"
+fi
+mkdir -p "$APP_DIR/ops/requests" "$APP_DIR/ops/status" && chown 1000:1000 "$APP_DIR/ops/requests"
 echo "==> Reconstruction et redémarrage"
 compose build
 compose up -d --wait

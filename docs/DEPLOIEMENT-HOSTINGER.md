@@ -136,6 +136,21 @@ un test ». Tu peux aussi ajouter un email.
 **Missions → Récurrentes → « Mission récurrente »** : agent, consignes, fréquence (jour / semaine / mois),
 heure, plafond de coût par exécution. Exemple : chaque lundi à 9 h, ton DG fait le rapport de la semaine.
 
+## 6 bis. Mises à jour automatiques et sauvegardes depuis le cockpit
+
+Après une mise à jour par `bash infra/deploy/update.sh` (la dernière à faire à la main), un **agent
+hôte** tourne chaque minute (`/etc/cron.d/company-os-agent` → `infra/deploy/host-agent.sh`) :
+
+- **mises à jour automatiques** : toutes les 10 minutes, si GitHub a du nouveau, sauvegarde puis mise à
+  jour (`update.sh`). Désactiver : `AUTO_UPDATE=false` dans `.env.production` ;
+- **Réglages › Serveur** dans le cockpit (administrateur) : état des mises à jour, liste des
+  sauvegardes, « Sauvegarder maintenant », « Restaurer » (confirmation « RESTAURER », sauvegarde de
+  l'état actuel faite avant).
+
+L'API n'a aucun accès à Docker : elle dépose des demandes dans `ops/requests` et lit l'état publié
+dans `ops/status`. L'agent n'exécute que ces trois actions, avec des noms de fichiers vérifiés.
+Journaux : `/var/log/company-os-agent.log`, `-update.log`, `-restore.log`.
+
 ## 7. Restaurer après un incident
 
 ⚠️ Remplace la base actuelle par la sauvegarde choisie. Faites d'abord une sauvegarde de l'état
