@@ -30,6 +30,8 @@ export const EnvSchema = z.object({
   CONNECTOR_SECRET_KEY: z.string().optional(),
   /** Serveurs MCP en http:// ou sur réseau privé : développement uniquement. */
   CONNECTOR_ALLOW_PRIVATE_NETWORK: z.enum(['true', 'false']).default('false'),
+  /** Adresse publique de l'API (retour des connexions OAuth). */
+  API_PUBLIC_URL: z.string().url().optional(),
 });
 export type Env = z.infer<typeof EnvSchema>;
 
@@ -37,6 +39,9 @@ export interface ConnectorSettings {
   /** Sans clé : seuls les connecteurs sans jeton peuvent être ajoutés. */
   secretKey: Buffer | null;
   allowPrivateNetwork: boolean;
+  /** Adresse publique de l'API (retour OAuth) et du cockpit (redirection finale). */
+  publicApiUrl?: string;
+  webOrigin?: string;
 }
 
 export interface ApiConfig {
@@ -106,6 +111,8 @@ export function loadConfig(raw: Record<string, string | undefined>): ApiConfig {
     connectors: {
       secretKey,
       allowPrivateNetwork: env.CONNECTOR_ALLOW_PRIVATE_NETWORK === 'true',
+      publicApiUrl: (env.API_PUBLIC_URL ?? `http://localhost:${env.API_PORT}`).replace(/\/+$/, ''),
+      webOrigin: corsOrigin[0] ?? 'http://localhost:3000',
     },
     auth: {
       hideDemoOrg: env.HIDE_DEMO_ORG === 'true',

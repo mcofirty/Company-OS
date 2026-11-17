@@ -16,6 +16,7 @@ import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
 import { ActivityFeed } from './cockpit/ActivityFeed';
 import { MobileView } from './cockpit/MobileView';
+import { AppBar } from './cockpit/AppBar';
 import { Onboarding, WelcomeBanner } from './cockpit/Welcome';
 import { DeliverablesPage } from './pages/Deliverables';
 import { MissionsPage, type MissionsTab } from './pages/Missions';
@@ -79,6 +80,19 @@ export function Cockpit() {
   const [showFormer, setShowFormer] = useState(false);
   const isMobile = useIsMobile();
   useEffect(() => applyTheme(), []);
+  // Retour d'une connexion « Se connecter avec … » : message, puis Réglages > Connecteurs.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const status = q.get('connector');
+    if (!status) return;
+    toast({
+      text: q.get('detail') ?? (status === 'ok' ? 'Application connectée' : 'Connexion refusée'),
+      tone: status === 'ok' ? 'success' : 'danger',
+    });
+    setSettingsSection('connectors');
+    setView('settings');
+    window.history.replaceState(null, '', window.location.pathname);
+  }, [toast]);
   /** undefined = fermé ; '' = mission sans agent présélectionné. */
   const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
   const scene = useRef<HqScene | null>(null);
@@ -336,6 +350,18 @@ export function Cockpit() {
                 </button>
               ))}
             </nav>
+            {world && (
+              <AppBar
+                world={world}
+                now={now}
+                onSelect={select}
+                canConnect={(controls.caps.manageConnectors ?? false) && world.org.mode === 'live'}
+                onConnect={() => {
+                  setSettingsSection('connectors');
+                  setView('settings');
+                }}
+              />
+            )}
           </div>
           {world && view === 'office' && (
             <div

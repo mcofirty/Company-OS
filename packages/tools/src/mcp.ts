@@ -1,6 +1,11 @@
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
+import {
+  UnauthorizedError,
+  type OAuthClientProvider,
+} from '@modelcontextprotocol/sdk/client/auth.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import {
   StreamableHTTPClientTransport,
   StreamableHTTPError,
@@ -20,6 +25,20 @@ export interface McpEndpoint {
   /** Autorise http:// et les adresses privées/locales (tests, serveur MCP interne voulu). */
   allowPrivateNetwork?: boolean;
   timeoutMs?: number;
+  /** Connecteur OAuth : jetons fournis (et renouvelés) par ce fournisseur. */
+  authProvider?: OAuthClientProvider;
+}
+
+/**
+ * fetch protégé : chaque requête (MCP, découverte OAuth, jeton) vise une adresse publique en
+ * HTTPS (anti-SSRF), sans suivre de redirection vers une autre machine.
+ */
+export function safeFetch(allowPrivate = false): typeof fetch {
+  return (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = input instanceof Request ? input.url : String(input);
+    await assertSafeMcpUrl(url, allowPrivate);
+    return fetch(input, { ...init, redirect: 'error' });
+  }) as typeof fetch;
 }
 
 export interface DiscoveredTool {
@@ -91,6 +110,9 @@ export async function assertSafeMcpUrl(raw: string, allowPrivate = false): Promi
 
 function classify(err: unknown): ToolError {
   if (err instanceof ToolError) return err;
+  if (err instanceof UnauthorizedError) {
+    return new ToolError('CONNECTOR_AUTH', false, 'Connexion expirée : reconnecter l’application');
+  }
   if (err instanceof StreamableHTTPError) {
     if (err.code === 401 || err.code === 403) {
       return new ToolError('CONNECTOR_AUTH', false, 'Authentification refusée par le serveur MCP');
@@ -109,18 +131,38 @@ function classify(err: unknown): ToolError {
 
 async function withClient<T>(ep: McpEndpoint, fn: (c: Client) => Promise<T>): Promise<T> {
   const url = await assertSafeMcpUrl(ep.url, ep.allowPrivateNetwork);
-  const transport = new StreamableHTTPClientTransport(url, {
-    requestInit: { headers: ep.headers, redirect: 'error' },
-  });
-  const client = new Client({ name: 'company-os', version: '1.0.0' });
+  const common = {
+    requestInit: { headers: ep.headers, redirect: 'error' as const },
+    fetch: safeFetch(ep.allowPrivateNetwork),
+    ...(ep.authProvider ? { authProvider: ep.authProvider } : {}),
+  };
   const timeout = ep.timeoutMs ?? 20_000;
+  // Serveurs anciens (SSE, ex. adresses en /sse) : transport SSE ; sinon Streamable HTTP, avec
+  // repli SSE si le serveur ne le connaît pas (404 / 405).
+  const sseFirst = /\/sse\/?$/.test(url.pathname);
+  const attempt = async (sse: boolean): Promise<T> => {
+    const transport = sse
+      ? new SSEClientTransport(url, common)
+      : new StreamableHTTPClientTransport(url, common);
+    const client = new Client({ name: 'company-os', version: '1.0.0' });
+    try {
+      await client.connect(transport, { timeout });
+      return await fn(client);
+    } finally {
+      await client.close().catch(() => undefined);
+    }
+  };
   try {
-    await client.connect(transport, { timeout });
-    return await fn(client);
+    return await attempt(sseFirst);
   } catch (err) {
+    if (!sseFirst && err instanceof StreamableHTTPError && (err.code === 404 || err.code === 405)) {
+      try {
+        return await attempt(true);
+      } catch (e2) {
+        throw classify(e2);
+      }
+    }
     throw classify(err);
-  } finally {
-    await client.close().catch(() => undefined);
   }
 }
 

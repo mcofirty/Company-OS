@@ -3,6 +3,17 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-19 (17) — Barre d'applications et catalogue (OAuth, passerelles)
+
+### Réalisé
+- Barre d'applications en haut du QG (logos, halo quand un agent l'utilise, tâches au clic).
+- Catalogue : 50+ applications ; OAuth MCP de bout en bout ; adresses secrètes de passerelle chiffrées ;
+  repli SSE ; migration `20261119090000_connector_apps_oauth` ; `API_PUBLIC_URL` (compose).
+
+### Tests (exécutés le 2026-11-19)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 165/165 (dont OAuth complet contre un serveur
+  d'autorisation de test conforme : métadonnées, enregistrement, PKCE). `pnpm e2e` : 25/25.
+
 ## Session 2026-11-18 (16) — Agents pilotables, missions récurrentes, notifications, cockpit v2
 
 ### Réalisé

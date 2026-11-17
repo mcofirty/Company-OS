@@ -536,6 +536,7 @@ export function registerV1(
       db.tool.findMany({
         where: { OR: [{ orgId: p.orgId }, { orgId: null }] },
         orderBy: { id: 'asc' },
+        include: { connector: { select: { app: true } } },
       }),
       db.toolInvocation.groupBy({
         by: ['toolId'],

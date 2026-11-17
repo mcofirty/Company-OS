@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -9,12 +10,22 @@ import {
   removeConnector,
   replaceAgentGrants,
   setConnectorToolPolicy,
+  saveConnectorOAuth,
   syncConnector,
   validateGrants,
   type Db,
 } from '@company-os/db';
+import { appById } from '@company-os/contracts';
 import { openSecret, sealSecret } from '@company-os/policies';
-import { discoverMcpTools, ToolError, type McpEndpoint } from '@company-os/tools';
+import {
+  beginOAuth,
+  buildConnectorEndpoint,
+  completeOAuth,
+  discoverMcpTools,
+  ToolError,
+  type McpEndpoint,
+  type OAuthState,
+} from '@company-os/tools';
 import { principalOf, requireRole } from '../auth';
 import type { ConnectorSettings } from '../config';
 
@@ -31,6 +42,17 @@ const CreateConnectorSchema = z
       .toLowerCase()
       .regex(/^[a-z0-9-]{1,40}$/)
       .default('authorization'),
+    /** Application du catalogue (logo, aide) : github, zapier… */
+    app: z.string().trim().max(40).optional(),
+    /** L'adresse contient un secret (Zapier, Make, n8n) : chiffrée, jamais réaffichée. */
+    urlIsSecret: z.boolean().optional(),
+  })
+  .strict();
+const OAuthStartSchema = z
+  .object({
+    name: z.string().trim().min(2).max(40),
+    url: z.string().trim().url().max(500),
+    app: z.string().trim().max(40).optional(),
   })
   .strict();
 const Id = z.object({ id: z.uuid() });
@@ -61,6 +83,8 @@ function connectError(err: unknown): DomainError {
  */
 export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorSettings): void {
   const meta = { schemaVersion: 1 };
+  const redirectUrl = `${cfg.publicApiUrl ?? 'http://localhost:4000'}/v1/connectors/oauth/callback`;
+  const webOrigin = cfg.webOrigin ?? 'http://localhost:3000';
   const endpoint = (url: string, headers: Record<string, string>): McpEndpoint => ({
     url,
     headers,
@@ -100,6 +124,14 @@ export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorS
         'Stockage de jetons indisponible : CONNECTOR_SECRET_KEY absente sur le serveur',
       );
     }
+    const preset = appById(body.app);
+    const urlIsSecret = body.urlIsSecret ?? preset?.connect.kind === 'mcp-url';
+    if (urlIsSecret && !cfg.secretKey) {
+      throw new DomainError(
+        'CONFLICT',
+        'Stockage chiffré indisponible : CONNECTOR_SECRET_KEY absente sur le serveur',
+      );
+    }
     let discovered;
     try {
       discovered = await discoverMcpTools(
@@ -112,9 +144,13 @@ export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorS
       orgId: p.orgId,
       actorId: p.userId,
       name: body.name,
-      url: body.url,
+      // Adresse secrète : seule une version affichable (origine) est gardée en clair.
+      url: urlIsSecret ? `${new URL(body.url).origin}/…` : body.url,
+      urlSealed: urlIsSecret && cfg.secretKey ? sealSecret(body.url, cfg.secretKey) : null,
       secretSealed: body.token && cfg.secretKey ? sealSecret(body.token, cfg.secretKey) : null,
       authHeader: body.authHeader,
+      authKind: urlIsSecret ? 'url' : body.token ? 'token' : 'none',
+      app: preset?.id ?? null,
       discovered,
     });
     return reply.status(201).send({ data: { ...r, tools: discovered.length }, meta });
@@ -125,13 +161,19 @@ export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorS
     const { id } = Id.parse(req.params);
     const c = await connectorEndpoint(db, p.orgId, id);
     if (!c) throw new DomainError('NOT_FOUND', 'Connecteur introuvable');
-    if (c.secretSealed && !cfg.secretKey) {
-      throw new DomainError('CONFLICT', 'CONNECTOR_SECRET_KEY absente : jeton illisible');
+    if ((c.secretSealed || c.urlSealed || c.oauthSealed) && !cfg.secretKey) {
+      throw new DomainError('CONFLICT', 'CONNECTOR_SECRET_KEY absente : secrets illisibles');
     }
-    const token =
-      c.secretSealed && cfg.secretKey ? openSecret(c.secretSealed, cfg.secretKey) : undefined;
     try {
-      const discovered = await discoverMcpTools(endpoint(c.url, authHeaders(c.authHeader, token)));
+      const discovered = await discoverMcpTools(
+        buildConnectorEndpoint(c, {
+          key: cfg.secretKey,
+          allowPrivateNetwork: cfg.allowPrivateNetwork,
+          timeoutMs: 15_000,
+          oauthRedirectUrl: redirectUrl,
+          persistOAuth: (sealed) => saveConnectorOAuth(db, c.id, sealed),
+        }),
+      );
       await syncConnector(db, { orgId: p.orgId, actorId: p.userId, connectorId: id, discovered });
     } catch (err) {
       const e = connectError(err);
@@ -144,6 +186,127 @@ export function registerConnectors(app: FastifyInstance, db: Db, cfg: ConnectorS
       throw e;
     }
     return { data: (await listConnectors(db, p.orgId)).find((x) => x.id === id), meta };
+  });
+
+  // ---------- « Se connecter avec … » (OAuth MCP) ----------
+  /** Étape 1 : découverte + enregistrement du client ; renvoie l'URL d'autorisation à ouvrir. */
+  app.post('/v1/connectors/oauth/start', async (req) => {
+    const p = await assertLiveAdmin(req);
+    const body = OAuthStartSchema.parse(req.body);
+    const key = cfg.secretKey;
+    if (!key) {
+      throw new DomainError(
+        'CONFLICT',
+        'CONNECTOR_SECRET_KEY absente : connexion OAuth impossible',
+      );
+    }
+    const state = randomBytes(24).toString('base64url');
+    await db.oAuthSession.deleteMany({ where: { expiresAt: { lt: new Date() } } });
+    await db.oAuthSession.create({
+      data: {
+        state,
+        orgId: p.orgId,
+        actorId: p.userId,
+        app: appById(body.app)?.id ?? null,
+        name: body.name,
+        serverUrl: body.url,
+        expiresAt: new Date(Date.now() + 10 * 60_000),
+      },
+    });
+    try {
+      const { authorizationUrl } = await beginOAuth({
+        serverUrl: body.url,
+        redirectUrl,
+        state,
+        allowPrivateNetwork: cfg.allowPrivateNetwork,
+        persist: async (s) => {
+          await db.oAuthSession.update({
+            where: { state },
+            data: { dataSealed: sealSecret(JSON.stringify(s), key) },
+          });
+        },
+      });
+      return { data: { authorizationUrl }, meta };
+    } catch (err) {
+      await db.oAuthSession.deleteMany({ where: { state } });
+      throw connectError(err);
+    }
+  });
+
+  /**
+   * Étape 2 : retour du navigateur depuis l'application (sans jeton du cockpit : la session est
+   * identifiée par `state`, à usage unique, 10 min). Puis retour au cockpit.
+   */
+  app.get('/v1/connectors/oauth/callback', async (req, reply) => {
+    const q = z
+      .object({
+        state: z.string().max(200).optional(),
+        code: z.string().max(4000).optional(),
+        error: z.string().max(200).optional(),
+      })
+      .parse(req.query);
+    const back = (status: 'ok' | 'error', detail: string) =>
+      reply.redirect(
+        `${webOrigin}/?connector=${status}&detail=${encodeURIComponent(detail.slice(0, 160))}`,
+      );
+    const session = q.state
+      ? await db.oAuthSession.findUnique({ where: { state: q.state } })
+      : null;
+    if (session) await db.oAuthSession.delete({ where: { state: session.state } });
+    if (!session || session.expiresAt < new Date() || !cfg.secretKey) {
+      return back('error', 'Session de connexion expirée : recommence depuis le cockpit');
+    }
+    if (q.error || !q.code) return back('error', `Connexion refusée (${q.error ?? 'sans code'})`);
+    const key = cfg.secretKey;
+    try {
+      const data = session.dataSealed
+        ? (JSON.parse(openSecret(session.dataSealed, key)) as OAuthState)
+        : {};
+      const tokens = await completeOAuth({
+        serverUrl: session.serverUrl,
+        redirectUrl,
+        code: q.code,
+        data,
+        allowPrivateNetwork: cfg.allowPrivateNetwork,
+      });
+      let sealed = sealSecret(JSON.stringify(tokens), key);
+      const discovered = await discoverMcpTools(
+        buildConnectorEndpoint(
+          {
+            url: session.serverUrl,
+            urlSealed: null,
+            oauthSealed: sealed,
+            authKind: 'oauth',
+            secretSealed: null,
+            authHeader: 'authorization',
+          },
+          {
+            key,
+            allowPrivateNetwork: cfg.allowPrivateNetwork,
+            timeoutMs: 15_000,
+            oauthRedirectUrl: redirectUrl,
+            persistOAuth: async (s) => {
+              sealed = s;
+            },
+          },
+        ),
+      );
+      await createConnector(db, {
+        orgId: session.orgId,
+        actorId: session.actorId,
+        name: session.name,
+        url: session.serverUrl,
+        secretSealed: null,
+        authHeader: 'authorization',
+        authKind: 'oauth',
+        oauthSealed: sealed,
+        app: session.app,
+        discovered,
+      });
+      return back('ok', `${session.name} connecté : ${discovered.length} outil(s)`);
+    } catch (err) {
+      return back('error', connectError(err).message);
+    }
   });
 
   app.post('/v1/connectors/:id/tools/:action/policy', async (req) => {

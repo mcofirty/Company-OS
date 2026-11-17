@@ -26,6 +26,8 @@ x-server: &server
     HIDE_DEMO_ORG: ${HIDE_DEMO_ORG:-true}
     # Chiffrement des jetons de connecteurs MCP (ne jamais changer : jetons sinon illisibles).
     CONNECTOR_SECRET_KEY: ${CONNECTOR_SECRET_KEY:-}
+    # Adresse publique de l'API : retour des connexions « Se connecter avec … » (OAuth).
+    API_PUBLIC_URL: ${PUBLIC_API_URL:?}
   depends_on:
     migrate: { condition: service_completed_successfully }
     temporal: { condition: service_healthy }

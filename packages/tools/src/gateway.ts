@@ -7,6 +7,7 @@ import {
 import {
   completeInvocation,
   connectorForCall,
+  saveConnectorOAuth,
   isConnectorToolId,
   invocationView,
   requestInvocationApproval,
@@ -16,10 +17,11 @@ import {
   startInvocation,
   type Db,
 } from '@company-os/db';
-import { openSecret, redactJson, redactText, withSpan } from '@company-os/policies';
+import { redactJson, redactText, withSpan } from '@company-os/policies';
 import { z } from 'zod';
 import { findAdapter, ToolError, type ToolAdapter } from './adapters';
 import { callMcpTool } from './mcp';
+import { buildConnectorEndpoint } from './endpoint';
 import { findPlatformAdapter } from './platform';
 
 export interface GatewayOptions {
@@ -131,30 +133,14 @@ export class ToolGateway {
       outputSchema: McpOutput,
       simulatedLatencyMs: 0,
       invoke: async (_ctx, input) => {
-        const headers: Record<string, string> = {};
-        if (c.secretSealed) {
-          if (!this.connectorKey) {
-            throw new ToolError(
-              'CONNECTOR_SECRET_UNAVAILABLE',
-              false,
-              'Clé de déchiffrement absente',
-            );
-          }
-          const token = openSecret(c.secretSealed, this.connectorKey);
-          if (c.authHeader === 'authorization') headers['Authorization'] = `Bearer ${token}`;
-          else headers[c.authHeader] = token;
-        }
         try {
-          const r = await callMcpTool(
-            {
-              url: c.url,
-              headers,
-              allowPrivateNetwork: this.allowPrivateNetwork,
-              timeoutMs: 30_000,
-            },
-            c.remoteName,
-            input,
-          );
+          const ep = buildConnectorEndpoint(c, {
+            key: this.connectorKey,
+            allowPrivateNetwork: this.allowPrivateNetwork,
+            timeoutMs: 30_000,
+            persistOAuth: (sealed) => saveConnectorOAuth(this.db, c.connectorId, sealed),
+          });
+          const r = await callMcpTool(ep, c.remoteName, input);
           const head = r.isError ? 'Erreur renvoyée par' : 'Réponse de';
           return {
             summary:

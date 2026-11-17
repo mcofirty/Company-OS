@@ -126,13 +126,17 @@ export function invocationView(i: Prisma.ToolInvocationGetPayload<object>): Invo
   };
 }
 
-export function toolView(t: Prisma.ToolGetPayload<object>): ToolView {
+export function toolView(
+  t: Prisma.ToolGetPayload<object> & { connector?: { app: string | null } | null },
+): ToolView {
   return ToolViewSchema.parse({
     id: t.id,
     name: t.name,
     code: t.code,
     category: t.category,
     color: t.color,
+    // Connecteurs : application du catalogue (même valeur que dans tool.connector.updated).
+    ...(t.category === 'connector' ? { app: t.connector?.app ?? null } : {}),
     status: t.status,
     actions: t.actions,
   });

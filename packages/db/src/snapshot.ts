@@ -42,7 +42,11 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
         await Promise.all([
           tx.department.findMany({ where: { orgId }, orderBy: { id: 'asc' } }),
           tx.agent.findMany({ where: { orgId, deletedAt: null }, orderBy: { id: 'asc' } }),
-          tx.tool.findMany({ where: { OR: [{ orgId }, { orgId: null }] }, orderBy: { id: 'asc' } }),
+          tx.tool.findMany({
+            where: { OR: [{ orgId }, { orgId: null }] },
+            orderBy: { id: 'asc' },
+            include: { connector: { select: { app: true } } },
+          }),
           tx.task.findMany({ where: { orgId, status: { in: [...OPEN_TASK_STATUSES] } } }),
           tx.task.findMany({
             where: { orgId, status: { notIn: [...OPEN_TASK_STATUSES] } },

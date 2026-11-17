@@ -367,6 +367,7 @@ export function applyEvent(
                 code: p.code,
                 category: 'connector',
                 color: p.color,
+                app: p.app,
                 status: p.status,
                 actions: p.actions,
               },

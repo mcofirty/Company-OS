@@ -293,3 +293,10 @@ indicateurs cliquables, incidents et alertes limités aux 24 h, équipe sans les
 flottante = identité / panneau droit = travail et gestion, fil d'activité groupé par mission, bulles
 d'activité et halo de blocage sur la carte (textes à échelle inverse du zoom), bandeau « depuis ta dernière
 visite », premier démarrage guidé, thème sombre, vue téléphone (validations + activité).
+
+ADR-063 — **« Toutes les applications » = MCP officiel + OAuth + passerelles.** Plutôt que d'écrire des
+intégrations, la plateforme branche (1) les serveurs MCP publiés par les éditeurs (jeton ou OAuth MCP,
+jetons chiffrés et renouvelés), (2) des passerelles d'automatisation (Zapier, Make, n8n) dont l'adresse
+secrète est chiffrée, qui ouvrent Gmail, WhatsApp, LinkedIn, Slack, Google… Les logos viennent de
+simple-icons (CC0) ; les marques sans icône libre ont une pastille à leurs couleurs. Les politiques
+(lecture / validation / désactivé) et l'audit s'appliquent à chaque outil, quelle que soit l'origine.

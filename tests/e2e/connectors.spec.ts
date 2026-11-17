@@ -46,8 +46,27 @@ test('Connecteurs — ajout d’un serveur MCP, politiques, outil proposé aux a
   await expect(page.getByTestId('policy-search_notes')).toHaveValue('read');
   await page.getByTestId('policy-create_ticket').selectOption('disabled');
   await expect(page.getByTestId('policy-create_ticket')).toHaveValue('disabled');
+  // Catalogue : Gmail passe par une passerelle (Zapier, Make, n8n) ; GitHub se branche par jeton.
+  await page.getByTestId('catalog-search').fill('gmail');
+  await page.getByTestId('catalog-gmail').click();
+  await expect(page.getByTestId('connect-dialog')).toContainText('Zapier');
+  await page.getByTestId('connect-dialog').getByRole('button', { name: 'Fermer' }).click();
+  await page.getByTestId('catalog-search').fill('');
   await page.screenshot({ path: 'docs/screenshots/connectors-1440.png' });
-  await page.getByRole('button', { name: 'Fermer' }).click();
+  await page
+    .getByTestId('connectors-panel')
+    .getByRole('button', { name: 'Fermer', exact: true })
+    .last()
+    .click();
+
+  // Barre d'applications : le connecteur y figure ; un clic montre ses tâches (aucune en cours).
+  const appBtn = page.getByTestId('app-bar').locator('button[title="Notes équipe"]');
+  await expect(appBtn).toBeVisible();
+  await expect(appBtn).toHaveAttribute('data-active', 'false');
+  await appBtn.click();
+  await expect(page.getByTestId('app-popover')).toContainText('Aucune tâche');
+  await page.screenshot({ path: 'docs/screenshots/app-bar-1440.png' });
+  await page.getByTestId('app-popover').getByRole('button', { name: 'Fermer' }).click();
 
   // L'outil actif est proposé à la création d'un agent ; l'outil désactivé ne l'est pas.
   await page.getByTestId('new-agent').click();

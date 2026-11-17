@@ -90,6 +90,8 @@ export const ToolViewSchema = z.object({
   code: z.string(),
   category: z.string(),
   color: z.string(),
+  /** Application du catalogue (connecteurs) : logo dans la barre d'applications. */
+  app: z.string().nullable().optional(),
   status: z.enum(['healthy', 'degraded', 'down']),
   actions: z.array(
     z.object({

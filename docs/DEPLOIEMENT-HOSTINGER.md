@@ -114,6 +114,11 @@ cd /opt/company-os && docker compose -f infra/docker-compose.prod.yml -f infra/d
 **Sauvegardes** : chaque nuit à 03:30 dans `/opt/company-os/backups` (14 jours). Pour une copie
 hors du serveur, téléchargez-les régulièrement (ou activez les sauvegardes Hostinger du VPS).
 
+### Brancher tes applications
+Réglages → Connecteurs → choisis l'application : « Se connecter avec … » (Notion, Linear, Sentry),
+jeton (GitHub, Stripe), ou passerelle (Zapier, Make, n8n) pour Gmail, WhatsApp, LinkedIn, Slack,
+Google… Elles apparaissent ensuite dans la barre en haut du QG.
+
 ### Brancher vos outils (connecteurs)
 Dans le cockpit : bouton **⇄ Connecteurs** → nom, adresse MCP (HTTPS) de l'outil, jeton d'accès →
 « Connecter et découvrir les outils ». Choisissez pour chaque outil : *Lecture directe*, *Validation à

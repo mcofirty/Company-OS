@@ -502,6 +502,14 @@ model Connector {
    * En-tête recevant le jeton (Authorization: Bearer par défaut).
    */
   authHeader   String          @default("authorization") @map("auth_header")
+  /// Application du catalogue (github, notion, zapier…) ; null = serveur MCP libre.
+  app          String?
+  /// token | oauth | url (adresse secrète) | none
+  authKind     String          @default("token") @map("auth_kind")
+  /// Adresse complète chiffrée quand elle contient un secret (Zapier, Make, n8n) ; `url` = version affichable.
+  urlSealed    String?         @map("url_sealed")
+  /// OAuth : { clientInformation, tokens } chiffrés (renouvellement automatique).
+  oauthSealed  String?         @map("oauth_sealed")
   status       String          @default("healthy")
   lastError    String?         @map("last_error")
   lastSyncAt   DateTime?       @map("last_sync_at") @db.Timestamptz(3)
@@ -590,4 +598,20 @@ model NotificationSetting {
   updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(3)
 
   @@map("notification_settings")
+}
+
+/// Connexion OAuth en cours (« Se connecter avec … ») : 10 minutes, usage unique.
+model OAuthSession {
+  state      String   @id
+  orgId      String   @map("org_id") @db.Uuid
+  actorId    String   @map("actor_id")
+  app        String?
+  name       String
+  serverUrl  String   @map("server_url")
+  /// { codeVerifier, clientInformation } chiffrés.
+  dataSealed String?  @map("data_sealed")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(3)
+
+  @@map("oauth_sessions")
 }

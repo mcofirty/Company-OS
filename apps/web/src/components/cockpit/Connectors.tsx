@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type React from 'react';
 import { api, ApiFailure } from '../../lib/api';
 import { time } from '../../lib/format';
+import { AppCatalog } from './AppCatalog';
+import { AppIcon } from './AppIcon';
 
 type Policy = 'read' | 'approval' | 'disabled';
 interface ConnectorTool {
@@ -21,6 +23,8 @@ interface Connector {
   hasSecret: boolean;
   authHeader: string;
   status: 'healthy' | 'degraded' | 'down';
+  app: string | null;
+  authKind: string;
   lastError: string | null;
   lastSyncAt: string | null;
   tools: ConnectorTool[];
@@ -105,12 +109,30 @@ export function ConnectorsPanel({
     <Wrapper embedded={embedded}>
       <h2>{embedded ? 'Connecteurs' : 'Connecteurs — vos outils réels'}</h2>
       <p className="muted small">
-        Branchez un serveur <strong>MCP</strong> (Model Context Protocol) : Notion, GitHub, Google
-        Drive, votre CRM… La plupart des éditeurs publient une adresse MCP et un jeton d’accès.
-        Chaque outil découvert est d’abord en <em>validation à chaque appel</em> : rien ne s’exécute
-        sans vous tant que vous ne l’avez pas passé en lecture directe. Ensuite, accordez les outils
-        à vos agents (fiche agent → « Modifier les outils »).
+        Choisis une application : connexion en un clic (« Se connecter avec … »), avec un jeton, ou
+        via une passerelle (Zapier, Make, n8n) qui ouvre des milliers d’apps — Gmail, WhatsApp,
+        LinkedIn, Slack, Google… Chaque outil découvert est d’abord en{' '}
+        <em>validation à chaque appel</em>. Ensuite, accorde les outils à tes agents (fiche agent →
+        « Modifier les outils »).
       </p>
+      <AppCatalog
+        connected={(list ?? []).map((c) => ({
+          id: c.id,
+          app: c.app,
+          name: c.name,
+          tools: c.tools,
+        }))}
+        canManage={canManage}
+        secretStorage={secretStorage}
+        onConnected={(text) => {
+          onDone(text, 'success');
+          void load();
+        }}
+        onCustom={() =>
+          document.querySelector('.connector-form')?.scrollIntoView({ behavior: 'smooth' })
+        }
+      />
+      <h3 className="section-title">Mes connexions</h3>
       {error && (
         <p className="form-error" role="alert" data-testid="connector-error">
           {error}
@@ -127,6 +149,7 @@ export function ConnectorsPanel({
           <section key={c.id} className="connector" data-testid="connector">
             <header className="connector-head">
               <span className={`dot status-${c.status}`} aria-hidden />
+              <AppIcon app={c.app} name={c.name} size={26} />
               <strong>{c.name}</strong>
               <span className="muted small">
                 {c.endpoint} · {c.hasSecret ? 'jeton chiffré' : 'sans jeton'}
@@ -216,7 +239,7 @@ export function ConnectorsPanel({
             void add();
           }}
         >
-          <h3>Ajouter un connecteur</h3>
+          <h3>Autre serveur MCP</h3>
           <label>
             Nom
             <input

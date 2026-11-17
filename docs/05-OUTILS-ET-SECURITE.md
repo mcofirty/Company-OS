@@ -91,3 +91,18 @@ Un administrateur d'une organisation live branche ses propres outils via un serv
   modèle comme donnée non fiable. Chaque appel est une invocation visible (machine-outil dans le QG).
 - **Événements** : `tool.connector.updated` (ajout, synchro, politique, erreur, retrait ; sans URL ni
   jeton) fait apparaître/disparaître la machine-outil en temps réel.
+
+### 11.1 Catalogue d'applications et connexions (implémenté)
+- **Catalogue** (`packages/contracts/src/apps.ts`) : intégrés (Claude, Web, Bibliothèque, Entreprise,
+  Équipe), serveurs MCP officiels (GitHub et Stripe par jeton ; Notion, Linear, Sentry par OAuth),
+  passerelles (Zapier, Make, n8n : adresse personnelle secrète, chiffrée, jamais réaffichée) et
+  applications atteintes via une passerelle (Gmail, WhatsApp, LinkedIn, Slack, Google…), reconnues dans
+  les noms d'outils (`gmail_send_email` → Gmail).
+- **OAuth MCP** (« Se connecter avec … ») : découverte des métadonnées, enregistrement dynamique du
+  client, PKCE S256, session à usage unique de 10 min (`oauth_sessions`), retour sur
+  `API_PUBLIC_URL/v1/connectors/oauth/callback`, jetons chiffrés (`connectors.oauth_sealed`) et
+  renouvelés automatiquement ; si le renouvellement échoue pendant une mission : `CONNECTOR_AUTH`
+  (reconnecter l'app). Toutes les requêtes (MCP, OAuth) passent par un fetch anti-SSRF sans redirection.
+- **Transports** : Streamable HTTP, repli SSE (serveurs anciens, adresses en `/sse`).
+- **Barre d'applications** : logo par application ; il s'illumine quand une invocation RÉELLE est en
+  cours (Claude : un agent réfléchit) ; un clic liste les tâches en cours et récentes.

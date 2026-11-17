@@ -249,6 +249,8 @@ export const Payloads = {
     name: z.string().min(1).max(60),
     code: z.string().min(1).max(4),
     color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    /** Application du catalogue (logo) ; null = serveur MCP libre. */
+    app: z.string().max(40).nullable().default(null),
     status: z.enum(['healthy', 'degraded', 'down']),
     removed: z.boolean(),
     actions: z

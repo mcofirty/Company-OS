@@ -41,6 +41,9 @@ export interface ConnectorView {
   hasSecret: boolean;
   authHeader: string;
   status: 'healthy' | 'degraded' | 'down';
+  /** Application du catalogue et mode de connexion. */
+  app: string | null;
+  authKind: string;
   lastError: string | null;
   lastSyncAt: string | null;
   createdAt: string;
@@ -146,6 +149,7 @@ async function emitConnector(
       name: c.name,
       code: c.tool.code,
       color: c.tool.color,
+      app: c.app,
       status: c.status as 'healthy' | 'degraded' | 'down',
       removed: c.removedAt !== null,
       actions,
@@ -171,6 +175,12 @@ export async function createConnector(
     secretSealed: string | null;
     authHeader: string;
     discovered: DiscoveredToolInput[];
+    /** Application du catalogue (github, notion, zapier…). */
+    app?: string | null;
+    authKind?: 'token' | 'oauth' | 'url' | 'none';
+    /** Adresse complète chiffrée (contient un secret) ; `url` reçoit alors la version affichable. */
+    urlSealed?: string | null;
+    oauthSealed?: string | null;
   },
 ): Promise<{ connectorId: string; toolId: string }> {
   const { result } = await withOrgTx(db, input.orgId, new Date(), async (ctx) => {
@@ -201,6 +211,10 @@ export async function createConnector(
         url: input.url,
         secretSealed: input.secretSealed,
         authHeader: input.authHeader,
+        app: input.app ?? null,
+        authKind: input.authKind ?? (input.secretSealed ? 'token' : 'none'),
+        urlSealed: input.urlSealed ?? null,
+        oauthSealed: input.oauthSealed ?? null,
         status: 'healthy',
         lastSyncAt: ctx.now,
         createdBy: input.actorId,
@@ -463,8 +477,10 @@ export async function listConnectors(db: Db, orgId: string): Promise<ConnectorVi
     toolId: c.toolId,
     name: c.name,
     endpoint: safeEndpoint(c.url),
-    hasSecret: c.secretSealed !== null,
+    hasSecret: c.secretSealed !== null || c.urlSealed !== null || c.oauthSealed !== null,
     authHeader: c.authHeader,
+    app: c.app,
+    authKind: c.authKind,
     status: c.status as ConnectorView['status'],
     lastError: c.lastError,
     lastSyncAt: c.lastSyncAt?.toISOString() ?? null,
@@ -492,6 +508,9 @@ export async function connectorForCall(db: Db, orgId: string, toolId: string, ac
     connectorId: c.id,
     name: c.name,
     url: c.url,
+    urlSealed: c.urlSealed,
+    oauthSealed: c.oauthSealed,
+    authKind: c.authKind,
     secretSealed: c.secretSealed,
     authHeader: c.authHeader,
     remoteName: tool.remoteName,
@@ -506,7 +525,16 @@ export async function connectorForCall(db: Db, orgId: string, toolId: string, ac
 export async function connectorEndpoint(db: Db, orgId: string, connectorId: string) {
   return db.connector.findFirst({
     where: { id: connectorId, orgId, removedAt: null },
-    select: { id: true, url: true, secretSealed: true, authHeader: true, name: true },
+    select: {
+      id: true,
+      url: true,
+      urlSealed: true,
+      oauthSealed: true,
+      authKind: true,
+      secretSealed: true,
+      authHeader: true,
+      name: true,
+    },
   });
 }
 
@@ -541,4 +569,9 @@ export async function connectorToolsForGrants(
     }
   }
   return out;
+}
+
+/** Jetons OAuth renouvelés (refresh) : enregistrés chiffrés, sans événement (aucun impact métier). */
+export async function saveConnectorOAuth(db: Db, connectorId: string, oauthSealed: string) {
+  await db.connector.update({ where: { id: connectorId }, data: { oauthSealed } });
 }

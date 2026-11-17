@@ -2904,3 +2904,236 @@ kbd {
 .manage-grid {
   min-width: 0;
 }
+
+/* =========================================================================
+   Barre d'applications (logos qui s'illuminent quand un agent les utilise)
+   ========================================================================= */
+.view-bar {
+  gap: 10px;
+  align-items: flex-start;
+}
+.app-bar {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid var(--outline);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  pointer-events: auto;
+  position: relative;
+  max-width: 60%;
+}
+.app-btn {
+  border: 0;
+  padding: 3px;
+  border-radius: 11px;
+  background: transparent;
+  position: relative;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.25s ease;
+}
+.app-btn:hover {
+  transform: translateY(-1px);
+}
+.app-btn.open {
+  background: var(--surface-muted);
+}
+.app-btn.on {
+  box-shadow:
+    0 0 0 2px var(--glow),
+    0 0 14px 2px color-mix(in srgb, var(--glow) 70%, transparent);
+  animation: app-glow 1.4s ease-in-out infinite;
+}
+.app-btn.on::after {
+  content: '';
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2b9471;
+  border: 2px solid var(--surface);
+}
+@keyframes app-glow {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--glow),
+      0 0 22px 6px color-mix(in srgb, var(--glow) 55%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-btn.on {
+    animation: none;
+  }
+}
+.app-icon {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+  flex: none;
+  overflow: hidden;
+}
+.app-initials {
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.app-more {
+  border: 0;
+  background: none;
+  font-weight: 800;
+  color: var(--ink-soft);
+  padding: 0 6px;
+  font-size: 14px;
+}
+.app-more.add {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1.5px dashed var(--outline);
+  color: var(--accent);
+}
+.app-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 360px;
+  max-height: 60vh;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(34, 32, 53, 0.22);
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+  z-index: 30;
+}
+.app-pop header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  column-gap: 8px;
+  align-items: center;
+}
+.app-pop header .muted {
+  grid-column: 2;
+  margin: 0;
+}
+.app-pop header .linklike {
+  grid-row: 1;
+  grid-column: 3;
+  text-decoration: none;
+}
+.app-pop h4 {
+  margin: 4px 0 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+}
+
+/* Catalogue d'applications */
+.app-catalog {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0 16px;
+}
+.catalog-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.catalog-head input {
+  flex: 1 1 260px;
+  padding: 8px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+}
+.app-card {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  padding: 9px 10px;
+  min-width: 0;
+}
+.app-card:hover {
+  border-color: var(--accent);
+}
+.app-card .grow {
+  display: grid;
+}
+.app-card .muted.small {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-card.small {
+  padding: 6px 8px;
+}
+.app-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  background: var(--surface-muted);
+  color: var(--ink-soft);
+}
+.app-status.ok {
+  background: #dcf3ea;
+  color: #1c6b52;
+}
+.section-title {
+  margin: 8px 0 4px;
+  font-size: 13px;
+}
+.connect-dialog {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+.connect-dialog label {
+  display: grid;
+  gap: 4px;
+}
+.connect-dialog input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--outline);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.connect-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.connect-head h2 {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 18px;
+}
+.via-list {
+  display: grid;
+  gap: 6px;
+}
