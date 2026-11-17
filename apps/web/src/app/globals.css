@@ -3708,3 +3708,10 @@ kbd {
   backdrop-filter: none;
   background: rgba(var(--glass-rgb), max(0.9, var(--ga)));
 }
+/* Ordre d'empilement : onglets et applis au-dessus des pôles ; fiche agent au-dessus des panneaux. */
+.cockpit.immersive .world-pane .view-bar {
+  z-index: 9;
+}
+.cockpit.immersive .agent-popover {
+  z-index: 28;
+}

@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  timeout: 30_000,
+  // 45 s : le QG 3D est rendu en WebGL logiciel (SwiftShader) dans le navigateur de test.
+  timeout: 45_000,
   fullyParallel: false,
   workers: 1,
   reporter: [['list']],

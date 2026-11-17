@@ -84,7 +84,9 @@ export function AgentPopover({
         const minY = bar && bar.height > 0 ? bar.bottom - paneR.top + 8 : 48;
         if (p && x > maxX) x = canR.left - paneR.left + p.x - GAP - CARD_W;
         x = Math.max(8, Math.min(x, maxX));
-        y = Math.max(minY, Math.min(y, paneR.height - h - 8));
+        const feed = pane.closest('.cockpit')?.querySelector('.feed')?.getBoundingClientRect();
+        const maxY = (feed && feed.height > 0 ? feed.top - paneR.top : paneR.height) - h - 8;
+        y = Math.max(minY, Math.min(y, maxY));
         el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
         el.style.opacity = '1';
       }
