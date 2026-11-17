@@ -343,9 +343,24 @@ export async function moveDepartment(
     for (const { d, to } of plan) {
       await tx.department.update({ where: { id: d.id }, data: { roomId: to } });
       const desks: Record<string, string> = {};
+      const taken = new Set<string>();
       for (const a of agentsOf.get(d.id) ?? []) {
-        const next = deskIn(to, a.deskAnchor);
+        let next = deskIn(to, a.deskAnchor);
         if (!next) continue; // agent en salle d'attente : inchangé
+        // Zone plus petite (local à 6 postes) : premier poste libre, sinon salle d'attente.
+        if (!HQ_MAP.anchors[next] || taken.has(next)) {
+          const used = new Set(
+            (await tx.agent.findMany({ where: { orgId }, select: { deskAnchor: true } })).map(
+              (x) => x.deskAnchor,
+            ),
+          );
+          next =
+            anchorsOfKind(HQ_MAP, 'desk', to).find((x) => !used.has(x.id) && !taken.has(x.id))
+              ?.id ??
+            anchorsOfKind(HQ_MAP, 'waiting').find((x) => !used.has(x.id) && !taken.has(x.id))?.id ??
+            a.deskAnchor;
+        }
+        taken.add(next);
         desks[a.id] = next;
         await tx.agent.update({ where: { id: a.id }, data: { deskAnchor: next } });
       }

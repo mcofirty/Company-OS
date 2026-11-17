@@ -144,7 +144,7 @@ export class HqScene extends Phaser.Scene implements HqWorldView {
     this.cameras.main.setBackgroundColor('#d6bde9');
     this.drawSky();
     this.drawStatic();
-    for (const r of HQ_MAP.rooms) this.drawPartitions(r);
+    this.drawWalls();
     for (const f of HQ_MAP.furniture) this.drawFurniture(f);
     this.drawSeats();
     commitDecor(this);
@@ -212,15 +212,19 @@ export class HqScene extends Phaser.Scene implements HqWorldView {
     return img;
   }
 
-  private drawPartitions(room: Room): void {
-    if (!room.walls) return;
-    const { x0, y0, x1, y1 } = room.rect;
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        if (HQ_MAP.tileKind({ x, y }) !== 'wall') continue;
-        this.placeDecor({ x, y }, partitionSprite(this, room, { x, y }), x + y + 1);
-      }
-    }
+  /** Murs du plan « Campus » (cloisons entre salles et façades), couleur neutre. */
+  private drawWalls(): void {
+    const room: Room = {
+      id: '__walls',
+      label: '',
+      color: '#E8DCCB',
+      kind: 'amenity',
+      rect: { x0: 0, y0: 0, x1: COLS - 1, y1: ROWS - 1 },
+      walls: true,
+      doors: [],
+    };
+    for (const t of HQ_MAP.wallTiles)
+      this.placeDecor(t, partitionSprite(this, room, t), t.x + t.y + 1);
   }
 
   private drawFurniture(f: Furniture): void {

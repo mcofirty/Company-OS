@@ -353,3 +353,16 @@ ADR-069 — **Fonctionnement des agents : objectifs, qualité, retours, coûts, 
   tarif Opus moins le coût réel (estimation affichée comme telle).
 - Missions en chaîne : modèles versionnés dans le code ; chaque étape reçoit le résultat précédent en
   données ; la dernière étape est toujours une validation humaine (rien n'est publié par la chaîne).
+
+ADR-070 — **Plan « Campus » (carte v4) et portraits 2D.** Le QG devient un plateau central en zones
+pastel (un pôle par zone, deux îlots de six postes) entouré de salles fermées à murs bas « coupés »
+(accueil, bureau de la direction, Agora pour les réunions, bibliothèque, salle calme, salle serveurs,
+town hall, amphithéâtre, café-jardin, cuisine, salle de jeux) et de trois locaux libres pour les
+nouveaux pôles, dans un extérieur décoratif. Les murs sont des tuiles bloquantes (`wallTiles`), les
+portes des ouvertures ; les identifiants de salles et d'ancres (`sales-desk-01`, `meeting-seat-01`,
+`annex-1`…) sont inchangés : aucune migration de données. Les postes supplémentaires ne sont utilisés
+que dans la limite de la capacité du pôle (décision humaine) ; un déplacement de pôle vers un local
+plus petit attribue le premier poste libre, sinon la salle d'attente. Sol unique (parquet clair) et
+tapis à motifs teintés par la couleur réelle du pôle ; décor sans effet métier. Les portraits des
+fiches, de l'équipe, de l'organigramme et de la vue téléphone sont des SVG générés depuis l'apparence
+et l'humeur réelle de l'agent (plus de rendu 3D hors écran).

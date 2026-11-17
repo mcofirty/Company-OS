@@ -468,8 +468,13 @@ async function hireFromProposal(
       (a) => a.deskAnchor,
     ),
   );
+  // Postes utilisables : la capacité du pôle (décision humaine), dans la limite des postes de la zone.
+  const capacity =
+    (await tx.department.findFirst({ where: { id: p.departmentId, orgId } }))?.capacity ?? 6;
   const desk =
-    anchorsOfKind(HQ_MAP, 'desk', p.roomId).find((d) => !taken.has(d.id)) ??
+    anchorsOfKind(HQ_MAP, 'desk', p.roomId)
+      .slice(0, capacity)
+      .find((d) => !taken.has(d.id)) ??
     anchorsOfKind(HQ_MAP, 'waiting').find((d) => !taken.has(d.id));
   if (!desk) throw new DomainError('CONFLICT', 'Aucun poste ni place d’attente disponible');
   const r = await createAgentInTx(ctx, {

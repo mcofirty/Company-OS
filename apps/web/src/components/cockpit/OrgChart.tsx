@@ -5,7 +5,7 @@ import type { AgentView, WorldSnapshot } from '@company-os/contracts';
 import { api, ApiFailure } from '../../lib/api';
 import { ACTIVITY_LABEL } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
-import { Portrait } from '../panels/AgentCard';
+import { AgentPortrait } from '../panels/Portrait2D';
 
 const ROOT = '__admin__';
 
@@ -146,8 +146,8 @@ export function OrgChart({
         data-testid={`org-node-${a.id}`}
         {...dropProps(a.id)}
       >
-        <span className="org-face" style={{ background: `${dept?.color ?? '#ccc'}33` }}>
-          <Portrait avatarId={a.avatarId} scale={2} crop="head" />
+        <span className="org-face">
+          <AgentPortrait world={world} agent={a} size={36} crop="head" />
         </span>
         <span className="org-id">
           <strong>{a.name}</strong>

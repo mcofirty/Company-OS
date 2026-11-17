@@ -37,6 +37,7 @@ import { FeedbackBox, TaskQualityBlock, type TaskQuality } from './TaskQuality';
 import { ObjectiveBar, type ObjectiveView } from '../pages/AgentOps';
 import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
 import { DepartmentDialog } from '../cockpit/OrgDialogs';
+import { AgentPortrait } from './Portrait2D';
 
 interface Props {
   world: WorldSnapshot;
@@ -157,8 +158,8 @@ function AgentInspector({
   return (
     <>
       <header className="insp-head">
-        <span className="avatar-dot" style={{ background: dept?.color }} aria-hidden>
-          {agent.name.slice(0, 1)}
+        <span className="avatar-dot face" aria-hidden>
+          <AgentPortrait world={world} agent={agent} size={38} crop="head" />
         </span>
         <div>
           <h2 data-testid="inspector-title">{agent.name}</h2>
@@ -856,7 +857,6 @@ export function TeamRows({
   return (
     <ul className="team" data-testid="team-list">
       {agents.map((a) => {
-        const dept = world.departments.find((d) => d.id === a.departmentId);
         const task = world.tasks.find((t) => t.id === a.currentTaskId);
         return (
           <li key={a.id}>
@@ -864,8 +864,8 @@ export function TeamRows({
               onClick={() => onSelect({ kind: 'agent', id: a.id })}
               data-testid={`agent-${a.id}`}
             >
-              <span className="avatar-dot sm" style={{ background: dept?.color }} aria-hidden>
-                {a.name.slice(0, 1)}
+              <span className="avatar-dot sm face" aria-hidden>
+                <AgentPortrait world={world} agent={a} size={26} crop="head" />
               </span>
               <span className="team-main">
                 <strong>{a.name}</strong> <span className="muted">{a.title}</span>

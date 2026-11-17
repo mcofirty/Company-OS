@@ -3,6 +3,31 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-27 (22) — QG « Campus » et portraits 2D
+
+### Réalisé
+- Carte v4 « Campus » (ADR-070) : 57×37 tuiles ; plateau central en zones pastel (12 postes par pôle),
+  salles fermées tout autour avec portes, trois locaux libres (6 postes) pour les nouveaux pôles ;
+  murs bloquants pour les déplacements ; mêmes identifiants d'ancres et de salles.
+- 3D : parquet clair unique, tapis arrondis à motifs (pois, losanges, rayures) teintés par la couleur
+  du pôle, murs bas coupés (façade nord haute avec baies, néon et logo à l'accueil, mur d'indicateurs
+  réels dans le bureau de la direction), mobilier des salles (étagères, billard, écrans, gradins,
+  amphithéâtre, cuisine, baies serveurs), extérieur (pelouse, arbres, potager, serre, terrain, route).
+  Locaux libres : mobilier masqué et marquage « + » tant qu'aucun pôle n'y est installé.
+- 2D de secours : murs du nouveau plan, équivalents simples des nouveaux meubles.
+- Portraits 2D vectoriels (style « illustration plate ») dans la fiche, l'équipe, l'organigramme,
+  l'en-tête de l'inspecteur et la vue téléphone ; expression selon l'état réel.
+- Recrutement : postes attribués dans la limite de la capacité du pôle ; déplacement de pôle vers un
+  local plus petit sans poste inexistant.
+
+### Tests (exécutés le 2026-11-27)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 204/204 (dont plan v4 : murs, portes, postes ;
+  portraits 2D : humeur, déterminisme, injection impossible).
+- `pnpm e2e` : voir ci-dessous.
+
+### Prochaine tâche
+- Retour utilisateur sur le Campus en production (`cd /opt/company-os && git pull && bash infra/deploy/update.sh`).
+
 ## Session 2026-11-26 (21) — Exploitation autonome, agents organisés, affichage vivant
 
 ### Réalisé

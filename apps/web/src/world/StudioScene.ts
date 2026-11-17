@@ -124,24 +124,124 @@ const shade = (hex: string, l: number): string => {
   return `#${c.getHexString()}`;
 };
 
-/** Moquette chinée (bruit doux, sans damier) : teintée par la couleur du pôle. */
-function carpetTex(repeat: [number, number]): THREE.CanvasTexture {
+/** Parquet clair tressé (bâtons rompus simplifiés), commun à tout le bâtiment. */
+function parquetTex(repeat: [number, number]): THREE.CanvasTexture {
+  let seed = 5;
+  const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const base = '#e6c9a0';
   return canvasTex(
-    96,
-    96,
+    256,
+    256,
     (g) => {
-      g.fillStyle = '#ffffff';
-      g.fillRect(0, 0, 96, 96);
-      let seed = 7;
-      const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
-      for (let i = 0; i < 1400; i++) {
-        const v = 236 + Math.floor(rnd() * 19);
-        g.fillStyle = `rgb(${v},${v},${v})`;
-        g.fillRect(Math.floor(rnd() * 96), Math.floor(rnd() * 96), 2, 2);
-      }
+      g.fillStyle = shade(base, -0.06);
+      g.fillRect(0, 0, 256, 256);
+      for (let cy = 0; cy < 4; cy++)
+        for (let cx = 0; cx < 4; cx++) {
+          const hz = (cx + cy) % 2 === 0;
+          for (let k = 0; k < 4; k++) {
+            g.fillStyle = shade(base, (rnd() - 0.5) * 0.05);
+            if (hz) g.fillRect(cx * 64 + 1, cy * 64 + k * 16 + 1, 62, 14);
+            else g.fillRect(cx * 64 + k * 16 + 1, cy * 64 + 1, 14, 62);
+          }
+        }
     },
     repeat,
   );
+}
+function grassTex(): THREE.CanvasTexture {
+  let seed = 9;
+  const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  return canvasTex(
+    128,
+    128,
+    (g) => {
+      g.fillStyle = '#94c97c';
+      g.fillRect(0, 0, 128, 128);
+      for (let i = 0; i < 1200; i++) {
+        g.fillStyle = shade('#94c97c', (rnd() - 0.5) * 0.08);
+        g.fillRect(rnd() * 128, rnd() * 128, 2, 2);
+      }
+    },
+    [50, 42],
+  );
+}
+/**
+ * Tapis en niveaux de gris (bordure, couture pointillée, motif léger) : la couleur du matériau le
+ * teinte, ce qui permet de recolorer une zone quand un pôle s'y installe.
+ */
+function rugTex(w: number, d: number, motif: string, r: number): THREE.CanvasTexture {
+  const Wp = 512;
+  const Hp = Math.max(64, Math.round((512 * d) / w));
+  const k = Wp / w;
+  const t = canvasTex(Wp, Hp, (g) => {
+    g.fillStyle = '#ececec';
+    g.fillRect(0, 0, Wp, Hp);
+    g.fillStyle = '#ffffff';
+    const step = 22;
+    for (let y = step; y < Hp - step; y += step)
+      for (let x = step; x < Wp - step; x += step) {
+        const odd = (x / step + y / step) % 2 === 1;
+        if (motif === 'dots' && !odd) {
+          g.beginPath();
+          g.arc(x, y, 2.6, 0, 7);
+          g.fill();
+        } else if (motif === 'diamonds' && !odd) {
+          g.beginPath();
+          g.moveTo(x, y - 6);
+          g.lineTo(x + 6, y);
+          g.lineTo(x, y + 6);
+          g.lineTo(x - 6, y);
+          g.fill();
+        } else if (motif === 'stripes' && (y / step) % 3 === 0 && x === step) {
+          g.fillRect(step, y - 2, Wp - 2 * step, 4);
+        }
+      }
+    const rr = r * k;
+    const inset = (m: number): void => {
+      g.beginPath();
+      g.roundRect(m, m, Wp - 2 * m, Hp - 2 * m, Math.max(2, rr - m));
+    };
+    g.lineWidth = 12;
+    g.strokeStyle = '#c4c4c4';
+    inset(6);
+    g.stroke();
+    g.lineWidth = 3;
+    g.strokeStyle = '#fafafa';
+    g.setLineDash([10, 7]);
+    inset(20);
+    g.stroke();
+  });
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(1 / w, 1 / d);
+  return t;
+}
+/** Tapis aux coins arrondis posé au sol (forme plane, UV en unités du monde). */
+function roundRug(
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  r: number,
+  m: THREE.MeshStandardMaterial,
+): THREE.Mesh {
+  const w = x1 - x0;
+  const d = z1 - z0;
+  const sh = new THREE.Shape();
+  sh.moveTo(r, 0);
+  sh.lineTo(w - r, 0);
+  sh.quadraticCurveTo(w, 0, w, r);
+  sh.lineTo(w, d - r);
+  sh.quadraticCurveTo(w, d, w - r, d);
+  sh.lineTo(r, d);
+  sh.quadraticCurveTo(0, d, 0, d - r);
+  sh.lineTo(0, r);
+  sh.quadraticCurveTo(0, 0, r, 0);
+  m.side = THREE.DoubleSide;
+  const mm = new THREE.Mesh(new THREE.ShapeGeometry(sh), m);
+  mm.rotation.x = Math.PI / 2;
+  mm.position.set(x0, 0.02, z0);
+  mm.receiveShadow = true;
+  return mm;
 }
 function neonTex(text: string, color = '#ff5fa2'): THREE.CanvasTexture {
   return canvasTex(512, 96, (g) => {
@@ -220,8 +320,7 @@ export class StudioScene implements HqWorldView {
   private homeDist = 60;
   private insets = { top: 0, right: 0, bottom: 0, left: 0 };
   /** Zone cadrée : locaux occupés (l'aile d'extension n'entre dans le cadre qu'une fois utilisée). */
-  private bounds = { x0: 0, z0: 0, x1: W, z1: 28.2 };
-  private boundsKey = '';
+  private bounds = { x0: 0, z0: 0, x1: W, z1: D };
   private night = false;
   private reduced = false;
   private raf = 0;
@@ -245,7 +344,6 @@ export class StudioScene implements HqWorldView {
   private windows: THREE.MeshBasicMaterial[] = [];
   private screensDecor: THREE.MeshBasicMaterial[] = [];
   private wallBands = new Map<string, THREE.MeshStandardMaterial>();
-  private roomEdges = new Map<string, THREE.MeshStandardMaterial>();
   private kpiScreen: { tex: THREE.CanvasTexture; key: string } | null = null;
   private neon: THREE.MeshBasicMaterial | null = null;
   private vacuum: {
@@ -253,8 +351,6 @@ export class StudioScene implements HqWorldView {
     to: { x: number; z: number };
     led: THREE.MeshBasicMaterial;
   } | null = null;
-  private wallSigns = new Map<string, THREE.Mesh>();
-  private signNames = new Map<string, string>();
   private selection: Selection | null = null;
   private highlight: string | null = null;
   private linksMode = false;
@@ -330,14 +426,14 @@ export class StudioScene implements HqWorldView {
     this.sun.position.set(W * 0.25, 40, D * 0.9);
     this.sun.target.position.set(W / 2, 0, D / 2);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(3072, 3072);
     Object.assign(this.sun.shadow.camera, {
-      left: -30,
-      right: 30,
-      top: 30,
-      bottom: -30,
+      left: -40,
+      right: 40,
+      top: 36,
+      bottom: -36,
       near: 2,
-      far: 110,
+      far: 140,
     });
     this.sun.shadow.bias = -0.0005;
     this.scene.add(this.sun, this.sun.target);
@@ -351,159 +447,317 @@ export class StudioScene implements HqWorldView {
 
   private buildStatic(): void {
     const w = this.world;
-    // Socle et parquet à bâtons rompus (couloirs).
-    mesh(B(W + 0.6, 0.3, D + 0.6), std('#d8cfc3'), W / 2, -0.16, D / 2, w);
-    const parquet = canvasTex(
-      128,
-      128,
-      (g) => {
-        g.fillStyle = '#e3bd85';
-        g.fillRect(0, 0, 128, 128);
-        const tones = ['#e6c08a', '#dcb37a', '#e9c793', '#d9ae73'];
-        for (let y = -32; y < 160; y += 16)
-          for (let x = -32; x < 160; x += 32) {
-            g.save();
-            g.translate(x + ((y / 16) % 2 ? 16 : 0), y);
-            g.rotate(Math.PI / 4);
-            g.fillStyle = tones[((x + y) / 16) & 3] ?? '#e3bd85';
-            g.fillRect(0, 0, 30, 9);
-            g.strokeStyle = 'rgba(120,80,40,.18)';
-            g.strokeRect(0, 0, 30, 9);
-            g.restore();
-          }
-      },
-      [W / 3, D / 3],
-    );
+    this.buildOutdoor();
+    // Socle et parquet clair tressé, unique pour tout le bâtiment (salles comprises).
+    mesh(B(W, 0.3, D), std('#d8cfc3'), W / 2, -0.16, D / 2, w);
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(W, D),
-      new THREE.MeshStandardMaterial({ map: parquet, roughness: 0.9 }),
+      new THREE.PlaneGeometry(W - 1, D - 1),
+      new THREE.MeshStandardMaterial({
+        map: parquetTex([(W - 1) / 4.8, (D - 1) / 4.8]),
+        roughness: 0.82,
+      }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(W / 2, 0, D / 2);
     floor.receiveShadow = true;
     w.add(floor);
-    // Murs extérieurs : fond haut, côtés bas, façade basse.
-    mesh(B(W + 0.5, 2.6, 0.3), std('#efe6da'), W / 2, 1.3, -0.15, w);
-    mesh(B(W + 0.6, 0.1, 0.4), std('#d5c8b6'), W / 2, 2.65, -0.15, w);
-    mesh(B(0.3, 1.0, D), std('#efe6da'), -0.15, 0.5, D / 2, w);
-    mesh(B(0.3, 1.0, D), std('#efe6da'), W + 0.15, 0.5, D / 2, w);
-    mesh(B(W + 0.6, 0.45, 0.3), std('#efe6da'), W / 2, 0.22, D + 0.15, w);
-    // Mur du fond : bandeau aux couleurs des pôles, enseigne peinte, grandes baies vitrées.
-    for (const room of HQ_MAP.rooms.filter((r) => r.rect.y0 <= 1)) {
+    this.buildWalls();
+    // Mur nord (haut) : panneaux d'accent des salles, baies vitrées, enseigne et écrans réels.
+    for (const room of HQ_MAP.rooms.filter((r) => r.rect.y0 === 1)) {
       const { x0, x1 } = room.rect;
       const band = new THREE.MeshStandardMaterial({
-        color: pastel(room.color, 0.45),
+        color: pastel(room.color, 0.25),
         roughness: 0.9,
       });
-      mesh(B(x1 - x0 + 0.9, 1.35, 0.04), band, (x0 + x1 + 1) / 2, 1.55, 0.02, w, false);
+      mesh(B(x1 - x0 + 0.6, 1.5, 0.04), band, (x0 + x1 + 1) / 2, 1.45, 0.62, w, false);
       this.wallBands.set(room.id, band);
-      const sign = new THREE.Mesh(
-        new THREE.PlaneGeometry(4.6, 0.75),
-        new THREE.MeshStandardMaterial({ transparent: true, map: this.signTex(room.label) }),
-      );
-      sign.position.set(x0 + 2.8, 1.92, 0.05);
-      w.add(sign);
-      this.wallSigns.set(room.id, sign);
-      if (room.id === 'direction') this.kpiWall(x0 + 7.5, x1 - 0.2);
-      else if (room.id === 'finance') this.livingWall(x0 + 6, x1);
-      else
-        for (let x = x0 + 6.5; x <= x1 - 1; x += 2.6) {
+      if (room.id === 'ceo') this.kpiWall(x0 + 1.2, x1 - 0.2, 0.66);
+      else if (room.id === 'focus') this.livingWall(x0 + 0.6, x1 + 0.4, 0.66);
+      else if (room.id !== 'entry' && room.id !== 'library')
+        for (let x = x0 + 1.6; x <= x1 - 0.6; x += 2.6) {
           const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
           this.windows.push(glass);
-          mesh(B(2.3, 1.15, 0.03), std('#2b2b30', 0.5), x, 1.6, 0.05, w, false);
-          mesh(B(2.2, 1.05, 0.03), glass, x, 1.6, 0.07, w, false);
-          mesh(B(0.03, 1.05, 0.04), std('#2b2b30', 0.5), x, 1.6, 0.09, w, false);
+          mesh(B(2.1, 1.0, 0.03), std('#2b2b30', 0.5), x, 1.7, 0.66, w, false);
+          mesh(B(2.0, 0.9, 0.03), glass, x, 1.7, 0.68, w, false);
         }
     }
-    // Enseigne néon au-dessus de la Direction.
+    // Porte d'entrée vitrée.
+    const doorGlass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+    this.windows.push(doorGlass);
+    mesh(B(0.96, 2.1, 0.06), doorGlass, 5.5, 1.05, 0.5, w, false);
+    mesh(B(1.1, 0.1, 0.12), std('#2b2b30', 0.5), 5.5, 2.12, 0.5, w, false);
+    // Enseigne néon de l'accueil (personnalisable).
     this.neon = new THREE.MeshBasicMaterial({
       color: '#ff5fa2',
       transparent: true,
       map: neonTex('LIVING HQ'),
     });
     const neon = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), this.neon);
-    neon.position.set(18, 2.42, 0.06);
+    neon.position.set(3.0, 2.25, 0.7);
     w.add(neon);
     this.buildVacuum();
     for (const room of HQ_MAP.rooms) this.buildRoom(room);
-    for (const f of HQ_MAP.furniture) this.buildFurniture(f);
+    for (const f of HQ_MAP.furniture) {
+      this.build = this.layerFor(f.roomId);
+      this.buildFurniture(f);
+    }
+    this.build = this.world;
     this.buildMeetingTable();
     for (const a of Object.values(HQ_MAP.anchors)) {
+      this.build = this.layerFor(a.roomId);
       if (a.kind === 'desk') this.deskChair(a);
       if (a.kind === 'meeting_seat') this.meetingChair(a);
     }
+    this.build = this.world;
+  }
+
+  /** Calque de construction : les locaux libres ont leur propre groupe (masqué tant qu'il est vide). */
+  private build: THREE.Object3D = this.world;
+  private annexLayers = new Map<
+    string,
+    { furn: THREE.Group; free: THREE.Group; rug: THREE.Mesh | null }
+  >();
+  private layerFor(roomId: string | null): THREE.Object3D {
+    if (!roomId?.startsWith('annex')) return this.world;
+    let l = this.annexLayers.get(roomId);
+    if (!l) {
+      l = { furn: new THREE.Group(), free: new THREE.Group(), rug: null };
+      this.world.add(l.furn, l.free);
+      this.annexLayers.set(roomId, l);
+    }
+    return l.furn;
+  }
+
+  /** Murs bas « coupés » (sauf la façade nord, haute) tirés des tuiles de murs du plan. */
+  private buildWalls(): void {
+    const walls = new Set(HQ_MAP.wallTiles.map((t) => `${t.x},${t.y}`));
+    const has = (x: number, y: number): boolean => walls.has(`${x},${y}`);
+    const body = std('#f4ede2', 0.9);
+    const cap = std('#d8ccb9', 0.8);
+    const LOW = 1.15;
+    const seg = (x0: number, z0: number, x1: number, z1: number, h: number): void => {
+      const horiz = z0 === z1;
+      const len = horiz ? x1 - x0 : z1 - z0;
+      const cx = (x0 + x1) / 2;
+      const cz = (z0 + z1) / 2;
+      mesh(B(horiz ? len : 0.22, h, horiz ? 0.22 : len), body, cx, h / 2, cz, this.world);
+      mesh(
+        B(horiz ? len + 0.04 : 0.28, 0.06, horiz ? 0.28 : len + 0.04),
+        cap,
+        cx,
+        h + 0.03,
+        cz,
+        this.world,
+        false,
+      );
+    };
+    // Segments horizontaux puis verticaux (tronçons d'au moins deux tuiles).
+    for (let y = 0; y < D; y++) {
+      let x = 0;
+      while (x < W) {
+        if (!has(x, y) || !has(x + 1, y)) {
+          x++;
+          continue;
+        }
+        const s0 = x;
+        while (has(x + 1, y)) x++;
+        seg(s0 + 0.5, y + 0.5, x + 0.5, y + 0.5, y === 0 ? 2.7 : LOW);
+        // Fenêtres côté extérieur sur les façades basses (sud).
+        if (y === D - 1)
+          for (let k = s0 + 1.5; k < x - 0.5; k += 3) {
+            const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+            this.windows.push(glass);
+            mesh(B(1.8, 0.55, 0.02), glass, k, 0.62, y + 0.62, this.world, false);
+          }
+        x++;
+      }
+    }
+    for (let x = 0; x < W; x++) {
+      let y = 0;
+      while (y < D) {
+        if (!has(x, y) || !has(x, y + 1)) {
+          y++;
+          continue;
+        }
+        const s0 = y;
+        while (has(x, y + 1)) y++;
+        seg(x + 0.5, Math.max(s0 + 0.5, 0.6), x + 0.5, y + 0.5, LOW);
+        if (x === 0 || x === W - 1)
+          for (let k = s0 + 2; k < y - 0.5; k += 3) {
+            const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+            this.windows.push(glass);
+            mesh(B(0.02, 0.55, 1.8), glass, x === 0 ? 0.38 : W - 0.38, 0.62, k, this.world, false);
+          }
+        y++;
+      }
+    }
+  }
+
+  /** Extérieur décoratif : pelouse, arbres, potager, serre, terrain de sport, route. */
+  private buildOutdoor(): void {
+    const o = new THREE.Group();
+    this.scene.add(o);
+    const grass = new THREE.Mesh(
+      new THREE.PlaneGeometry(260, 220),
+      new THREE.MeshStandardMaterial({ map: grassTex(), roughness: 1 }),
+    );
+    grass.rotation.x = -Math.PI / 2;
+    grass.position.set(W / 2, -0.32, D / 2);
+    grass.receiveShadow = true;
+    o.add(grass);
+    const flat = (x0: number, z0: number, x1: number, z1: number, c: string, y = -0.3): void => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, z1 - z0), std(c, 1));
+      m.rotation.x = -Math.PI / 2;
+      m.position.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+      m.receiveShadow = true;
+      o.add(m);
+    };
+    flat(-3, -3, W + 3, D + 3, '#ddd0b8');
+    flat(3, -12, 8, -3, '#ddd0b8', -0.29); // allée vers l'entrée
+    flat(-60, D + 10, W + 60, D + 15, '#6f7378', -0.29);
+    for (let x = -58; x < W + 58; x += 4) flat(x, D + 12.35, x + 2, D + 12.65, '#f2f2f2', -0.28);
+    // Terrain de sport (est).
+    flat(W + 5, 4, W + 19, 32, '#e0866a', -0.29);
+    flat(W + 7, 8, W + 17, 28, '#9cc49a', -0.285);
+    flat(W + 5, 17.95, W + 19, 18.05, '#ffffff', -0.28);
+    for (const z of [4.8, 31.2]) {
+      mesh(C(0.08, 0.08, 3, 8), std('#444', 0.5), W + 12, 1.2, z, o);
+      mesh(B(1.6, 1, 0.1), std('#ffffff', 0.5), W + 12, 2.6, z + (z < 10 ? 0.15 : -0.15), o);
+    }
+    // Potager et serre (nord).
+    for (let i = 0; i < 3; i++)
+      for (let j = 0; j < 2; j++) {
+        const x = 14 + i * 4.2;
+        const z = -10 + j * 3;
+        mesh(B(3.2, 0.35, 1.8), std('#8a5a36', 0.9), x, -0.12, z, o);
+        for (let k = 0; k < 8; k++)
+          mesh(
+            S(0.2),
+            std(k % 2 ? '#5aa05b' : '#77b866', 0.9),
+            x - 1.2 + (k % 4) * 0.8,
+            0.15,
+            z - 0.4 + Math.floor(k / 4) * 0.8,
+            o,
+            false,
+          );
+      }
+    {
+      const gm = new THREE.MeshStandardMaterial({
+        color: '#d8f0ff',
+        roughness: 0.1,
+        transparent: true,
+        opacity: 0.45,
+      });
+      mesh(B(7, 2.4, 4.5), gm, 34, 0.9, -10, o, false);
+      const r1 = mesh(B(7.2, 0.12, 2.6), std('#e6e6e6', 0.5), 34, 2.45, -10.9, o, false);
+      r1.rotation.x = -0.5;
+      const r2 = mesh(B(7.2, 0.12, 2.6), std('#e6e6e6', 0.5), 34, 2.45, -9.1, o, false);
+      r2.rotation.x = 0.5;
+      for (let k = 0; k < 6; k++) mesh(S(0.35), std('#5aa05b', 0.9), 31.5 + k, 0.2, -10, o, false);
+    }
+    // Arbres (graine fixe : la scène est identique à chaque chargement).
+    let seed = 11;
+    const rnd = (): number => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const trunk = std('#7a5233', 0.9);
+    const leaves = [std('#3f7f45', 0.9), std('#4b8f4f', 0.9), std('#5aa05b', 0.9)];
+    for (let i = 0; i < 44; i++) {
+      let x: number;
+      let z: number;
+      do {
+        x = -24 + rnd() * (W + 50);
+        z = -22 + rnd() * (D + 50);
+      } while (
+        (x > -6 && x < W + 6 && z > -6 && z < D + 6) ||
+        (z > D + 8 && z < D + 17) ||
+        (x > W + 3 && x < W + 21 && z > 2 && z < 34) ||
+        (x > 10 && x < 40 && z > -14 && z < -6)
+      );
+      const s = 0.8 + rnd() * 0.6;
+      mesh(C(0.18 * s, 0.25 * s, 1.4 * s, 8), trunk, x, 0.4 * s, z, o, false);
+      if (i % 3) {
+        for (let k = 0; k < 3; k++)
+          mesh(
+            geo(`cone${k}`, () => new THREE.ConeGeometry(1.3 - k * 0.3, 2.2 - k * 0.4, 8)),
+            leaves[k]!,
+            x,
+            (1.9 + k * 0.85) * s,
+            z,
+            o,
+            false,
+          ).scale.setScalar(s);
+      } else {
+        mesh(
+          geo('icoT', () => new THREE.IcosahedronGeometry(1.25, 1)),
+          leaves[2]!,
+          x,
+          2.1 * s,
+          z,
+          o,
+          false,
+        ).scale.setScalar(s);
+      }
+    }
+    // Bancs et range-vélos devant l'entrée.
+    for (const x of [1.5, 9.5]) mesh(B(2, 0.1, 0.6), std('#a8794f', 0.8), x, 0.2, -4.2, o);
   }
 
   private buildRoom(room: Room): void {
     const { x0, y0, x1, y1 } = room.rect;
-    const w = x1 - x0 + 1;
-    const d = y1 - y0 + 1;
-    const base = room.kind === 'department' ? room.color : room.color;
+    const open = room.kind === 'department' && !room.walls;
+    const inset = open ? 0.2 : 0.55;
+    const free = room.id.startsWith('annex');
     const m = new THREE.MeshStandardMaterial({
-      roughness: 0.92,
-      color: '#ffffff',
-      map: carpetTex([w / 3, d / 3]),
+      roughness: 1,
+      map: rugTex(
+        x1 - x0 + 1 - 2 * inset,
+        y1 - y0 + 1 - 2 * inset,
+        room.motif ?? 'dots',
+        open ? 1.5 : 1.1,
+      ),
     });
-    m.color.set(pastel(base, 0.45));
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.set(x0 + w / 2, 0.01, y0 + d / 2);
-    plane.receiveShadow = true;
-    plane.userData['roomId'] = room.id;
-    this.world.add(plane);
+    m.color.set(pastel(room.color, 0.25));
+    const rug = roundRug(
+      x0 + inset,
+      y0 + inset,
+      x1 + 1 - inset,
+      y1 + 1 - inset,
+      open ? 1.5 : 1.1,
+      m,
+    );
+    rug.userData['roomId'] = room.id;
+    if (free) {
+      this.layerFor(room.id);
+      const l = this.annexLayers.get(room.id)!;
+      l.furn.add(rug);
+      l.rug = rug;
+      // Local libre : contour pointillé et « + » au sol.
+      const dm = new THREE.MeshStandardMaterial({
+        color: '#a58ef0',
+        roughness: 1,
+        transparent: true,
+        opacity: 0.6,
+      });
+      const cx = (x0 + x1 + 1) / 2;
+      const cz = (y0 + y1 + 1) / 2;
+      for (const [a, b, ww, dd] of [
+        [cx, cz, 2.2, 0.45],
+        [cx, cz, 0.45, 2.2],
+      ] as const)
+        mesh(B(ww, 0.02, dd), dm, a, 0.03, b, l.free, false);
+      for (let x = x0 + 0.8; x < x1 + 0.4; x += 0.7) {
+        mesh(B(0.4, 0.02, 0.07), dm, x, 0.025, y0 + 0.75, l.free, false);
+        mesh(B(0.4, 0.02, 0.07), dm, x, 0.025, y1 + 0.25, l.free, false);
+      }
+      for (let z = y0 + 0.8; z < y1 + 0.4; z += 0.7) {
+        mesh(B(0.07, 0.02, 0.4), dm, x0 + 0.75, 0.025, z, l.free, false);
+        mesh(B(0.07, 0.02, 0.4), dm, x1 + 0.25, 0.025, z, l.free, false);
+      }
+    } else this.world.add(rug);
     this.roomFloors.set(room.id, m);
-    // Liseré de zone (bande plus foncée au sol), comme un marquage d'open space.
-    const edge = new THREE.MeshStandardMaterial({
-      color: shade(pastel(base, 0.45), -0.08),
-      roughness: 0.9,
-    });
-    this.roomEdges.set(room.id, edge);
-    for (const [ex, ez, ew, ed] of [
-      [x0 + w / 2, y0 + 0.04, w, 0.08],
-      [x0 + w / 2, y0 + d - 0.04, w, 0.08],
-      [x0 + 0.04, y0 + d / 2, 0.08, d],
-      [x0 + w - 0.04, y0 + d / 2, 0.08, d],
-    ] as const) {
-      const strip = new THREE.Mesh(new THREE.PlaneGeometry(ew, ed), edge);
-      strip.rotation.x = -Math.PI / 2;
-      strip.position.set(ex, 0.013, ez);
-      strip.receiveShadow = true;
-      this.world.add(strip);
-    }
-    // Cloisons basses le long des murs du local, portes ouvertes.
-    if (room.walls) {
-      const doors = new Set(room.doors.map((t) => `${t.x},${t.y}`));
-      const wall = std('#f6f1e9', 0.7);
-      const cap = std('#d9c9b2', 0.6);
-      for (let x = x0; x <= x1; x++)
-        for (let y = y0; y <= y1; y++) {
-          const edge = x === x0 || x === x1 || y === y0 || y === y1;
-          if (!edge || doors.has(`${x},${y}`)) continue;
-          const horiz = y === y0 || y === y1;
-          const back = y === y0 && y0 <= 1;
-          const h = back ? 1.6 : 0.42;
-          mesh(
-            B(horiz ? 1 : 0.16, h, horiz ? 0.16 : 1),
-            wall,
-            x + 0.5,
-            h / 2,
-            y + (y === y0 ? 0.2 : y === y1 ? 0.8 : 0.5),
-            this.world,
-          );
-          if (!back)
-            mesh(
-              B(horiz ? 1 : 0.2, 0.04, horiz ? 0.2 : 1),
-              cap,
-              x + 0.5,
-              h + 0.02,
-              y + (y === y0 ? 0.2 : y === y1 ? 0.8 : 0.5),
-              this.world,
-            );
-        }
-    }
-    // Étiquette « pastille » du local (nom réel du pôle, mis à jour au sync).
+    // Étiquette « pastille » (nom réel du pôle pour les zones, nom de la salle sinon).
     const pill = document.createElement('button');
     pill.className = 'studio-zone';
+    if (room.kind === 'amenity') pill.classList.add('amenity');
     pill.dataset['room'] = room.id;
     pill.innerHTML = `<i></i><span>${room.label}</span><small></small>`;
     pill.addEventListener('click', () => {
@@ -518,7 +772,7 @@ export class StudioScene implements HqWorldView {
   private buildFurniture(f: Furniture): void {
     const x = f.x + 0.5;
     const z = f.y + 0.5;
-    const w = this.world;
+    const w = this.build;
     switch (f.kind) {
       case 'desk': {
         // Îlot : l'écran regarde le siège, cloison verte côté opposé (postes dos à dos).
@@ -683,13 +937,107 @@ export class StudioScene implements HqWorldView {
         mesh(B(1.6, 1.0, 0.6), std('#f4f0ea', 0.6), x + 0.3, 0.5, z, w);
         mesh(B(1.7, 0.05, 0.7), std('#c99a62', 0.6), x + 0.3, 1.02, z, w);
         break;
+      case 'bookshelf': {
+        // Étagère de livres ; contre un mur nord ou ouest selon la position.
+        const vert = !HQ_MAP.furniture.some(
+          (g) => g.kind === 'bookshelf' && g.y === f.y && Math.abs(g.x - f.x) === 1,
+        );
+        const g = new THREE.Group();
+        g.position.set(vert ? f.x + 0.2 : x, 0, vert ? z : f.y + 0.2);
+        if (vert) g.rotation.y = Math.PI / 2;
+        w.add(g);
+        mesh(B(1, 1.9, 0.36), std('#8a6240', 0.8), 0, 0.95, 0, g);
+        const cols = ['#c2553f', '#365a6e', '#d9a441', '#3f6f5e', '#e8e0d4', '#7a5ea8'];
+        for (let r = 0; r < 4; r++)
+          for (let k = 0; k < 5; k++)
+            mesh(
+              B(0.14, 0.3 + ((k + r + f.x) % 3) * 0.04, 0.26),
+              std(cols[(k + r + f.x + f.y) % cols.length]!, 0.85),
+              -0.38 + k * 0.19,
+              0.26 + r * 0.44,
+              0.06,
+              g,
+              false,
+            );
+        break;
+      }
+      case 'pool_table':
+        if (this.firstOf(f)) {
+          const { cx, cz } = this.group(f);
+          mesh(B(2.1, 0.18, 1.15), std('#7a4a2a', 0.7), cx, 0.78, cz, w);
+          mesh(B(1.86, 0.02, 0.92), std('#2f8a52', 0.9), cx, 0.88, cz, w, false);
+          for (const [dx, dz] of [
+            [-0.9, -0.45],
+            [0.9, -0.45],
+            [-0.9, 0.45],
+            [0.9, 0.45],
+          ] as const)
+            mesh(B(0.14, 0.7, 0.14), std('#5b3b26', 0.8), cx + dx, 0.35, cz + dz, w);
+          ['#ffd166', '#d9534f', '#1d1d1d', '#ffffff', '#5b6ee1', '#3f8a4a'].forEach((c, k) =>
+            mesh(
+              S(0.045),
+              std(c, 0.3),
+              cx - 0.4 + k * 0.16,
+              0.93,
+              cz - 0.1 + (k % 2) * 0.22,
+              w,
+              false,
+            ),
+          );
+        }
+        break;
+      case 'tv': {
+        // Grand écran mural (salle de réunion, town hall, salle de jeux).
+        if (!this.firstOf(f)) break;
+        const { cx } = this.group(f);
+        const scr = new THREE.MeshBasicMaterial({ color: '#2f3d58' });
+        this.screensDecor.push(scr);
+        mesh(B(1.9, 1.1, 0.06), std('#1d1f24', 0.4), cx, 1.35, f.y + 0.12, w, false);
+        mesh(B(1.78, 0.98, 0.02), scr, cx, 1.35, f.y + 0.16, w, false);
+        mesh(B(1.4, 0.4, 0.4), std('#e9e1d5', 0.6), cx, 0.2, f.y + 0.35, w);
+        break;
+      }
+      case 'exec_desk':
+        if (this.firstOf(f)) {
+          const { cx, cz } = this.group(f);
+          mesh(B(2.2, 0.06, 1.0), std('#5a3a22', 0.55), cx, 0.76, cz, w);
+          mesh(B(0.1, 0.74, 0.9), std('#3b2a1e', 0.6), cx - 1.0, 0.37, cz, w);
+          mesh(B(0.1, 0.74, 0.9), std('#3b2a1e', 0.6), cx + 1.0, 0.37, cz, w);
+          mesh(B(0.56, 0.34, 0.03), std('#1d1f24', 0.4), cx, 1.0, cz - 0.3, w, false);
+          this.chairAt(cx, cz - 0.95, 0, '#2b2b2b');
+          this.chairAt(cx - 0.5, cz + 1.0, Math.PI, '#c9a26a');
+          this.chairAt(cx + 0.5, cz + 1.0, Math.PI, '#c9a26a');
+        }
+        break;
+      case 'kitchen_island':
+        mesh(B(1.0, 0.92, 0.9), std('#7cc6fe', 0.6), x, 0.46, z, w);
+        mesh(B(1.04, 0.05, 1.1), std('#f7f5f1', 0.4), x, 0.94, z, w);
+        mesh(C(0.17, 0.17, 0.05, 12), std('#2c2c2c', 0.4), x, 0.7, z - 0.8, w);
+        mesh(C(0.02, 0.02, 0.68, 6), std('#9aa0a8', 0.4), x, 0.34, z - 0.8, w, false);
+        break;
+      case 'stage':
+        mesh(B(1.02, 0.32, 1.02), std('#a7794f', 0.8), x, 0.16, z, w);
+        if (this.firstOf(f)) {
+          const scr = new THREE.MeshBasicMaterial({ color: '#2f3d58' });
+          this.screensDecor.push(scr);
+          mesh(B(0.06, 1.3, 3.2), std('#1d1f24', 0.4), f.x + 0.08, 1.3, f.y + 2.5, w, false);
+          mesh(B(0.02, 1.2, 3.0), scr, f.x + 0.12, 1.3, f.y + 2.5, w, false);
+        }
+        break;
+      case 'auditorium_seat': {
+        const row = f.x - 3;
+        mesh(B(0.62, 0.36 + row * 0.06, 0.9), std('#8a5d6a', 0.9), x, 0.18 + row * 0.03, z, w);
+        mesh(B(0.5, 0.1, 0.5), std('#b8333e', 0.8), x, 0.42 + row * 0.06, z, w);
+        mesh(B(0.12, 0.5, 0.5), std('#b8333e', 0.8), x + 0.24, 0.66 + row * 0.06, z, w);
+        break;
+      }
       default:
         break;
     }
   }
 
   /** Mur d'écrans : indicateurs RÉELS de l'entreprise (mis à jour au sync, jamais inventés). */
-  private kpiWall(xa: number, xb: number): void {
+  private kpiWall(xa: number, xb: number, z0 = 0): void {
     const wdt = xb - xa;
     const tex = canvasTex(640, 220, (g) => drawKpis(g, null));
     this.kpiScreen = { tex, key: '' };
@@ -698,19 +1046,27 @@ export class StudioScene implements HqWorldView {
       std('#1d1f24', 0.4),
       (xa + xb) / 2,
       1.6,
-      0.05,
-      this.world,
+      z0 + 0.05,
+      this.build,
       false,
     );
     const scr = new THREE.Mesh(
       new THREE.PlaneGeometry(wdt, 1.08),
       new THREE.MeshBasicMaterial({ map: tex }),
     );
-    scr.position.set((xa + xb) / 2, 1.6, 0.085);
-    this.world.add(scr);
+    scr.position.set((xa + xb) / 2, 1.6, z0 + 0.085);
+    this.build.add(scr);
   }
-  private livingWall(xa: number, xb: number): void {
-    mesh(B(xb - xa + 0.4, 1.5, 0.08), std('#5d4a38'), (xa + xb) / 2, 1.5, 0.05, this.world, false);
+  private livingWall(xa: number, xb: number, z0 = 0): void {
+    mesh(
+      B(xb - xa + 0.4, 1.5, 0.08),
+      std('#5d4a38'),
+      (xa + xb) / 2,
+      1.5,
+      z0 + 0.05,
+      this.build,
+      false,
+    );
     const leaf = [
       std('#3f8a4a', 0.9),
       std('#4f9a57', 0.9),
@@ -720,18 +1076,26 @@ export class StudioScene implements HqWorldView {
     for (let x = xa; x < xb; x += 0.22)
       for (let y = 0.85; y < 2.2; y += 0.2) {
         const k = Math.floor((x * 7 + y * 13) * 10) % 4;
-        const m = mesh(S(0.14), leaf[k]!, x + ((y * 10) % 2) * 0.1, y, 0.12, this.world, false);
+        const m = mesh(
+          S(0.14),
+          leaf[k]!,
+          x + ((y * 10) % 2) * 0.1,
+          y,
+          z0 + 0.12,
+          this.build,
+          false,
+        );
         m.scale.set(1, 0.8, 0.45);
       }
   }
   private buildVacuum(): void {
     const g = new THREE.Group();
-    g.position.set(20.5, 0, 10.5);
-    this.world.add(g);
+    g.position.set(20.5, 0, 18.5);
+    this.build.add(g);
     mesh(C(0.2, 0.2, 0.07, 24), std('#f4f4f6', 0.4), 0, 0.05, 0, g);
     const led = new THREE.MeshBasicMaterial({ color: '#5b6ee1' });
     mesh(C(0.05, 0.05, 0.02, 10), led, 0, 0.095, 0.08, g, false);
-    this.vacuum = { g, to: { x: 20.5, z: 10.5 }, led };
+    this.vacuum = { g, to: { x: 20.5, z: 18.5 }, led };
   }
   private stepVacuum(dt: number, t: number): void {
     const v = this.vacuum;
@@ -741,9 +1105,9 @@ export class StudioScene implements HqWorldView {
     const dz = v.to.z - p.z;
     const d = Math.hypot(dx, dz);
     if (d < 0.05) {
-      // Nouvelle destination praticable dans l'atrium nord (aucun effet métier).
+      // Nouvelle destination praticable dans l'allée centrale (aucun effet métier).
       for (let k = 0; k < 12; k++) {
-        const c = { x: 4 + Math.random() * 26, z: 8.3 + Math.random() * 3.4 };
+        const c = { x: 11 + Math.random() * 34, z: 17.2 + Math.random() * 1.6 };
         if (HQ_MAP.isWalkable({ x: Math.floor(c.x), y: Math.floor(c.z) })) {
           v.to = c;
           break;
@@ -756,21 +1120,10 @@ export class StudioScene implements HqWorldView {
     v.g.rotation.y = Math.atan2(dx, dz);
     v.led.color.set(Math.sin(t / 250) > 0 ? '#5b6ee1' : '#a8b4ff');
   }
-  private signTex(name: string): THREE.CanvasTexture {
-    return canvasTex(512, 84, (g) => {
-      g.fillStyle = '#3a3530';
-      g.font = '700 44px Inter, system-ui, sans-serif';
-      g.fillText(name.toUpperCase().slice(0, 22), 6, 48);
-      g.fillStyle = '#7a7168';
-      g.font = '400 20px Inter, system-ui, sans-serif';
-      g.fillText('Pôle · espace ouvert', 8, 76);
-    });
-  }
-
   private plant(x: number, z: number, size: number, pot: string): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
-    this.world.add(g);
+    this.build.add(g);
     mesh(C(0.2 * size, 0.16 * size, 0.38 * size, 14), std(pot), 0, 0.19 * size, 0, g);
     const n = 9;
     for (let k = 0; k < n; k++) {
@@ -813,18 +1166,18 @@ export class StudioScene implements HqWorldView {
     return { cx: (f.x + x1) / 2, cz: (f.y + y1) / 2, w: x1 - f.x, d: y1 - f.y };
   }
   private deskLamp(x: number, z: number): void {
-    mesh(C(0.06, 0.07, 0.02, 10), std('#2f2f33'), x, 0.79, z, this.world);
-    mesh(C(0.012, 0.012, 0.3, 6), std('#2f2f33'), x, 0.93, z, this.world);
+    mesh(C(0.06, 0.07, 0.02, 10), std('#2f2f33'), x, 0.79, z, this.build);
+    mesh(C(0.012, 0.012, 0.3, 6), std('#2f2f33'), x, 0.93, z, this.build);
     const m = new THREE.MeshStandardMaterial({ color: '#f3ead8', roughness: 0.7 });
     this.lampShades.push(m);
-    mesh(C(0.05, 0.08, 0.08, 10), m, x, 1.08, z, this.world);
+    mesh(C(0.05, 0.08, 0.08, 10), m, x, 1.08, z, this.build);
   }
   private tree(f: Furniture): void {
     const { cx, cz, w } = this.group(f);
     const r = w * 0.62;
-    mesh(C(r, r, 0.5, 32), std('#f4f0ea', 0.6), cx, 0.25, cz, this.world);
-    mesh(C(r - 0.12, r - 0.12, 0.04, 32), std('#5b4330'), cx, 0.51, cz, this.world);
-    mesh(C(0.1, 0.14, 2.2, 8), std('#7a5a3c'), cx, 1.5, cz, this.world);
+    mesh(C(r, r, 0.5, 32), std('#f4f0ea', 0.6), cx, 0.25, cz, this.build);
+    mesh(C(r - 0.12, r - 0.12, 0.04, 32), std('#5b4330'), cx, 0.51, cz, this.build);
+    mesh(C(0.1, 0.14, 2.2, 8), std('#7a5a3c'), cx, 1.5, cz, this.build);
     for (const [dx, y, dz, rr] of [
       [0, 2.8, 0, 0.85],
       [0.45, 2.45, 0.3, 0.65],
@@ -838,7 +1191,7 @@ export class StudioScene implements HqWorldView {
         cx + dx,
         y,
         cz + dz,
-        this.world,
+        this.build,
       );
     // Banquettes rayonnantes autour de la jardinière.
     for (let k = 0; k < 10; k++) {
@@ -846,7 +1199,7 @@ export class StudioScene implements HqWorldView {
       const g = new THREE.Group();
       g.position.set(cx + Math.sin(a) * (r + 0.28), 0, cz + Math.cos(a) * (r + 0.28));
       g.rotation.y = a;
-      this.world.add(g);
+      this.build.add(g);
       mesh(B(0.3, 0.07, 0.42), std('#e8d2ad', 0.8), 0, 0.36, 0, g);
       mesh(B(0.24, 0.32, 0.05), std('#d7bf98'), 0, 0.16, 0, g);
     }
@@ -854,7 +1207,7 @@ export class StudioScene implements HqWorldView {
   private booth(x: number, z: number): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
-    this.world.add(g);
+    this.build.add(g);
     const dark = std('#2d2b31', 0.5);
     mesh(B(0.94, 2.0, 0.06), dark, 0, 1.0, -0.44, g);
     mesh(B(0.06, 2.0, 0.94), dark, -0.44, 1.0, 0, g);
@@ -876,36 +1229,36 @@ export class StudioScene implements HqWorldView {
   }
   private highTable(f: Furniture): void {
     const { cx, cz, w } = this.group(f);
-    mesh(B(w - 0.1, 0.05, 0.7), std('#e9d3b0', 0.6), cx, 1.05, cz, this.world);
-    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx - w / 2 + 0.2, 0.52, cz, this.world);
-    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx + w / 2 - 0.2, 0.52, cz, this.world);
+    mesh(B(w - 0.1, 0.05, 0.7), std('#e9d3b0', 0.6), cx, 1.05, cz, this.build);
+    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx - w / 2 + 0.2, 0.52, cz, this.build);
+    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx + w / 2 - 0.2, 0.52, cz, this.build);
     for (let k = 0; k < w; k++) {
       const sx = f.x + k + 0.5;
       for (const dz of [-0.62, 0.62]) {
-        mesh(C(0.15, 0.15, 0.05, 14), std('#e08a5a'), sx, 0.72, cz + dz, this.world);
-        mesh(C(0.025, 0.025, 0.7, 6), std('#3a3a3e'), sx, 0.36, cz + dz, this.world);
+        mesh(C(0.15, 0.15, 0.05, 14), std('#e08a5a'), sx, 0.72, cz + dz, this.build);
+        mesh(C(0.025, 0.025, 0.7, 6), std('#3a3a3e'), sx, 0.36, cz + dz, this.build);
       }
     }
   }
   private pingpong(f: Furniture): void {
     const { cx, cz, w } = this.group(f);
-    mesh(B(w - 0.15, 0.05, 0.95), std('#2f6f5a', 0.6), cx, 0.76, cz, this.world);
-    mesh(B(0.03, 0.12, 0.95), std('#f4f4f4'), cx, 0.84, cz, this.world);
-    mesh(B(w - 0.15, 0.006, 0.02), std('#ffffff'), cx, 0.79, cz, this.world);
+    mesh(B(w - 0.15, 0.05, 0.95), std('#2f6f5a', 0.6), cx, 0.76, cz, this.build);
+    mesh(B(0.03, 0.12, 0.95), std('#f4f4f4'), cx, 0.84, cz, this.build);
+    mesh(B(w - 0.15, 0.006, 0.02), std('#ffffff'), cx, 0.79, cz, this.build);
     for (const [dx, dz] of [
       [-0.8, -0.38],
       [0.8, -0.38],
       [-0.8, 0.38],
       [0.8, 0.38],
     ] as const)
-      mesh(B(0.05, 0.74, 0.05), std('#2f2f33'), cx + dx, 0.37, cz + dz, this.world);
-    mesh(S(0.035), std('#ffffff', 0.4), cx + 0.4, 0.82, cz + 0.1, this.world);
+      mesh(B(0.05, 0.74, 0.05), std('#2f2f33'), cx + dx, 0.37, cz + dz, this.build);
+    mesh(S(0.035), std('#ffffff', 0.4), cx + 0.4, 0.82, cz + 0.1, this.build);
   }
   private armchair(x: number, z: number, c: string): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = Math.PI;
-    this.world.add(g);
+    this.build.add(g);
     mesh(B(0.74, 0.34, 0.68), std(c, 0.9), 0, 0.24, 0, g);
     mesh(B(0.74, 0.46, 0.16), std(c, 0.9), 0, 0.58, -0.27, g);
     mesh(B(0.13, 0.22, 0.62), std(shade(c, -0.04)), -0.32, 0.48, 0.02, g);
@@ -914,15 +1267,15 @@ export class StudioScene implements HqWorldView {
   }
   private foosball(f: Furniture): void {
     const { cx, cz, w } = this.group(f);
-    mesh(B(w - 0.35, 0.22, 0.75), std('#7a5640', 0.6), cx, 0.8, cz, this.world);
-    mesh(B(w - 0.5, 0.01, 0.6), std('#3d8b4f', 0.8), cx, 0.915, cz, this.world);
+    mesh(B(w - 0.35, 0.22, 0.75), std('#7a5640', 0.6), cx, 0.8, cz, this.build);
+    mesh(B(w - 0.5, 0.01, 0.6), std('#3d8b4f', 0.8), cx, 0.915, cz, this.build);
     for (const [dx, dz] of [
       [-0.6, -0.3],
       [0.6, -0.3],
       [-0.6, 0.3],
       [0.6, 0.3],
     ] as const)
-      mesh(B(0.06, 0.7, 0.06), std('#5d4232'), cx + dx, 0.35, cz + dz, this.world);
+      mesh(B(0.06, 0.7, 0.06), std('#5d4232'), cx + dx, 0.35, cz + dz, this.build);
     for (let k = 0; k < 6; k++)
       mesh(
         C(0.012, 0.012, 1.0, 6),
@@ -930,7 +1283,7 @@ export class StudioScene implements HqWorldView {
         cx - 0.55 + k * 0.22,
         0.94,
         cz,
-        this.world,
+        this.build,
         false,
       ).rotation.x = Math.PI / 2;
   }
@@ -938,7 +1291,7 @@ export class StudioScene implements HqWorldView {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = -Math.PI / 2;
-    this.world.add(g);
+    this.build.add(g);
     mesh(B(0.62, 1.7, 0.6), std('#5b2bb5', 0.5), 0, 0.85, 0, g);
     const scr = new THREE.MeshBasicMaterial({ color: '#59e3ff' });
     this.screensDecor.push(scr);
@@ -964,7 +1317,7 @@ export class StudioScene implements HqWorldView {
         cx,
         0.11 * (k + 1),
         cz + 0.34 - k * 0.34,
-        this.world,
+        this.build,
       );
     }
     const cush = ['#e98a52', '#5b8fd6', '#e8b84a', '#d65c7a'];
@@ -975,14 +1328,14 @@ export class StudioScene implements HqWorldView {
         f.x + 0.25 + i * 0.5,
         0.25 + (i % 3) * 0.22,
         cz + 0.34 - (i % 3) * 0.34,
-        this.world,
+        this.build,
       );
   }
   private bike(x: number, z: number, c: string): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = Math.PI / 2;
-    this.world.add(g);
+    this.build.add(g);
     for (const dz of [-0.32, 0.32]) {
       const wheel = mesh(
         geo('wheel', () => new THREE.TorusGeometry(0.2, 0.02, 6, 20)),
@@ -999,7 +1352,7 @@ export class StudioScene implements HqWorldView {
     mesh(B(0.1, 0.03, 0.18), std('#1f1f24'), 0, 0.48, -0.08, g);
   }
   private fridge(x: number, z: number): void {
-    mesh(B(0.86, 1.8, 0.6), std('#dfe3e8', 0.3), x, 0.9, z, this.world);
+    mesh(B(0.86, 1.8, 0.6), std('#dfe3e8', 0.3), x, 0.9, z, this.build);
     const glass = new THREE.MeshStandardMaterial({
       color: '#bfe6ff',
       transparent: true,
@@ -1008,7 +1361,7 @@ export class StudioScene implements HqWorldView {
       emissive: '#000000',
     });
     this.lampShades.push(glass);
-    mesh(B(0.74, 1.6, 0.02), glass, x, 0.92, z + 0.31, this.world, false);
+    mesh(B(0.74, 1.6, 0.02), glass, x, 0.92, z + 0.31, this.build, false);
     const cols = ['#ff7a59', '#ffd166', '#06d6a0', '#118ab2', '#ef476f'];
     for (let r = 0; r < 4; r++)
       for (let k = 0; k < 5; k++)
@@ -1018,7 +1371,7 @@ export class StudioScene implements HqWorldView {
           x - 0.28 + k * 0.14,
           0.32 + r * 0.38,
           z + 0.2,
-          this.world,
+          this.build,
           false,
         );
   }
@@ -1027,17 +1380,17 @@ export class StudioScene implements HqWorldView {
     const { cx, cz } = this.group(f);
     const room = HQ_MAP.rooms.find((r) => r.id === f.roomId);
     this.rug(cx, cz, 3, 3, shade(room?.color ?? '#9fb2dc', 0.08));
-    mesh(C(0.62, 0.62, 0.05, 28), std('#e9d5b2', 0.6), cx, 0.74, cz, this.world);
-    mesh(C(0.05, 0.05, 0.7, 10), std('#cfc3b0'), cx, 0.37, cz, this.world);
-    mesh(B(0.32, 0.02, 0.22), std('#d9dbe0', 0.4), cx + 0.12, 0.78, cz - 0.05, this.world);
-    mesh(B(0.2, 0.005, 0.28), std('#ffffff', 0.9), cx - 0.25, 0.775, cz + 0.15, this.world);
+    mesh(C(0.62, 0.62, 0.05, 28), std('#e9d5b2', 0.6), cx, 0.74, cz, this.build);
+    mesh(C(0.05, 0.05, 0.7, 10), std('#cfc3b0'), cx, 0.37, cz, this.build);
+    mesh(B(0.32, 0.02, 0.22), std('#d9dbe0', 0.4), cx + 0.12, 0.78, cz - 0.05, this.build);
+    mesh(B(0.2, 0.005, 0.28), std('#ffffff', 0.9), cx - 0.25, 0.775, cz + 0.15, this.build);
     const chair = shade(room?.color ?? '#a9bde6', 0.05);
     for (let k = 0; k < 4; k++) {
       const a = (k / 4) * Math.PI * 2 + 0.4;
       const g = new THREE.Group();
       g.position.set(cx + Math.sin(a) * 0.95, 0, cz + Math.cos(a) * 0.95);
       g.rotation.y = a + Math.PI;
-      this.world.add(g);
+      this.build.add(g);
       mesh(B(0.42, 0.06, 0.4), std(chair, 0.8), 0, 0.46, 0, g);
       mesh(B(0.4, 0.4, 0.05), std(chair, 0.8), 0, 0.68, -0.19, g);
       for (const [a1, b1] of [
@@ -1062,11 +1415,11 @@ export class StudioScene implements HqWorldView {
     const cx = (x0 + x1) / 2;
     const cz = (y0 + y1) / 2;
     this.rug(cx, cz, x1 - x0 + 2.6, y1 - y0 + 2.4, '#b9a2dc');
-    mesh(B(x1 - x0 - 0.1, 0.06, y1 - y0 - 0.5), std('#7a5640', 0.6), cx, 0.75, cz, this.world);
-    mesh(B(0.12, 0.72, 0.8), std('#5d4232'), x0 + 0.5, 0.36, cz, this.world);
-    mesh(B(0.12, 0.72, 0.8), std('#5d4232'), x1 - 0.5, 0.36, cz, this.world);
+    mesh(B(x1 - x0 - 0.1, 0.06, y1 - y0 - 0.5), std('#7a5640', 0.6), cx, 0.75, cz, this.build);
+    mesh(B(0.12, 0.72, 0.8), std('#5d4232'), x0 + 0.5, 0.36, cz, this.build);
+    mesh(B(0.12, 0.72, 0.8), std('#5d4232'), x1 - 0.5, 0.36, cz, this.build);
     for (let x = x0 + 0.5; x < x1; x += 1)
-      mesh(B(0.22, 0.01, 0.28), std('#ffffff', 0.9), x, 0.785, cz - 0.25, this.world);
+      mesh(B(0.22, 0.01, 0.28), std('#ffffff', 0.9), x, 0.785, cz - 0.25, this.build);
   }
 
   private rug(x: number, z: number, w: number, d: number, c: string): void {
@@ -1087,14 +1440,14 @@ export class StudioScene implements HqWorldView {
     m.rotation.x = -Math.PI / 2;
     m.position.set(x, 0.015, z);
     m.receiveShadow = true;
-    this.world.add(m);
+    this.build.add(m);
   }
 
   private chairAt(x: number, z: number, rot: number, color: string): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
     g.rotation.y = rot;
-    this.world.add(g);
+    this.build.add(g);
     mesh(B(0.44, 0.07, 0.42), std(color, 0.7), 0, 0.46, 0, g);
     mesh(B(0.42, 0.44, 0.06), std(color, 0.7), 0, 0.73, -0.21, g);
     mesh(C(0.03, 0.03, 0.36, 8), std('#3a3a3e'), 0, 0.26, 0, g);
@@ -1364,27 +1717,13 @@ export class StudioScene implements HqWorldView {
       const html = `<i style="background:${color}"></i><span>${name}</span>${sub ? `<small>${sub}</small>` : ''}`;
       if (pill.innerHTML !== html) pill.innerHTML = html;
       pill.classList.toggle('free', !dept && room.id.startsWith('annex'));
-      const band = this.wallBands.get(room.id);
-      if (band) band.color.set(pastel(color, 0.45));
-      const sign = this.wallSigns.get(room.id);
-      if (sign && this.signNames.get(room.id) !== name) {
-        this.signNames.set(room.id, name);
-        const mat = sign.material as THREE.MeshStandardMaterial;
-        mat.map?.dispose();
-        mat.map = this.signTex(name);
-        mat.needsUpdate = true;
+      floor?.color.set(pastel(dept?.color ?? room.color, 0.25));
+      // Local libre : mobilier masqué et marquage « + » tant qu'aucun pôle ne s'y installe.
+      const layer = this.annexLayers.get(room.id);
+      if (layer) {
+        layer.furn.visible = !!dept;
+        layer.free.visible = !dept;
       }
-      this.roomEdges
-        .get(room.id)
-        ?.color.set(
-          shade(
-            pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color), 0.45),
-            -0.08,
-          ),
-        );
-      floor?.color.set(
-        pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color), 0.45),
-      );
     }
     // Mur d'écrans : chiffres réels du snapshot.
     if (this.kpiScreen) {
@@ -1397,14 +1736,6 @@ export class StudioScene implements HqWorldView {
         if (g) drawKpis(g, k);
         this.kpiScreen.tex.needsUpdate = true;
       }
-    }
-    // Cadrage : l'aile d'extension n'est incluse que si un pôle y est installé.
-    const annexUsed = world.departments.some((d) => d.roomId.startsWith('annex'));
-    const key = annexUsed ? 'all' : 'core';
-    if (key !== this.boundsKey) {
-      this.boundsKey = key;
-      this.bounds = { x0: 0, z0: 0, x1: W, z1: annexUsed ? D : 28.2 };
-      this.home();
     }
     const m = world.meetings.find((x) => x.status === 'in_progress');
     this.meetingPill.hidden = !m;
@@ -1513,7 +1844,7 @@ export class StudioScene implements HqWorldView {
           new THREE.PlaneGeometry(w, h),
           new THREE.MeshBasicMaterial({ map: tex, transparent: true }),
         );
-        m.position.set(15.2 - w / 2, 2.0, 0.07);
+        m.position.set(7.6, 1.75, 0.7);
         this.world.add(m);
         this.logoMesh = m;
         this.dirty = true;
@@ -2050,10 +2381,11 @@ export class StudioScene implements HqWorldView {
     for (const room of HQ_MAP.rooms) {
       const pill = this.roomPills.get(room.id);
       if (!pill) continue;
+      const zone = room.kind === 'department' && !room.walls;
       const [x, y, ok] = proj(
-        (room.rect.x0 + room.rect.x1 + 1) / 2 + 1.5,
-        0.1,
-        room.rect.y0 + 0.45,
+        (room.rect.x0 + room.rect.x1 + 1) / 2 + (zone ? 1.5 : 0),
+        zone ? 0.1 : 1.3,
+        zone ? room.rect.y0 + 0.45 : (room.rect.y0 + room.rect.y1 + 1) / 2,
       );
       pill.hidden = !ok;
       pill.classList.toggle('compact', compact);

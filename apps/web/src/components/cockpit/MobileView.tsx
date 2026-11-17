@@ -8,6 +8,7 @@ import { duration, TASK_STATUS_LABEL, time } from '../../lib/format';
 import type { Selection } from '../../world/types';
 import type { DocumentView, FullDocument } from '../panels/Documents';
 import { ActivityFeed } from './ActivityFeed';
+import { AgentPortrait } from '../panels/Portrait2D';
 
 type Tab = 'approvals' | 'running' | 'docs' | 'feed';
 
@@ -76,7 +77,12 @@ export function MobileView({
           <ul className="mobile-cards">
             {pending.map((a) => (
               <li key={a.id}>
-                <strong>{agent(a.agentId)?.name ?? a.agentId}</strong>
+                <span className="mobile-who">
+                  {world && agent(a.agentId) && (
+                    <AgentPortrait world={world} agent={agent(a.agentId)!} size={28} crop="head" />
+                  )}
+                  <strong>{agent(a.agentId)?.name ?? a.agentId}</strong>
+                </span>
                 <span className="muted small"> · {time(a.requestedAt)}</span>
                 <p>{a.riskReason}</p>
                 {caps.decideApproval && (
@@ -120,7 +126,8 @@ export function MobileView({
                       {TASK_STATUS_LABEL[t.status]}
                     </span>
                   </div>
-                  <p className="muted small">
+                  <p className="muted small mobile-who">
+                    {world && a && <AgentPortrait world={world} agent={a} size={22} crop="head" />}
                     {a?.name ?? t.agentId}
                     {t.startedAt ? ` · depuis ${duration(now - Date.parse(t.startedAt))}` : ''}
                     {tool ? ` · 🛠 ${tool.name}` : ''}

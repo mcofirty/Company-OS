@@ -248,13 +248,31 @@ describe('carte hq-v1', () => {
     expect(kinds).toContain('meeting');
     expect(kinds).toContain('cafe');
     expect(kinds).toContain('entry');
-    expect(HQ_MAP.cols).toBe(36);
-    expect(HQ_MAP.rows).toBe(35); // aile d'extension (nouveaux pôles)
+    expect(HQ_MAP.cols).toBe(57);
+    expect(HQ_MAP.rows).toBe(37); // plan « Campus » : salles tout autour du plateau
   });
   it('assez de postes pour 12 agents et de places au café', () => {
     expect(anchorsOfKind(HQ_MAP, 'desk').length).toBeGreaterThanOrEqual(12);
     expect(anchorsOfKind(HQ_MAP, 'cafe').length).toBeGreaterThanOrEqual(12);
     expect(anchorsOfKind(HQ_MAP, 'meeting_seat').length).toBe(8);
+  });
+  it('chaque pôle du plateau a 12 postes, chaque local libre 6', () => {
+    for (const id of ['sales', 'finance', 'direction', 'marketing', 'rh', 'operations'])
+      expect(anchorsOfKind(HQ_MAP, 'desk', id).length, id).toBe(12);
+    for (const id of ['annex-1', 'annex-2', 'annex-3'])
+      expect(anchorsOfKind(HQ_MAP, 'desk', id).length, id).toBe(6);
+  });
+  it('les murs bloquent le passage ; chaque salle fermée a une porte praticable', () => {
+    expect(HQ_MAP.wallTiles.length).toBeGreaterThan(100);
+    for (const t of HQ_MAP.wallTiles) expect(HQ_MAP.isWalkable(t)).toBe(false);
+    const spawn = HQ_MAP.anchors['entry-spawn']!;
+    for (const r of HQ_MAP.rooms.filter((x) => x.walls)) {
+      expect(r.doors.length, r.id).toBeGreaterThan(0);
+      for (const d of r.doors) {
+        expect(HQ_MAP.tileKind(d), r.id).toBe('door');
+        expect(findPath(spawn, d, HQ_MAP.isWalkable), r.id).not.toBeNull();
+      }
+    }
   });
   it('chaque ancre est praticable et accessible depuis l’accueil (pas de collision mobilier)', () => {
     const spawn = HQ_MAP.anchors['entry-spawn']!;

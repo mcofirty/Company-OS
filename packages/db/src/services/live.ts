@@ -169,8 +169,11 @@ export async function createAgentByAdmin(
         (a) => a.deskAnchor,
       ),
     );
+    // Postes utilisables : la capacité du pôle, dans la limite des postes de la zone.
     const desk =
-      anchorsOfKind(HQ_MAP, 'desk', dept.roomId).find((d) => !taken.has(d.id)) ??
+      anchorsOfKind(HQ_MAP, 'desk', dept.roomId)
+        .slice(0, dept.capacity)
+        .find((d) => !taken.has(d.id)) ??
       anchorsOfKind(HQ_MAP, 'waiting').find((d) => !taken.has(d.id));
     if (!desk) throw new DomainError('CONFLICT', 'Aucun poste ni place d’attente disponible');
     const role = req.role;

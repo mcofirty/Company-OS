@@ -692,7 +692,19 @@ export function furnitureSprite(scene: Phaser.Scene, f: Furniture, room: Room | 
     case 'bike_rack':
       return texture(scene, 'cafe_table', TILE_SPEC, drawCafeTable);
     case 'pingpong':
+    case 'pool_table':
+    case 'stage':
       return texture(scene, 'mtable:0', TILE_SPEC, (c) => drawMeetingTile(c, 0));
+    case 'bookshelf':
+    case 'tv':
+      return texture(scene, 'server', TILE_SPEC, drawServer);
+    case 'exec_desk':
+    case 'kitchen_island': {
+      const variant = f.x % 2 === 0 ? 0 : 1;
+      return texture(scene, `counter:${variant}`, TILE_SPEC, (c) => drawCounter(c, variant));
+    }
+    case 'auditorium_seat':
+      return texture(scene, 'sofa', TILE_SPEC, drawSofa);
   }
 }
 
@@ -742,7 +754,7 @@ export function glowSprite(scene: Phaser.Scene): DecorSprite {
 // ---------------------------------------------------------------- cloisons
 
 const isWallOf = (room: Room, t: Tile): boolean =>
-  HQ_MAP.tileKind(t) === 'wall' && HQ_MAP.roomAt(t)?.id === room.id;
+  HQ_MAP.tileKind(t) === 'wall' && (room.id === '__walls' || HQ_MAP.roomAt(t)?.id === room.id);
 
 /** Cloison basse vitrée : un sprite par tuile, raccordé aux voisines. */
 export function partitionSprite(scene: Phaser.Scene, room: Room, t: Tile): DecorSprite {
