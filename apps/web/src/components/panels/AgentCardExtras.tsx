@@ -15,7 +15,13 @@ import { FollowUp } from './Inspector';
 export interface AgentInsights {
   last7d: { succeeded: number; blocked: number };
   avgDurationMs: number | null;
-  run: { steps: number; maxSteps: number; startedAt: string } | null;
+  run: {
+    steps: number;
+    maxSteps: number;
+    startedAt: string;
+    model?: string | null;
+    modelReason?: string | null;
+  } | null;
   collaborators: { agentId: string; count: number }[];
   lastDocument: { id: string; title: string; createdAt: string } | null;
 }
@@ -116,6 +122,11 @@ export function AgentLive({
               <span className="stat-bar">
                 <span style={{ width: `${Math.max(4, pct * 100)}%` }} />
               </span>
+              {run.modelReason && (
+                <span className="live-model" data-testid="agent-live-model" title={run.model ?? ''}>
+                  🧠 {run.modelReason}
+                </span>
+              )}
               <span className="muted small">
                 Étape {run.steps} sur {run.maxSteps} max · depuis{' '}
                 {duration(Math.max(0, now - Date.parse(run.startedAt)))}

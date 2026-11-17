@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { TIER_EFFORT, tierOfModel } from '@company-os/contracts';
 import { canReserve, crossesThreshold, usagePercent } from '@company-os/policies';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
@@ -45,7 +46,12 @@ export async function loadRunContext(db: Db, runId: string) {
       promptVersion: version.promptVersion,
       instructions: version.instructions,
       goal: version.goal,
-      modelPolicy: version.modelPolicy as unknown as ModelPolicy,
+      // Modèle choisi au démarrage de l'exécution (optimisation automatique ou niveau fixé).
+      modelPolicy: {
+        ...(version.modelPolicy as unknown as ModelPolicy),
+        ...(run.model ? { model: run.model } : {}),
+        ...(run.model && run.modelReason ? { effort: TIER_EFFORT[tierOfModel(run.model)] } : {}),
+      } as ModelPolicy,
       // Mission récurrente : plafond de coût fixé pour CETTE exécution (les budgets restent appliqués).
       limits: {
         ...(version.limits as unknown as RunLimits),

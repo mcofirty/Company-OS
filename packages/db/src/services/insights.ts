@@ -1,4 +1,4 @@
-import { CreateAgentRequestSchema, tierOfModel } from '@company-os/contracts';
+import { CreateAgentRequestSchema, choiceOfPolicy } from '@company-os/contracts';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
 import { createAgentByAdmin } from './live';
@@ -11,7 +11,14 @@ export interface AgentInsights {
   /** Durée moyenne des 20 dernières missions réussies (ms), ou null. */
   avgDurationMs: number | null;
   /** Exécution en cours : étapes réalisées sur le plafond de la version active. */
-  run: { steps: number; maxSteps: number; startedAt: string } | null;
+  run: {
+    steps: number;
+    maxSteps: number;
+    startedAt: string;
+    /** Modèle retenu et pourquoi (optimisation automatique ou niveau fixé). */
+    model: string | null;
+    modelReason: string | null;
+  } | null;
   /** Collègues avec qui l'agent travaille le plus (délégations, réunions), 60 jours. */
   collaborators: { agentId: string; count: number }[];
   /** Dernier livrable enregistré par l'agent. */
@@ -119,6 +126,8 @@ export async function agentInsights(
           steps: run.stepCount,
           maxSteps: Math.max(1, limits.maxSteps ?? 8),
           startedAt: run.startedAt.toISOString(),
+          model: run.model,
+          modelReason: run.modelReason,
         }
       : null,
     collaborators: [...score.entries()]
@@ -158,7 +167,6 @@ export async function duplicateAgent(
   const raw = version?.instructions ?? '';
   const i = raw.indexOf(ADMIN_MARK);
   const own = (i >= 0 ? raw.slice(i + ADMIN_MARK.length) : raw).trim();
-  const model = ((version?.modelPolicy ?? {}) as { model?: string }).model ?? '';
   const req = CreateAgentRequestSchema.parse({
     name: `${src.name.slice(0, 37)} 2`,
     title: src.title,
@@ -171,7 +179,7 @@ export async function duplicateAgent(
       : `${own} Même rôle et mêmes consignes que ${src.name}.`
     ).slice(0, 4000),
     monthlyBudgetUsd: Math.min(500, Math.max(0.5, budget ? budget.limitMicros / 1e6 : 5)),
-    modelTier: tierOfModel(model),
+    modelTier: choiceOfPolicy(version?.modelPolicy as { model?: string; auto?: boolean } | null),
     avatarId: /^avatar-\d{2}$/.test(src.avatarId) ? src.avatarId : 'avatar-01',
     skills: src.skills,
     routines: src.routines,

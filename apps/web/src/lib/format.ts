@@ -99,7 +99,13 @@ export function describe(
       };
     case 'agent.run.started':
       return {
-        text: `${agentName(e.payload.agentId)} · exécution ${e.payload.providerClass === 'demo' ? 'démo (sans LLM)' : 'LLM'}`,
+        text: `${agentName(e.payload.agentId)} · exécution ${
+          e.payload.providerClass === 'demo'
+            ? 'démo (sans LLM)'
+            : e.payload.routing
+              ? `${e.payload.routing.auto ? 'auto → ' : ''}${e.payload.routing.reason}`
+              : 'LLM'
+        }`,
         tone: 'neutral',
         icon: '·',
       };

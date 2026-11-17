@@ -3,6 +3,25 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-22 (20) — Fiches enrichies et optimisation automatique du modèle
+
+### Réalisé
+- Fiche agent (uniquement à côté de l'avatar) : indicateurs réels (7 jours, coût du mois / budget,
+  temps moyen), activité en direct (outil, étape, modèle retenu, dernier livrable), relations,
+  actions rapides (suite, pause, mission récurrente, duplication), 2 fiches épinglées.
+- `POST /v1/agents/:id/duplicate` ; indicateurs `insights` dans `GET /v1/agents/:id`.
+- Optimisation automatique du modèle (ADR-066) : choix « Auto » / Tier 1-2-3 par agent et par mission,
+  routage au démarrage de l'exécution, raison affichée. Migration `20261122090000_model_routing`.
+- 3D : mode économe par défaut, rendu suspendu hors du Bureau, décor start-up (mur d'écrans aux vrais
+  indicateurs, mur végétal, néon, arcade, baby-foot, gradins…).
+
+### Tests (exécutés le 2026-11-22)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 187/187 (dont `routing.test.ts`,
+  `model-routing.test.ts`, `agent-insights.test.ts`). `pnpm e2e` : voir commit.
+
+### Prochaine tâche
+- Retour utilisateur en production (coûts observés par niveau).
+
 ## Session 2026-11-21 (19) — QG en 3D « studio » et interface en verre
 
 ### Réalisé

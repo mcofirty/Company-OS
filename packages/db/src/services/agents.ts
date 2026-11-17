@@ -24,6 +24,8 @@ export interface CreateAgentInput {
       model: string;
       effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
       maxTokens: number;
+      /** Optimisation automatique du modèle selon la mission (ADR-066). */
+      auto?: boolean;
     };
     limits: { maxSteps: number; maxDurationMs: number; maxCostMicros: number };
   };

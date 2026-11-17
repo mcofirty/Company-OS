@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { instructionsFor, PROMPT_VERSION } from '@company-os/agents';
 import {
-  MODEL_TIERS,
+  policyForChoice,
   TOOL_CATALOG,
   toolAvailableIn,
   type CreateAgentRequest,
@@ -193,7 +193,7 @@ export async function createAgentByAdmin(
         promptVersion: PROMPT_VERSION,
         instructions: `${instructionsFor(dept.roomId, role)}\n\nConsignes de l’administrateur :\n${req.instructions}`,
         goal: req.goal,
-        modelPolicy: { model: MODEL_TIERS[req.modelTier].model, effort: 'medium', maxTokens: 8000 },
+        modelPolicy: { ...policyForChoice(req.modelTier), maxTokens: 8000 },
         limits: { maxSteps: 8, maxDurationMs: 5 * 60_000, maxCostMicros: 500_000 },
       },
     });

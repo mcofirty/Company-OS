@@ -289,7 +289,7 @@ export function useHq() {
   const createMission = useCallback(
     async (
       agentId: string,
-      mission: { title: string; instructions: string },
+      mission: { title: string; instructions: string; modelTier?: string },
     ): Promise<TaskView> => {
       const { data } = await api<TaskView>('/v1/tasks', {
         method: 'POST',

@@ -129,6 +129,15 @@ export const Payloads = {
     /** Modèle demandé (null pour le fournisseur démo scripté, sans LLM). */
     model: z.string().max(64).nullable().default(null),
     agentVersion: z.number().int().min(1).nullable().default(null),
+    /** Choix du modèle pour cette mission (optimisation automatique ou niveau fixé). */
+    routing: z
+      .object({
+        tier: z.enum(['economy', 'balanced', 'quality']),
+        auto: z.boolean(),
+        reason: z.string().max(200),
+      })
+      .nullable()
+      .default(null),
   }),
   'agent.run.completed': z.object({
     runId: Uuid,

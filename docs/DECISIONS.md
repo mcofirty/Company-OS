@@ -316,3 +316,14 @@ contrat `HqWorldView` (hooks e2e inclus). L'interface (barre du haut, équipe / 
 onglets, pôles) flotte au-dessus du monde en panneaux de verre dépoli ; l'opacité est réglable, le verre
 passe en sombre en thème sombre ou de nuit, la touche H masque l'interface. Le cadrage évite les
 panneaux (marges mesurées). Préférences d'affichage stockées dans le navigateur uniquement.
+
+ADR-066 — **Optimisation automatique du modèle selon la mission.** Chaque agent a un choix de modèle :
+« Auto » (par défaut à la création) ou un niveau fixe (Tier 1 léger · Haiku, Tier 2 moyen · Sonnet,
+Tier 3 lourd · Opus) ; une mission peut imposer son niveau. En « Auto », le niveau est décidé au
+démarrage de chaque exécution par une règle locale, déterministe et gratuite (`routeModel`, aucun appel
+LLM pour décider) : nature de la mission (mots-clés de tâches simples ou complexes), longueur des
+consignes, rôle (responsable qui délègue), nombre d'outils, profondeur de délégation, suite de mission ;
+nouvel essai après échec = un cran au-dessus ; garde-fou budget (< 20 % restant : pas d'Opus ; < 5 % :
+Haiku). Le choix et sa raison sont persistés (`agent_runs.model_reason`, `agent.run.started.routing`) et
+affichés (fil d'activité, fiche de l'agent). Le budget et le plafond par exécution s'appliquent au
+modèle effectivement retenu. Migration `20261122090000_model_routing`.

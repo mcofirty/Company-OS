@@ -7,6 +7,12 @@ import {
   type Actor,
   type AgentActivity,
   type Mission,
+  type ModelChoice,
+  type ModelTier,
+  routeModel,
+  type StoredModelPolicy,
+  TIER_LABEL,
+  tierOfModel,
   type TaskKind,
   type TaskStatus,
   type TaskView,
@@ -150,6 +156,7 @@ export async function createTaskInTx(
       costCapMicros: input.costCapMicros ?? null,
       scheduleId: input.scheduleId ?? null,
       followUpOf: input.followUpOf ?? null,
+      modelTier: input.mission?.modelTier ?? null,
     },
   });
   if (agent.activity === 'idle') {
@@ -269,9 +276,52 @@ export async function startNextTask(
     const version = await tx.agentVersion.findUnique({
       where: { agentId_version: { agentId: task.agentId, version: task.agent.activeVersion } },
     });
-    const policy = (version?.modelPolicy ?? {}) as { model?: string };
+    const policy = (version?.modelPolicy ?? {}) as StoredModelPolicy;
     const providerClass = org.mode === 'demo' ? 'demo' : 'llm';
-    const model = providerClass === 'llm' ? (policy.model ?? null) : null;
+    let model: string | null = null;
+    let routing: { tier: ModelTier; auto: boolean; reason: string } | null = null;
+    if (providerClass === 'llm') {
+      // Optimisation automatique (ADR-066) : Haiku / Sonnet / Opus selon la mission.
+      const forced =
+        task.modelTier && task.modelTier !== 'auto' ? (task.modelTier as ModelTier) : null;
+      const auto = task.modelTier === 'auto' || (!forced && policy.auto === true);
+      if (auto || forced) {
+        const [budget, prior, toolCount] = await Promise.all([
+          tx.budget.findFirst({ where: { orgId, scopeType: 'agent', scopeId: task.agentId } }),
+          tx.task.count({
+            where: {
+              orgId,
+              agentId: task.agentId,
+              title: task.title,
+              failureCode: { not: null },
+              id: { not: task.id },
+              createdAt: { gte: new Date(now.getTime() - 7 * 86_400_000) },
+            },
+          }),
+          tx.agentToolGrant.count({ where: { agentId: task.agentId } }),
+        ]);
+        const d = routeModel({
+          title: task.title,
+          instructions: task.description,
+          role: task.agent.role,
+          toolCount,
+          depth: task.depth,
+          attempt: 1 + prior,
+          followUp: task.followUpOf !== null,
+          budgetLeft:
+            budget && budget.limitMicros > 0
+              ? Math.max(0, 1 - budget.usedMicros / budget.limitMicros)
+              : null,
+          forced,
+        });
+        model = d.model;
+        routing = { tier: d.tier, auto: !forced, reason: d.reason };
+      } else {
+        model = policy.model ?? null;
+        const tier = tierOfModel(model ?? '');
+        routing = { tier, auto: false, reason: `${TIER_LABEL[tier]} : niveau fixé pour l’agent` };
+      }
+    }
     const updated = await transitionTask(ctx, task.id, 'running', {
       startedAt: now,
       attempts: { increment: 1 },
@@ -309,6 +359,7 @@ export async function startNextTask(
         providerClass,
         model,
         agentVersion: task.agent.activeVersion,
+        routing,
       },
     });
     await tx.agentRun.create({
@@ -325,6 +376,7 @@ export async function startNextTask(
         startEventId: runEventId,
         agentVersion: task.agent.activeVersion,
         workflowId: `agent-task-${task.id}`,
+        modelReason: routing?.reason ?? null,
       },
     });
     return { task: taskView(updated), runId, runEventId };
@@ -647,7 +699,13 @@ export async function retryTask(
       agentId: old.agentId,
       requester: input.actor,
       ...(kind === 'custom'
-        ? { mission: { title: old.title, instructions: old.description } }
+        ? {
+            mission: {
+              title: old.title,
+              instructions: old.description,
+              ...(old.modelTier ? { modelTier: old.modelTier as ModelChoice } : {}),
+            },
+          }
         : {}),
     });
     const replaced =

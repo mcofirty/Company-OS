@@ -205,6 +205,8 @@ model Task {
   failureCode    String?      @map("failure_code")
   /// Délégation : tâche parente (DAG, profondeur bornée, cycles refusés côté service).
   parentTaskId   String?      @map("parent_task_id") @db.Uuid
+  /// Niveau de modèle imposé pour cette mission (economy | balanced | quality | auto), sinon null.
+  modelTier      String?      @map("model_tier")
   depth          Int          @default(0)
   /// Plafond de coût de CETTE exécution (mission récurrente), en micro-USD.
   costCapMicros  Int?         @map("cost_cap_micros")
@@ -246,6 +248,8 @@ model AgentRun {
   costMicros     Int        @default(0) @map("cost_micros")
   costSource     String     @default("none") @map("cost_source")
   workflowId     String?    @map("workflow_id")
+  /// Pourquoi ce modèle (optimisation automatique ou niveau fixé), affiché dans le cockpit.
+  modelReason    String?    @map("model_reason")
 
   usages LlmUsage[]
 

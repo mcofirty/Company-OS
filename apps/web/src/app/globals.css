@@ -3954,3 +3954,8 @@ kbd {
 .rel-pill:hover {
   border-color: var(--accent);
 }
+.live-model {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}

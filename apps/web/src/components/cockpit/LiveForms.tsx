@@ -3,7 +3,13 @@
 import { useMemo, useState } from 'react';
 import type { CreateAgentRequest, WorldSnapshot } from '@company-os/contracts';
 import { ApiFailure } from '../../lib/api';
-import { ModelTierSelect, type Tier } from './ModelTierSelect';
+import { ModelTierSelect, TIER_CHOICE_LABEL, type Tier } from './ModelTierSelect';
+
+export interface MissionInput {
+  title: string;
+  instructions: string;
+  modelTier?: Tier;
+}
 
 const RISK_LABEL: Record<string, string> = {
   read: 'lecture',
@@ -101,7 +107,7 @@ export function AgentForm({
   const [avatarId, setAvatarId] = useState('avatar-01');
   const [grants, setGrants] = useState<Record<string, string[]>>({});
   const [skills, setSkills] = useState('');
-  const [modelTier, setModelTier] = useState<Tier>('quality');
+  const [modelTier, setModelTier] = useState<Tier>('auto');
   const [routines, setRoutines] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -304,10 +310,11 @@ export function MissionForm({
 }: {
   world: WorldSnapshot;
   agentId?: string;
-  onCreate: (agentId: string, mission: { title: string; instructions: string }) => Promise<void>;
+  onCreate: (agentId: string, mission: MissionInput) => Promise<void>;
   onClose: () => void;
 }) {
   const agents = world.agents.filter((a) => a.status === 'active');
+  const [tier, setTier] = useState<Tier | ''>('');
   const [agentId, setAgentId] = useState(initialAgent ?? agents[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -322,7 +329,7 @@ export function MissionForm({
           e.preventDefault();
           setBusy(true);
           setError(null);
-          onCreate(agentId, { title, instructions })
+          onCreate(agentId, { title, instructions, ...(tier ? { modelTier: tier } : {}) })
             .then(onClose)
             .catch((err: unknown) => setError(errorText(err)))
             .finally(() => setBusy(false));
@@ -374,6 +381,21 @@ export function MissionForm({
             placeholder="Ce que l’agent doit faire, le résultat attendu…"
             data-testid="mission-instructions"
           />
+        </label>
+        <label>
+          Modèle pour cette mission
+          <select
+            value={tier}
+            onChange={(e) => setTier(e.target.value as Tier | '')}
+            data-testid="mission-model"
+          >
+            <option value="">Réglage de l’agent</option>
+            {(['auto', 'economy', 'balanced', 'quality'] as const).map((t) => (
+              <option key={t} value={t}>
+                {TIER_CHOICE_LABEL[t]}
+              </option>
+            ))}
+          </select>
         </label>
         {error && <p className="form-error">{error}</p>}
         <div className="actions row">

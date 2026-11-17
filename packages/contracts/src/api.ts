@@ -7,11 +7,17 @@ export const ApiErrorSchema = z.object({
 });
 export type ApiError = z.infer<typeof ApiErrorSchema>;
 
+/** Choix du modèle : « auto » (selon la mission, ADR-066) ou un niveau fixe. */
+export const ModelChoiceSchema = z.enum(['auto', 'quality', 'balanced', 'economy']);
+export type ModelChoice = z.infer<typeof ModelChoiceSchema>;
+
 export const MissionSchema = z
   .object({
     title: z.string().trim().min(3).max(120),
     /** Consignes de l'humain (données confiées à l'agent, jamais des droits supplémentaires). */
     instructions: z.string().trim().min(10).max(4000),
+    /** Niveau de modèle pour CETTE mission (sinon : réglage de l'agent). */
+    modelTier: ModelChoiceSchema.optional(),
   })
   .strict();
 export type Mission = z.infer<typeof MissionSchema>;
@@ -58,7 +64,7 @@ export const UpdateAgentVersionRequestSchema = z
   .object({
     goal: z.string().trim().min(5).max(300),
     instructions: z.string().trim().min(20).max(4000),
-    modelTier: ModelTierSchema,
+    modelTier: ModelChoiceSchema,
     note: z.string().trim().max(200).optional(),
   })
   .strict();
@@ -125,7 +131,8 @@ export const CreateAgentRequestSchema = z
     /** Budget mensuel plafonné (plafond dur). */
     monthlyBudgetUsd: z.number().min(0.5).max(500).default(5),
     /** Niveau de modèle : Qualité (Opus), Équilibré (Sonnet), Économique (Haiku). */
-    modelTier: ModelTierSchema.default('quality'),
+    /** « auto » par défaut : Haiku, Sonnet ou Opus selon chaque mission. */
+    modelTier: ModelChoiceSchema.default('auto'),
     avatarId: z
       .string()
       .regex(/^avatar-\d{2}$/)

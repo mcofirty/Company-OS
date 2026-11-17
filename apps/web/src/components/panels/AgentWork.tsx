@@ -5,7 +5,7 @@ import type { AgentView, TaskView, WorldSnapshot } from '@company-os/contracts';
 import { api, apiPost, ApiFailure } from '../../lib/api';
 import { duration, TASK_STATUS_LABEL, time, usd } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
-import { ModelTierSelect, type Tier } from '../cockpit/ModelTierSelect';
+import { ModelTierSelect, TIER_CHOICE_LABEL, type Tier } from '../cockpit/ModelTierSelect';
 import { ScheduleForm, scheduleLabel, type ScheduleView } from '../pages/Schedules';
 import { Empty, Section } from '../common';
 import { DocViewer, downloadDocument, type DocumentView } from './Documents';
@@ -274,13 +274,7 @@ export function AgentManage({
           <strong>
             v{remote?.activeVersion ?? '…'} ·{' '}
             {current ? (
-              <span data-testid="agent-model-label">
-                {
-                  { quality: 'Qualité', balanced: 'Équilibré', economy: 'Économique' }[
-                    current.modelTier
-                  ]
-                }
-              </span>
+              <span data-testid="agent-model-label">{TIER_CHOICE_LABEL[current.modelTier]}</span>
             ) : (
               '…'
             )}

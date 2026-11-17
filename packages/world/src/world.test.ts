@@ -135,6 +135,7 @@ const cycle: DomainEvent[] = [
         providerClass: 'demo',
         model: null,
         agentVersion: 1,
+        routing: null,
       },
     },
     5,

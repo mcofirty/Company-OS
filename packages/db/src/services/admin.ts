@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { instructionsFor, PROMPT_VERSION } from '@company-os/agents';
-import { MODEL_TIERS, tierOfModel, type ModelTier } from '@company-os/contracts';
+import { choiceOfPolicy, policyForChoice, type ModelChoice } from '@company-os/contracts';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
 import { withOrgTx } from '../events';
@@ -26,7 +26,7 @@ export async function updateAgentVersion(
     agentId: string;
     goal: string;
     instructions: string;
-    modelTier: ModelTier;
+    modelTier: ModelChoice;
     note?: string;
   },
 ): Promise<{ version: number }> {
@@ -43,7 +43,8 @@ export async function updateAgentVersion(
     });
     const version = current.version + 1;
     const policy = current.modelPolicy as Record<string, unknown>;
-    const model = MODEL_TIERS[input.modelTier].model;
+    const nextPolicy = policyForChoice(input.modelTier);
+    const model = nextPolicy.model;
     await tx.agentVersion.create({
       data: {
         id: randomUUID(),
@@ -52,7 +53,7 @@ export async function updateAgentVersion(
         promptVersion: PROMPT_VERSION,
         instructions: `${instructionsFor(agent.department.roomId, agent.role as 'manager')}\n\n${ADMIN_MARK}${input.instructions.trim()}`,
         goal: input.goal.trim(),
-        modelPolicy: { ...policy, model },
+        modelPolicy: { ...policy, ...nextPolicy } as object,
         limits: current.limits as object,
         createdBy: `user:${input.actorId}`,
       },
@@ -97,7 +98,7 @@ export async function agentVersions(db: Db, agentId: string) {
       goal: v.goal,
       instructions: adminInstructionsOf(v.instructions),
       model,
-      modelTier: tierOfModel(model),
+      modelTier: choiceOfPolicy(v.modelPolicy as { model?: string; auto?: boolean }),
       createdBy: v.createdBy,
       createdAt: v.createdAt.toISOString(),
     };

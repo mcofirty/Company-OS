@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../../lib/api';
 
-export type Tier = 'quality' | 'balanced' | 'economy';
+export type Tier = 'auto' | 'quality' | 'balanced' | 'economy';
+
+/** Libellés courts des choix de modèle (optimisation automatique, ADR-066). */
+export const TIER_CHOICE_LABEL: Record<Tier, string> = {
+  auto: 'Auto (selon la mission)',
+  economy: 'Tier 1 · Léger · Haiku',
+  balanced: 'Tier 2 · Moyen · Sonnet',
+  quality: 'Tier 3 · Lourd · Opus',
+};
 interface ModelInfo {
   tier: Tier;
   model: string;
@@ -44,15 +52,16 @@ export function ModelTierSelect({
     <label>
       Modèle
       <select value={value} onChange={(e) => onChange(e.target.value as Tier)} data-testid={testId}>
+        <option value="auto">Auto — Haiku, Sonnet ou Opus selon chaque mission (recommandé)</option>
         {(
           models ?? [
-            { tier: 'quality', label: 'Qualité', hint: '', estimatedMissionUsd: null },
-            { tier: 'balanced', label: 'Équilibré', hint: '', estimatedMissionUsd: null },
-            { tier: 'economy', label: 'Économique', hint: '', estimatedMissionUsd: null },
+            { tier: 'economy', label: '', hint: '', estimatedMissionUsd: null },
+            { tier: 'balanced', label: '', hint: '', estimatedMissionUsd: null },
+            { tier: 'quality', label: '', hint: '', estimatedMissionUsd: null },
           ]
         ).map((m) => (
           <option key={m.tier} value={m.tier}>
-            {m.label}
+            {TIER_CHOICE_LABEL[m.tier]}
             {m.hint ? ` — ${m.hint}` : ''}
             {fmt(m.estimatedMissionUsd)}
           </option>
