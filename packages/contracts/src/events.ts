@@ -43,6 +43,7 @@ export const ALL_EVENT_TYPES = [
   'agent.grants.updated',
   'agent.profile.updated',
   'agent.reporting.updated',
+  'agent.deleted',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -277,6 +278,15 @@ export const Payloads = {
     role: AgentRoleSchema,
     reason: z.string().max(200),
   }),
+  /**
+   * Agent supprimé par un administrateur : il quitte le QG et l'organigramme ; son historique
+   * (tâches, invocations, journal) reste consultable. Ses subordonnés sont rattachés à son manager.
+   */
+  'agent.deleted': z.object({
+    agentId: SlugIdSchema,
+    reason: z.string().min(1).max(200),
+    reportsReassignedTo: SlugIdSchema.nullable(),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -332,6 +342,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.grants.updated'),
   variant('agent.profile.updated'),
   variant('agent.reporting.updated'),
+  variant('agent.deleted'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

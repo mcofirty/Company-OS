@@ -369,6 +369,9 @@ export function applyEvent(
     case 'agent.grants.updated':
     case 'agent.profile.updated':
       break;
+    case 'agent.deleted':
+      w = { ...w, agents: w.agents.filter((a) => a.id !== e.payload.agentId) };
+      break;
     case 'agent.reporting.updated':
       w = patchAgent(w, e.payload.agentId, () => ({
         managerId: e.payload.managerId,

@@ -3,7 +3,7 @@ import type { AgentRole } from '@company-os/contracts';
 import type { Db } from '../client';
 import { DomainError } from '../errors';
 import { withOrgTx, type OrgTxContext } from '../events';
-import { createTaskInTx } from './tasks';
+import { cancelTaskInTx, createTaskInTx } from './tasks';
 
 /**
  * Hiérarchie des agents (organigramme). Seul un administrateur humain la modifie :
@@ -180,6 +180,123 @@ export async function assignToReport(
       idempotencyKey: input.idempotencyKey,
       causationId: input.causationId,
     });
+  });
+  return result;
+}
+
+/**
+ * Suppression d'un agent par un administrateur humain (suppression logique : l'historique reste).
+ * Refusée pendant une mission en cours. Tâches en file / bloquées : annulées. Subordonnés :
+ * rattachés au manager de l'agent (ou à l'administrateur). Droits retirés, poste libéré,
+ * propositions de recrutement en attente rejetées.
+ */
+export async function deleteAgent(
+  db: Db,
+  input: { orgId: string; actorId: string; agentId: string; reason: string },
+): Promise<{ cancelledTasks: number; reassigned: number }> {
+  const { result } = await withOrgTx(db, input.orgId, new Date(), async (ctx) => {
+    const { tx, orgId } = ctx;
+    const agent = await tx.agent.findFirst({
+      where: { id: input.agentId, orgId, deletedAt: null },
+    });
+    if (!agent) throw new DomainError('NOT_FOUND', 'Agent introuvable');
+    const reason = input.reason.trim().slice(0, 200) || 'Suppression par un administrateur';
+    const busy = await tx.task.count({
+      where: { orgId, agentId: agent.id, status: { in: ['running', 'waiting_approval'] } },
+    });
+    if (busy > 0) {
+      throw new DomainError(
+        'CONFLICT',
+        `${agent.name} est en pleine mission : attendre la fin (ou décider la validation en attente) avant de le supprimer`,
+      );
+    }
+    const actor = { kind: 'user' as const, id: input.actorId };
+    const open = await tx.task.findMany({
+      where: { orgId, agentId: agent.id, status: { in: ['queued', 'blocked'] } },
+      select: { id: true },
+    });
+    for (const t of open) {
+      await cancelTaskInTx(ctx, {
+        taskId: t.id,
+        reason: `Agent supprimé : ${reason}`.slice(0, 200),
+        actor,
+        retriedAs: null,
+      });
+    }
+    // Subordonnés : rattachés au manager de l'agent supprimé.
+    const reports = await tx.agent.findMany({
+      where: { orgId, managerId: agent.id, deletedAt: null },
+    });
+    const newManager = agent.managerId;
+    for (const r of reports) {
+      await tx.agent.update({ where: { id: r.id }, data: { managerId: newManager } });
+      emitReporting(
+        ctx,
+        input.actorId,
+        r,
+        newManager,
+        r.role as AgentRole,
+        `Rattaché suite à la suppression de ${agent.name}`,
+      );
+    }
+    // Propositions de recrutement de cet agent encore en attente : rejetées.
+    const hires = await tx.approvalRequest.findMany({
+      where: { orgId, agentId: agent.id, status: 'pending' },
+    });
+    for (const h of hires) {
+      await tx.approvalRequest.update({
+        where: { id: h.id },
+        data: {
+          status: 'rejected',
+          reviewedAt: ctx.now,
+          reviewedBy: `user:${input.actorId}`,
+          decisionReason: 'Demandeur supprimé',
+          version: { increment: 1 },
+        },
+      });
+      ctx.emit({
+        classification: 'internal',
+        aggregateType: 'approval',
+        aggregateId: h.id,
+        aggregateVersion: h.version + 1,
+        correlationId: randomUUID(),
+        causationId: null,
+        actor,
+        provenance: ctx.mode,
+        type: 'approval.decided',
+        payload: {
+          approvalId: h.id,
+          decision: 'rejected',
+          reviewerId: input.actorId,
+          reason: 'Demandeur supprimé',
+        },
+      });
+    }
+    await tx.agentToolGrant.deleteMany({ where: { agentId: agent.id } });
+    await tx.agent.update({
+      where: { id: agent.id },
+      data: {
+        deletedAt: ctx.now,
+        status: 'deactivated',
+        activity: 'offline',
+        currentTaskId: null,
+        deskAnchor: `deleted:${agent.id}`,
+        version: { increment: 1 },
+      },
+    });
+    ctx.emit({
+      classification: 'internal',
+      aggregateType: 'agent',
+      aggregateId: agent.id,
+      aggregateVersion: agent.version + 1,
+      correlationId: randomUUID(),
+      causationId: null,
+      actor,
+      provenance: ctx.mode,
+      type: 'agent.deleted',
+      payload: { agentId: agent.id, reason, reportsReassignedTo: newManager },
+    });
+    return { cancelledTasks: open.length, reassigned: reports.length };
   });
   return result;
 }

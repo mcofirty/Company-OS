@@ -479,7 +479,7 @@ export async function listRunningTasks(db: Db, orgId: string) {
  * Annulation humaine d'une tâche EN FILE ou BLOQUÉE (une tâche en cours ou en attente de
  * validation suit son workflow ; elle n'est pas interrompue ici). Émet `task.cancelled`.
  */
-async function cancelTaskInTx(
+export async function cancelTaskInTx(
   ctx: OrgTxContext,
   input: { taskId: string; reason: string; actor: Actor; retriedAs: string | null },
 ): Promise<TaskView> {

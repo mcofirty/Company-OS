@@ -256,3 +256,8 @@ idempotent), aucun outil fictif recréé (`ensureCatalogTools({ liveOnly })`), p
 (`NEXT_PUBLIC_LIVE_ONLY` au build), aucune mention « démo » dans le cockpit. Le mode démo déterministe
 reste disponible pour le développement local et les tests automatiques (règle CLAUDE.md inchangée),
 jamais livré sur ce serveur.
+
+ADR-055 — **Suppression d'agent = suppression logique, décidée par un humain.** `deletedAt` + événement
+`agent.deleted` : l'agent quitte le QG, les listes et l'organigramme ; tâches, invocations et journal
+restent consultables (audit). Refusée pendant une mission en cours ; tâches en file/bloquées annulées ;
+subordonnés rattachés à son manager ; droits retirés ; ses recrutements en attente rejetés.

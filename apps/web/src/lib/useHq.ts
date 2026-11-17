@@ -359,5 +359,6 @@ export interface Me {
     manageConnectors?: boolean;
     editProfile?: boolean;
     manageHierarchy?: boolean;
+    deleteAgent?: boolean;
   };
 }

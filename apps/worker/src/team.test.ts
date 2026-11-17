@@ -8,6 +8,8 @@ import {
   loadSnapshot,
   startNextTask,
   updateReporting,
+  deleteAgent,
+  proposeSubordinate,
 } from '@company-os/db';
 import { ToolGateway } from '@company-os/tools';
 import { resetAndSeed, testDb } from '../../../tests/setup/helpers';
@@ -173,5 +175,76 @@ describe('Équipe d’un manager (live)', () => {
       where: { orgId, type: 'agent.reporting.updated' },
     });
     expect(events).toHaveLength(3); // Léo rattaché, Léo promu, Zoé rattachée
+  });
+
+  it('suppression : équipe rattachée, tâches en attente annulées, refus en pleine mission', async () => {
+    const { agentId: boss } = await hire('Iris', 'manager', {});
+    const { agentId: mgr } = await hire('Inès', 'manager', { company: ['status'] });
+    const { agentId: sub } = await hire('Hugo', 'specialist', {});
+    await updateReporting(db, {
+      orgId,
+      actorId: DEV_ADMIN.id,
+      agentId: mgr,
+      managerId: boss,
+      role: 'manager',
+    });
+    await updateReporting(db, {
+      orgId,
+      actorId: DEV_ADMIN.id,
+      agentId: sub,
+      managerId: mgr,
+      role: 'specialist',
+    });
+    // Mission en cours : suppression refusée.
+    const runId = await runOf(mgr);
+    await expect(
+      deleteAgent(db, { orgId, actorId: DEV_ADMIN.id, agentId: mgr, reason: 'Réorganisation' }),
+    ).rejects.toThrow(/pleine mission/);
+    await db.agentRun.update({ where: { id: runId }, data: { status: 'succeeded' } });
+    await db.task.updateMany({ where: { orgId, agentId: mgr }, data: { status: 'succeeded' } });
+    await db.agent.update({ where: { id: mgr }, data: { currentTaskId: null, activity: 'idle' } });
+    // Une tâche en file et une proposition de recrutement en attente.
+    await createTask(db, {
+      orgId,
+      kind: 'custom',
+      agentId: mgr,
+      mission: { title: 'Plus tard', instructions: 'Tâche en file à annuler.' },
+      requester: admin,
+    });
+    await proposeSubordinate(db, {
+      orgId,
+      managerAgentId: mgr,
+      taskId: null,
+      name: 'Lou',
+      title: 'Assistante',
+      goal: 'Aider',
+      instructions: 'Aider l’équipe au quotidien.',
+      tools: 'company.status',
+      justification: 'Charge',
+      idempotencyKey: 'hire-lou',
+      correlationId: crypto.randomUUID(),
+      causationId: null,
+    });
+
+    const r = await deleteAgent(db, {
+      orgId,
+      actorId: DEV_ADMIN.id,
+      agentId: mgr,
+      reason: 'Réorganisation',
+    });
+    expect(r).toEqual({ cancelledTasks: 1, reassigned: 1 });
+    expect((await db.agent.findUniqueOrThrow({ where: { id: sub } })).managerId).toBe(boss);
+    expect(await db.agentToolGrant.count({ where: { agentId: mgr } })).toBe(0);
+    expect(
+      (await db.approvalRequest.findFirstOrThrow({ where: { orgId, agentId: mgr } })).status,
+    ).toBe('rejected');
+    // L'historique reste ; l'agent disparaît du QG ; snapshot = rejeu du journal.
+    expect(await db.task.count({ where: { orgId, agentId: mgr } })).toBe(2);
+    const snap = (await loadSnapshot(db, orgId))!;
+    expect(snap.agents.map((a) => a.id)).not.toContain(mgr);
+    expect(snap.agents.find((a) => a.id === sub)?.managerId).toBe(boss);
+    await expect(
+      deleteAgent(db, { orgId, actorId: DEV_ADMIN.id, agentId: mgr, reason: 'Encore' }),
+    ).rejects.toThrow(/introuvable/);
   });
 });

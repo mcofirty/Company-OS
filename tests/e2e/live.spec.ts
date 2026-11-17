@@ -97,6 +97,16 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.getByTestId('task-cancel')).toHaveCount(0);
   await expect(page.getByTestId('timeline')).toContainText('Abandon de la mission (e2e)');
 
+  // Suppression de l'agent (admin) : il quitte le QG et la liste ; l'historique reste.
+  await page.getByRole('button', { name: 'Afficher l’équipe' }).click();
+  await page.getByTestId('team-list').getByText('Camille').click();
+  await expect(page.getByTestId('inspector-title')).toHaveText('Camille');
+  page.once('dialog', (d) => void d.accept('Fin du test e2e'));
+  await page.getByTestId('agent-delete').click();
+  await expect(page.getByTestId('inspector')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.getByTestId('live-empty')).toBeVisible();
+  await expect(page.getByTestId('timeline')).toContainText('supprimé · Fin du test e2e');
+
   // Retour à la démo : l'agent live n'y apparaît pas.
   await page.getByTestId('org-switcher').selectOption({ label: 'DEMO · Living HQ — démo' });
   await expect(page.getByTestId('mode-badge')).toContainText('DEMO', { timeout: 20_000 });

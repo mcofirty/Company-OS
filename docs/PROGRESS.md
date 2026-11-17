@@ -3,6 +3,15 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-17 (14) — Suppression d'agents
+
+### Réalisé
+- `deleteAgent` + `POST /v1/agents/:id/delete` (admin, motif obligatoire) + bouton « 🗑 Supprimer l'agent »
+  dans l'inspecteur (ADR-055).
+
+### Tests (exécutés le 2026-11-17)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 150/150. `pnpm e2e` : 24/24.
+
 ## Session 2026-11-17 (13) — Production « réel uniquement »
 
 ### Réalisé

@@ -233,6 +233,12 @@ export function describe(
         icon: '⇄',
       };
     }
+    case 'agent.deleted':
+      return {
+        text: `Agent ${e.payload.agentId} supprimé · ${e.payload.reason}`,
+        tone: 'neutral',
+        icon: '🗑',
+      };
     case 'agent.reporting.updated':
       return {
         text: `${agentName(e.payload.agentId)} ${e.payload.managerId ? `rattaché à ${agentName(e.payload.managerId)}` : 'rattaché directement à l’administrateur'}${e.payload.role === 'manager' ? ' · manager' : ''} · ${e.payload.reason}`,

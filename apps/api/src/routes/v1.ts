@@ -37,6 +37,7 @@ import {
   createAgentByAdmin,
   updateAgentProfile,
   updateReporting,
+  deleteAgent,
   orgsOfUser,
   cancelTask,
   retryTask,
@@ -91,6 +92,7 @@ export function registerV1(
           manageConnectors: admin && live,
           editProfile: admin,
           manageHierarchy: admin,
+          deleteAgent: admin,
         },
       },
       meta,
@@ -205,6 +207,19 @@ export function registerV1(
     const body = UpdateReportingRequestSchema.parse(req.body);
     await updateReporting(db, { orgId: p.orgId, actorId: p.userId, agentId: id, ...body });
     return { data: { agentId: id, ...body }, meta };
+  });
+
+  /** Suppression d'un agent (administrateur) : quitte le QG, l'historique reste. */
+  app.post('/v1/agents/:id/delete', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = SlugParam.parse(req.params);
+    const { reason } = z
+      .object({ reason: z.string().trim().min(3).max(200) })
+      .strict()
+      .parse(req.body);
+    const r = await deleteAgent(db, { orgId: p.orgId, actorId: p.userId, agentId: id, reason });
+    return { data: { agentId: id, deleted: true, ...r }, meta };
   });
 
   /** Fiche d'un agent (compétences, tâches habituelles) : administrateur seulement. */
