@@ -264,11 +264,19 @@ test('S05 — RH propose un agent, l’admin approuve depuis le cockpit, l’age
   // Nettoyage : désactiver la recrue libère son poste (sinon les exécutions répétées remplissent le QG).
   const hired = (await agentIds()).filter((id) => !beforeIds.has(id));
   expect(hired).toHaveLength(1);
-  const res = await page.request.post(`${API}/v1/agents/${hired[0]}/deactivate`, {
-    headers: { 'idempotency-key': crypto.randomUUID() },
-    data: { reason: 'Nettoyage e2e S05' },
-  });
-  expect(res.status()).toBe(200);
+  // La recrue peut être en pleine mission (pilote automatique) : on réessaie jusqu'à ce qu'elle soit libre.
+  await expect
+    .poll(
+      async () =>
+        (
+          await page.request.post(`${API}/v1/agents/${hired[0]}/deactivate`, {
+            headers: { 'idempotency-key': crypto.randomUUID() },
+            data: { reason: 'Nettoyage e2e S05' },
+          })
+        ).status(),
+      { timeout: 20_000, intervals: [1000] },
+    )
+    .toBe(200);
 });
 
 test('S06 — réunion réelle : participants, décisions et tâche déléguée visibles', async ({

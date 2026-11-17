@@ -69,6 +69,8 @@ export function AgentPopover({
   toast: (t: { text: string; tone: 'info' | 'danger' | 'success' }) => void;
 }) {
   const [tab, setTab] = useState<'card' | 'work'>('card');
+  const tabRef = useRef(tab);
+  tabRef.current = tab;
   const box = useRef<HTMLDivElement>(null);
   const [version, setVersion] = useState(0);
   const [remote, setRemote] = useState<Remote | null>(null);
@@ -98,6 +100,15 @@ export function AgentPopover({
     let raf = 0;
     const place = (): void => {
       const el = box.current;
+      // Fiche immobile pendant qu'on s'en sert (survol, saisie, réglages) : les boutons ne bougent pas.
+      if (
+        el &&
+        el.style.opacity === '1' &&
+        (el.matches(':hover') || el.contains(document.activeElement) || tabRef.current === 'work')
+      ) {
+        raf = requestAnimationFrame(place);
+        return;
+      }
       const pane = el?.parentElement;
       const canvas = pane?.querySelector<HTMLCanvasElement>('[data-testid="world-canvas"] canvas');
       if (el && pane && canvas) {
