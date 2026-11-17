@@ -19,7 +19,11 @@ Pour chaque changement : horodatage UTC, commit (si disponible), tâches termin�
 - Contrat commun `HqWorldView` (`apps/web/src/world/types.ts`) pour les deux rendus.
 
 ### Tests (exécutés le 2026-11-21)
-- Voir le commit : `pnpm lint && pnpm typecheck && pnpm test`, `pnpm e2e` (Chromium + SwiftShader).
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 177/177. `pnpm e2e` : 26/26 (Chromium + SwiftShader,
+  délai par test porté à 45 s pour le rendu 3D logiciel). `apps/web` : `next build` OK.
+- Plateau ouvert (plan v3) : zones sans cloisons, îlots dos à dos, coins réunion/lounge, atriums (arbre,
+  cabines, mange-debout, ping-pong) ; mode économe automatique sans carte graphique (pas d'ombres ni de
+  flou, cadence réduite).
 
 ### Prochaine tâche
 - Retour utilisateur sur le rendu 3D en production (performances sur son PC).
