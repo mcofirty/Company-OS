@@ -3,6 +3,23 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-17 (12) — Fiche agent, organigramme, équipes des managers
+
+### Réalisé
+- Fiche agent à côté du personnage (suit l'avatar) : portrait pixel-art, pôle, chef de pôle, rattachement,
+  statut réel, mission, compétences, outils, tâches habituelles, équipe, « Lui confier une mission »,
+  « Voir le pôle » ; fiche éditable par un admin (migration `20261117090000_agent_profile`).
+- Organigramme (⑂) : arbre réel des rattachements, glisser-déposer, « Rend compte à », nommer /
+  retirer manager, recrutements proposés en pointillés ; refus serveur des cycles (ADR-052).
+- Outil « Équipe » des managers (live) : `team.list`, `team.assign` (subordonnés directs),
+  `team.recruit` (validation humaine, droits ⊆ manager).
+
+### Tests (exécutés le 2026-11-17)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 148/148. `pnpm e2e` : 24/24.
+
+### Prochaine tâche exacte
+Rapports périodiques du DG (synthèse planifiée des équipes) ; OAuth des connecteurs MCP.
+
 ## Session 2026-11-16 (11) — Connecteurs MCP en libre-service (Phase B) + refonte graphique
 
 ### Réalisé

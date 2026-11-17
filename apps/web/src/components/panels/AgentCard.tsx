@@ -170,7 +170,7 @@ export function AgentCard({
               {dept.name}
             </button>
           )}
-          <h2 data-testid="inspector-title">{agent.name}</h2>
+          <h2 data-testid="agent-card-name">{agent.name}</h2>
           <p className="agent-card-title">{agent.title}</p>
           {chief && (
             <span className="chief-chip" data-testid="chief-chip">

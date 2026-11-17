@@ -1753,3 +1753,243 @@ kbd {
   text-transform: uppercase;
   color: var(--ink-soft);
 }
+
+/* ---------- Fiche flottante à côté du personnage ---------- */
+.world-pane {
+  position: relative;
+}
+.agent-popover {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  opacity: 0;
+  max-height: calc(100% - 60px);
+  overflow-y: auto;
+  border-radius: 18px;
+  filter: drop-shadow(0 10px 28px rgba(34, 32, 53, 0.22));
+  will-change: transform;
+}
+.agent-popover .agent-card {
+  margin: 0;
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-muted) 100%);
+}
+.agent-card [data-testid='profile-edit'] {
+  justify-self: start;
+}
+.popover-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+/* ---------- Organigramme ---------- */
+.org-modal {
+  width: min(1380px, 96vw);
+  max-width: none;
+  height: min(860px, 92vh);
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: 8px;
+}
+.org-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 12px;
+}
+.org-head h2 {
+  margin: 0;
+}
+.org-scroll {
+  overflow: auto;
+  border: 1px solid var(--outline);
+  border-radius: 12px;
+  background: var(--surface-muted);
+  padding: 18px;
+}
+.org-tree {
+  display: inline-block;
+  min-width: 100%;
+}
+.org-tree ul {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 0;
+  margin: 0;
+  position: relative;
+  list-style: none;
+}
+.org-tree > ul {
+  padding-top: 0;
+}
+.org-tree li {
+  position: relative;
+  padding: 20px 6px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.org-tree > ul > li {
+  padding-top: 0;
+}
+/* Connecteurs : barre horizontale entre frères + trait vertical vers chaque nœud */
+.org-tree li::before,
+.org-tree li::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 20px;
+  border-top: 2px solid var(--outline);
+}
+.org-tree li::before {
+  right: 50%;
+}
+.org-tree li::after {
+  left: 50%;
+  border-left: 2px solid var(--outline);
+}
+.org-tree li:only-child::before,
+.org-tree li:only-child::after {
+  border-top: 0;
+}
+.org-tree li:first-child::before,
+.org-tree li:last-child::after {
+  border-top: 0;
+}
+.org-tree li:last-child::before {
+  border-right: 2px solid var(--outline);
+  border-radius: 0 8px 0 0;
+}
+.org-tree li:first-child::after {
+  border-radius: 8px 0 0 0;
+}
+.org-tree li:only-child::after {
+  border-radius: 0;
+}
+.org-tree > ul > li::before,
+.org-tree > ul > li::after {
+  display: none;
+}
+.org-tree ul ul::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 20px;
+  border-left: 2px solid var(--outline);
+}
+.org-node {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  min-width: 190px;
+  max-width: 230px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--outline);
+  border-top: 4px solid var(--accent);
+  border-radius: 12px;
+  padding: 9px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+  font: inherit;
+  color: var(--ink);
+}
+.org-node[draggable='true'] {
+  cursor: grab;
+}
+.org-node.picked {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.org-node.drop {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  outline: 2px dashed var(--accent);
+}
+.org-node.root {
+  border-top-color: var(--ink);
+  min-width: 220px;
+  cursor: default;
+}
+.org-node.pending {
+  border-style: dashed;
+  border-top-style: dashed;
+  border-top-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, var(--surface));
+}
+.org-face {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  flex: none;
+}
+.org-id {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.org-id strong {
+  font-size: 13.5px;
+}
+.org-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.org-chief {
+  font-size: 11px;
+  font-weight: 700;
+  color: #6b5410;
+  background: #fdf0b8;
+  border-radius: 999px;
+  padding: 1px 7px;
+  justify-self: start;
+}
+.org-dept {
+  font-size: 11px;
+  font-weight: 700;
+}
+.org-status {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.org-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.org-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--outline);
+  padding-top: 10px;
+}
+.org-attach {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12.5px;
+}

@@ -31,7 +31,7 @@ import type { MetricsSummary } from '../../lib/useMetrics';
 import { Badge, Empty, Provenance, Section, ToolIcon } from '../common';
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 import { TaskDocuments } from './Documents';
-import { AgentCard, type AgentProfile } from './AgentCard';
+import type { AgentProfile } from './AgentCard';
 import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
 
 interface Props {
@@ -134,6 +134,7 @@ function AgentInspector({
   }>(`/v1/agents/${id}`, `${id}-${grantsVersion}`);
   const [busy, setBusy] = useState(false);
   if (!agent) return <Empty>Agent introuvable.</Empty>;
+  const dept = world.departments.find((d) => d.id === agent.departmentId);
   const manager = world.agents.find((a) => a.id === agent.managerId);
   const budget = world.budgets.find((b) => b.scopeType === 'agent' && b.scopeId === agent.id);
   const task = world.tasks.find((t) => t.id === agent.currentTaskId);
@@ -153,17 +154,17 @@ function AgentInspector({
     now - Date.parse(agent.lastTaskEndedAt) < 20_000;
   return (
     <>
-      <AgentCard
-        world={world}
-        agent={agent}
-        grants={remote?.grants ?? null}
-        profile={remote?.profile ?? null}
-        canEdit={caps.editProfile ?? false}
-        canMission={world.org.mode === 'live' && caps.createMission && agent.status === 'active'}
-        onMission={() => onMission(agent.id)}
-        onSelect={onSelect}
-        onProfileSaved={() => setGrantsVersion((v) => v + 1)}
-      />
+      <header className="insp-head">
+        <span className="avatar-dot" style={{ background: dept?.color }} aria-hidden>
+          {agent.name.slice(0, 1)}
+        </span>
+        <div>
+          <h2 data-testid="inspector-title">{agent.name}</h2>
+          <p className="muted">
+            {agent.title} · {dept?.name} · fiche à côté du personnage
+          </p>
+        </div>
+      </header>
       <h3 className="details-title">Détails et historique</h3>
       <div className="insp-badges">
         <Badge tone={ACTIVITY_TONE[agent.activity]}>{ACTIVITY_LABEL[agent.activity]}</Badge>
@@ -293,6 +294,15 @@ function AgentInspector({
         </ol>
       </Section>
       <div className="actions">
+        {world.org.mode === 'live' && caps.createMission && agent.status === 'active' && (
+          <button
+            className="btn primary"
+            onClick={() => onMission(agent.id)}
+            data-testid="inspector-mission"
+          >
+            Confier une mission
+          </button>
+        )}
         {caps.createTask &&
           world.org.mode !== 'live' &&
           kinds.map((k) => (

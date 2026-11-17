@@ -237,3 +237,15 @@ découvert est un `toolId` dynamique `mcp-xxxxxxxx` (ligne `tools` par organisat
 viennent de la politique (`read` => risque read ; sinon `external_write` => validation humaine). Défaut :
 validation à chaque appel. Jeton chiffré AES-256-GCM avec une clé d'environnement ; protection SSRF
 (HTTPS, IP publiques). Les droits d'un agent sont remplaçables par un admin (`agent.grants.updated`).
+
+ADR-052 — **Hiérarchie contrôlée par l'humain, équipes pilotées par les managers.** Le rattachement
+(`managerId`) et le rôle ne changent que par un administrateur (organigramme, `agent.reporting.updated`,
+sans cycle ; rattacher sous un spécialiste le promeut). Un agent manager (live) dispose de l'outil
+« Équipe » : voir son équipe, confier une mission à un subordonné DIRECT (sous-tâche), proposer un
+recrutement — toujours soumis à validation humaine, droits demandés ⊆ droits du manager, jamais l'outil
+Équipe (pas de recrutement en chaîne sans décision humaine).
+
+ADR-053 — **Fiche agent ancrée au personnage.** La fiche (pôle, rattachement, statut réel, mission,
+compétences, outils, tâches habituelles, équipe) s'affiche à côté de l'avatar et le suit image par image
+(position écran exposée par la scène) ; l'inspecteur de droite garde détails et historique. Compétences
+et tâches habituelles : saisies par un humain (`agent.profile.updated`), purement descriptives.

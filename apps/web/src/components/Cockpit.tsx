@@ -18,6 +18,8 @@ import { Timeline } from './cockpit/Timeline';
 import { OrgSwitcher, Topbar } from './cockpit/Topbar';
 import { AgentForm, MissionForm } from './cockpit/LiveForms';
 import { ConnectorsPanel } from './cockpit/Connectors';
+import { AgentPopover } from './cockpit/AgentPopover';
+import { OrgChart } from './cockpit/OrgChart';
 import { ApprovalsInbox } from './panels/Governance';
 import { Inspector, TeamRows } from './panels/Inspector';
 import { ToolWall } from './panels/ToolWall';
@@ -43,6 +45,7 @@ export function Cockpit() {
   const [metricsWindow, setMetricsWindow] = useState<MetricsWindow>('24h');
   const [agentFormOpen, setAgentFormOpen] = useState(false);
   const [connectorsOpen, setConnectorsOpen] = useState(false);
+  const [orgOpen, setOrgOpen] = useState(false);
   /** undefined = fermé ; '' = mission sans agent présélectionné. */
   const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
   const scene = useRef<HqScene | null>(null);
@@ -221,6 +224,15 @@ export function Cockpit() {
           >
             ☰
           </button>
+          <button
+            onClick={() => setOrgOpen(true)}
+            title="Organigramme (qui rend compte à qui)"
+            aria-label="Organigramme"
+            disabled={!world}
+            data-testid="open-orgchart"
+          >
+            ⑂
+          </button>
           {world?.org.mode === 'live' && (
             <button
               onClick={() => setConnectorsOpen(true)}
@@ -299,6 +311,19 @@ export function Cockpit() {
             onSelect={select}
             onReady={(s) => (scene.current = s)}
           />
+          {world && selection?.kind === 'agent' && (
+            <AgentPopover
+              key={selection.id}
+              world={world}
+              agentId={selection.id}
+              scene={scene}
+              canEdit={controls.caps.editProfile ?? false}
+              canMission={controls.caps.createMission}
+              onMission={(agentId) => setMissionFor(agentId)}
+              onSelect={select}
+              onClose={() => setSelection(null)}
+            />
+          )}
           <div className="legend" aria-hidden>
             <span>
               Glisser : déplacer · Molette : zoom · Double-clic : recentrer · Ctrl/Cmd+K :
@@ -383,6 +408,14 @@ export function Cockpit() {
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}
         {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
+        {orgOpen && world && (
+          <OrgChart
+            world={world}
+            canEdit={(controls.caps.manageHierarchy ?? false) && !replay.active}
+            onClose={() => setOrgOpen(false)}
+            onSelect={select}
+          />
+        )}
         {connectorsOpen && (
           <ConnectorsPanel
             canManage={controls.caps.manageConnectors ?? false}
