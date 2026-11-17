@@ -2147,7 +2147,11 @@ export class StudioScene implements HqWorldView {
     this.hemi.color.set(n ? '#7f8fc8' : '#fffaf2');
     this.sun.intensity = n ? 0.45 : 2.6;
     this.sun.color.set(n ? '#9fb2ee' : '#fff3e0');
-    this.lamps.forEach((l) => (l.intensity = n ? 9 : 0));
+    // Lampes masquées de jour : chaque lumière, même éteinte, alourdit tous les shaders.
+    this.lamps.forEach((l) => {
+      l.visible = n;
+      l.intensity = n ? 9 : 0;
+    });
     this.lampShades.forEach((m) => m.emissive.set(n ? '#ffcf8a' : '#000000'));
     this.windows.forEach((m) => m.color.set(n ? '#22335c' : '#cfe8ff'));
     if (this.neon) this.neon.opacity = n ? 1 : 0.85;
