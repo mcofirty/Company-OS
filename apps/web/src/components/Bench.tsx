@@ -68,6 +68,7 @@ export function Bench() {
           world={world}
           selection={null}
           now={now}
+          renderer="3d"
           onSelect={() => undefined}
           onReady={() => undefined}
         />

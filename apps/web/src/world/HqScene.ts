@@ -34,6 +34,7 @@ import {
   screenSprite,
   type DecorSprite,
 } from './decor';
+import type { HqWorldView, Selection, WorldCallbacks } from './types';
 
 /**
  * Projection visuelle du QG. Ne détient aucun état métier : elle reçoit le snapshot
@@ -41,20 +42,8 @@ import {
  * et ne modifient jamais le statut métier.
  */
 
-export type Selection =
-  | { kind: 'agent'; id: string }
-  | { kind: 'department'; id: string }
-  | { kind: 'task'; id: string }
-  | { kind: 'invocation'; id: string }
-  | { kind: 'tool'; id: string }
-  | { kind: 'approval'; id: string }
-  | { kind: 'meeting'; id: string };
-
-export interface HqSceneCallbacks {
-  onSelect: (sel: Selection | null) => void;
-  /** Clic sur un local libre de l'aile d'extension. */
-  onEmptyRoom?: (roomId: string) => void;
-}
+export type { Selection } from './types';
+export type HqSceneCallbacks = WorldCallbacks;
 
 const TW = HQ_MAP.tileWidth;
 const TH = HQ_MAP.tileHeight;
@@ -106,7 +95,7 @@ function pictogram(title: string): string {
   return '✍';
 }
 
-export class HqScene extends Phaser.Scene {
+export class HqScene extends Phaser.Scene implements HqWorldView {
   private origin = { x: 0, y: 0 };
   private avatars = new Map<string, AvatarObj>();
   private monitors = new Map<

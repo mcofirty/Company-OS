@@ -3245,3 +3245,440 @@ kbd {
   width: 100%;
   box-sizing: border-box;
 }
+
+/* =========================================================================
+   QG immersif : le monde occupe tout l'écran, l'interface flotte en verre dépoli
+   (opacité réglable --ga ; sombre automatiquement en thème sombre ou de nuit).
+   ========================================================================= */
+.cockpit.immersive {
+  --ga: 0.72;
+  --glass-rgb: 255, 253, 250;
+  --glass-line: rgba(255, 255, 255, 0.7);
+  --glass-shadow: 0 8px 28px rgba(40, 25, 10, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  --side-w: clamp(320px, 24vw, 420px);
+  --rail-w: 46px;
+  --gap: 10px;
+  display: block;
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+}
+:root[data-theme='dark'] .cockpit.immersive,
+.cockpit.immersive.night {
+  --glass-rgb: 26, 23, 36;
+  --glass-line: rgba(255, 255, 255, 0.13);
+  --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .cockpit.immersive {
+    --glass-rgb: 26, 23, 36;
+    --glass-line: rgba(255, 255, 255, 0.13);
+    --glass-shadow: 0 8px 28px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+}
+/* Nuit en thème clair : textes et surfaces passent en sombre pour rester lisibles. */
+.cockpit.immersive.night {
+  --surface: #1e1b2b;
+  --surface-muted: #16141f;
+  --ink: #ece8f6;
+  --ink-soft: #b3acc8;
+  --outline: #3a3450;
+  --accent: #9a82e6;
+  color: var(--ink);
+}
+.cockpit.immersive.night input,
+.cockpit.immersive.night select,
+.cockpit.immersive.night textarea {
+  background: var(--surface-muted);
+  color: var(--ink);
+  border-color: var(--outline);
+}
+
+/* Matière « verre » commune */
+.cockpit.immersive .topbar,
+.cockpit.immersive .rail,
+.cockpit.immersive .side,
+.cockpit.immersive .feed,
+.cockpit.immersive .view-tabs,
+.cockpit.immersive .app-bar,
+.cockpit.immersive .glass-ui,
+.cockpit.immersive .world-pane .filter-bar .chips,
+.cockpit.immersive .agent-popover .agent-card {
+  background: rgba(var(--glass-rgb), var(--ga));
+  -webkit-backdrop-filter: blur(16px) saturate(1.5);
+  backdrop-filter: blur(16px) saturate(1.5);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
+  border-radius: 14px;
+}
+
+/* Placement des panneaux au-dessus du monde */
+.cockpit.immersive .world-pane {
+  position: absolute;
+  inset: 0;
+  background: #e9e2d8;
+}
+.cockpit.immersive.night .world-pane {
+  background: #151826;
+}
+.cockpit.immersive .topbar {
+  position: absolute;
+  z-index: 30;
+  top: var(--gap);
+  left: var(--gap);
+  right: var(--gap);
+  height: 58px;
+}
+.cockpit.immersive .rail {
+  position: absolute;
+  z-index: 30;
+  top: calc(var(--gap) * 2 + 58px);
+  left: var(--gap);
+  width: var(--rail-w);
+  padding: 6px 4px;
+  gap: 4px;
+  border-right: 1px solid var(--glass-line);
+}
+.cockpit.immersive .side {
+  position: absolute;
+  z-index: 25;
+  top: calc(var(--gap) * 2 + 58px);
+  right: var(--gap);
+  bottom: var(--gap);
+  width: var(--side-w);
+  padding: 10px;
+}
+.cockpit.immersive .side .panel,
+.cockpit.immersive .side .inspector,
+.cockpit.immersive .side .toolwall {
+  background: rgba(var(--glass-rgb), 0.45);
+  border-color: var(--glass-line);
+  box-shadow: none;
+}
+.cockpit.immersive .feed {
+  position: absolute;
+  z-index: 25;
+  left: calc(var(--gap) * 2 + var(--rail-w));
+  right: calc(var(--side-w) + var(--gap) * 2);
+  bottom: var(--gap);
+  height: 128px;
+  border-top: 1px solid var(--glass-line);
+}
+.cockpit.immersive .world-pane .view-bar {
+  top: calc(var(--gap) * 2 + 58px);
+  left: calc(var(--gap) * 2 + var(--rail-w));
+  right: calc(var(--side-w) + var(--gap) * 2);
+  gap: 8px;
+}
+.cockpit.immersive .app-bar {
+  padding: 4px 6px;
+}
+.cockpit.immersive .world-pane .filter-bar {
+  top: calc(var(--gap) * 3 + 58px + 44px);
+  left: calc(var(--gap) * 2 + var(--rail-w));
+  right: calc(var(--side-w) + var(--gap) * 2);
+  align-items: center;
+}
+.cockpit.immersive .world-pane .filter-bar .chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 4px;
+  pointer-events: auto;
+}
+.cockpit.immersive .world-pane .filter-bar button {
+  background: rgba(var(--glass-rgb), 0.55);
+  border-color: var(--glass-line);
+}
+.cockpit.immersive .world-pane .filter-bar button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.cockpit.immersive .office-overlays {
+  top: calc(var(--gap) * 4 + 58px + 44px + 34px);
+  left: calc(var(--gap) * 2 + var(--rail-w));
+}
+.cockpit.immersive .world-pane .pause-banner,
+.cockpit.immersive .replay-bar {
+  z-index: 26;
+}
+.cockpit.immersive .page {
+  inset: calc(var(--gap) * 3 + 58px + 44px) calc(var(--side-w) + var(--gap) * 2)
+    calc(128px + var(--gap) * 2) calc(var(--gap) * 2 + var(--rail-w));
+  border-radius: 14px;
+  background: rgba(var(--glass-rgb), max(0.9, var(--ga)));
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--glass-line);
+  box-shadow: var(--glass-shadow);
+}
+.cockpit.immersive .world-pane > .legend {
+  display: none;
+}
+
+/* Masquer l'interface (touche H) : seul le monde et la barre de contrôle restent. */
+.cockpit.immersive .topbar,
+.cockpit.immersive .rail,
+.cockpit.immersive .side,
+.cockpit.immersive .feed,
+.cockpit.immersive .view-bar,
+.cockpit.immersive .filter-bar,
+.cockpit.immersive .office-overlays {
+  transition: opacity 0.25s ease;
+}
+.cockpit.immersive.ui-hidden .topbar,
+.cockpit.immersive.ui-hidden .rail,
+.cockpit.immersive.ui-hidden .side,
+.cockpit.immersive.ui-hidden .feed,
+.cockpit.immersive.ui-hidden .view-bar,
+.cockpit.immersive.ui-hidden .filter-bar,
+.cockpit.immersive.ui-hidden .office-overlays,
+.cockpit.immersive.ui-hidden .agent-popover {
+  opacity: 0;
+  pointer-events: none;
+}
+.cockpit.immersive.ui-hidden .world-controls {
+  bottom: var(--gap);
+  left: var(--gap);
+}
+
+/* Barre de contrôle du monde */
+.world-controls {
+  position: absolute;
+  z-index: 24;
+  left: calc(var(--gap, 10px) * 2 + var(--rail-w, 46px));
+  bottom: calc(128px + var(--gap, 10px) * 2);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 5px 7px;
+  max-width: calc(100% - var(--side-w, 340px) - 90px);
+  color: var(--ink);
+  font-size: 12px;
+}
+.world-controls .wc-seg {
+  display: inline-flex;
+  gap: 2px;
+}
+.world-controls .wc-seg button,
+.world-controls .wc-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 5px 9px;
+  border-radius: 8px;
+}
+.world-controls .wc-btn {
+  border: 1px solid var(--glass-line, var(--outline));
+  background: rgba(var(--glass-rgb, 255, 255, 255), 0.5);
+  color: var(--ink);
+}
+.world-controls .wc-seg button[aria-pressed='true'] {
+  background: rgba(var(--glass-rgb, 255, 255, 255), 0.95);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+.world-controls .wc-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--outline);
+}
+.world-controls .wc-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-soft);
+}
+.world-controls .wc-slider input {
+  width: 86px;
+  accent-color: var(--accent);
+}
+.world-controls .wc-legend {
+  display: inline-flex;
+  gap: 10px;
+  color: var(--ink-soft);
+}
+.world-controls .wc-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.world-controls .lg-work,
+.world-controls .lg-life {
+  width: 14px;
+  height: 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.world-controls .lg-work {
+  background: #2a9468;
+}
+.world-controls .lg-life {
+  border: 1.5px dashed #a993d6;
+}
+
+/* ---------- Rendu 3D : canvas, pastilles, bulles ---------- */
+.world-canvas.is-3d canvas {
+  image-rendering: auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+.studio-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.studio-labels > * {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  will-change: transform;
+}
+.studio-zone {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #2b2723;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 5px 13px 5px 10px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(60, 40, 20, 0.16);
+}
+.studio-zone i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: block;
+}
+.studio-zone small {
+  font-weight: 500;
+  font-size: 11.5px;
+  color: #6b6259;
+}
+.studio-zone.free {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px dashed #a79fb4;
+  color: #5d5668;
+}
+.studio-bubble {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #fff;
+  color: #2b2723;
+  box-shadow: 0 1px 4px rgba(60, 40, 20, 0.22);
+}
+.studio-bubble.work::before,
+.studio-bubble.tool::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #2a9468;
+  margin-right: 5px;
+  vertical-align: 1px;
+}
+.studio-bubble.tool {
+  border: 1.5px solid #2a9468;
+}
+.studio-bubble.life {
+  background: rgba(255, 255, 255, 0.82);
+  color: #5a4a78;
+  border: 1px dashed #a993d6;
+  font-weight: 500;
+}
+.studio-bubble.alert {
+  background: #fff2d6;
+  border: 1.5px solid #d49c30;
+}
+.studio-bubble.danger {
+  background: #ffe1e5;
+  border: 1.5px solid #ce4b61;
+  color: #8b1022;
+}
+.studio-bubble.meet {
+  border: 1.5px solid #7c60c9;
+}
+.studio-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  background: rgba(38, 34, 44, 0.88);
+  padding: 4px 12px 4px 9px;
+  border-radius: 999px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.studio-who i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: block;
+}
+.studio-who span {
+  font-weight: 400;
+  opacity: 0.82;
+}
+.studio-link {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--c, #7c60c9);
+  padding: 2px 8px;
+  border-radius: 6px;
+  outline: 2px dashed rgba(255, 255, 255, 0.85);
+  outline-offset: 1px;
+}
+.studio-meeting {
+  pointer-events: auto;
+  border: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  color: #fff;
+  background: #7c60c9;
+  padding: 5px 12px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(60, 40, 90, 0.3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cockpit.immersive .topbar,
+  .cockpit.immersive .side,
+  .cockpit.immersive .feed {
+    transition: none;
+  }
+}
+/* Téléphone : la vue mobile reste prioritaire. */
+@media (max-width: 760px) {
+  .world-controls {
+    display: none;
+  }
+}
+.studio-zone.compact small {
+  display: none;
+}
+.studio-zone {
+  max-width: 220px;
+}
+.studio-zone span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

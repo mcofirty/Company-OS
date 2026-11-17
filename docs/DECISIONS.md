@@ -307,3 +307,12 @@ explicite plutôt que génération dynamique de carte. Les réunions convoquées
 salle et les sièges existants, n'interrompent jamais un agent en mission et se ferment seules à l'heure
 prévue. La « vie de bureau » est une fonction pure du temps et de l'id de l'agent, active seulement quand
 l'agent est actif et sans mission : aucun état métier, aucun impact sur la file des tâches.
+
+ADR-065 — **QG en 3D « studio » et interface en verre.** Le monde est rendu en 3D (Three.js) par
+défaut, à partir du même plan `HQ_MAP` et de la même projection `visualIntent` que le rendu 2D : aucune
+logique métier nouvelle, les sièges de réunion, postes et trajets sont identiques. Le rendu 2D (Phaser)
+reste disponible (bouton 3D / 2D) et sert de repli automatique sans WebGL. Les deux rendus partagent le
+contrat `HqWorldView` (hooks e2e inclus). L'interface (barre du haut, équipe / inspecteur, fil d'activité,
+onglets, pôles) flotte au-dessus du monde en panneaux de verre dépoli ; l'opacité est réglable, le verre
+passe en sombre en thème sombre ou de nuit, la touche H masque l'interface. Le cadrage évite les
+panneaux (marges mesurées). Préférences d'affichage stockées dans le navigateur uniquement.

@@ -3,7 +3,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { WorldSnapshot } from '@company-os/contracts';
 import { api } from '../../lib/api';
-import type { HqScene, Selection } from '../../world/HqScene';
+import type { HqWorldView, Selection } from '../../world/types';
 import { AgentCard, type AgentProfile } from '../panels/AgentCard';
 
 const CARD_W = 340;
@@ -26,7 +26,7 @@ export function AgentPopover({
 }: {
   world: WorldSnapshot;
   agentId: string;
-  scene: RefObject<HqScene | null>;
+  scene: RefObject<HqWorldView | null>;
   canEdit: boolean;
   canMission: boolean;
   onMission: (agentId: string) => void;

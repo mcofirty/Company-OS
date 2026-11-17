@@ -8,7 +8,9 @@ import { ControlsContext, controlsFrom } from '../lib/controls';
 import { useHq } from '../lib/useHq';
 import { useMetrics, type MetricsWindow } from '../lib/useMetrics';
 import { useReplay } from '../lib/useReplay';
-import type { HqScene, Selection } from '../world/HqScene';
+import type { CameraView, HqWorldView, Selection } from '../world/types';
+import { useDisplay } from '../lib/display';
+import { WorldControls } from './cockpit/WorldControls';
 import { AlertCenter } from './cockpit/AlertCenter';
 import { BackendSettings } from './cockpit/BackendSettings';
 import { LoginPanel } from './cockpit/LoginPanel';
@@ -98,7 +100,12 @@ export function Cockpit() {
   }, [toast]);
   /** undefined = fermé ; '' = mission sans agent présélectionné. */
   const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
-  const scene = useRef<HqScene | null>(null);
+  const scene = useRef<HqWorldView | null>(null);
+  const [display, setDisplay] = useDisplay();
+  const [camView, setCamView] = useState<CameraView>('top');
+  const [uiHidden, setUiHidden] = useState(false);
+  const [sceneReady, setSceneReady] = useState(0);
+  const root = useRef<HTMLDivElement>(null);
 
   // En replay, tout l'écran montre l'état reconstruit et rien n'est déclenchable.
   const world = replay.active ? replay.world : hq.world;
@@ -120,13 +127,66 @@ export function Cockpit() {
       } else if (e.key === 'Escape') {
         setSelection(null);
         setSearchOpen(false);
+      } else if (
+        (e.key === 'h' || e.key === 'H') &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !(
+          e.target instanceof HTMLElement &&
+          e.target.closest('input, textarea, select, [contenteditable]')
+        )
+      ) {
+        setUiHidden((v) => !v);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  useEffect(() => scene.current?.setHighlight(dept), [dept]);
-  useEffect(() => scene.current?.setLinksMode(links), [links]);
+  useEffect(() => scene.current?.setHighlight(dept), [dept, sceneReady]);
+  useEffect(() => scene.current?.setLinksMode(links), [links, sceneReady]);
+  useEffect(() => scene.current?.setNight?.(display.night), [display.night, sceneReady]);
+  useEffect(() => scene.current?.setView?.(camView), [camView, sceneReady]);
+  const hasWorld = world !== null;
+  // Zone libre entre les panneaux flottants : le cadrage du QG l'utilise.
+  useEffect(() => {
+    const el = root.current;
+    if (!el) return;
+    const measure = (): void => {
+      const pane = el.querySelector('.world-pane')?.getBoundingClientRect();
+      if (!pane) return;
+      const r = (sel: string): DOMRect | null => {
+        const n = el.querySelector(sel);
+        if (
+          !n ||
+          getComputedStyle(n).visibility === 'hidden' ||
+          getComputedStyle(n).opacity === '0'
+        )
+          return null;
+        return n.getBoundingClientRect();
+      };
+      const topEls = ['.topbar', '.view-bar .view-tabs', '.filter-bar']
+        .map(r)
+        .filter(Boolean) as DOMRect[];
+      const side = r('.side');
+      const feed = r('.feed');
+      const rail = r('.rail');
+      const ctrl = r('.world-controls');
+      const top = Math.max(0, ...topEls.map((b) => b.bottom - pane.top)) + 8;
+      const bottom =
+        Math.max(0, feed ? pane.bottom - feed.top : 0, ctrl ? pane.bottom - ctrl.top : 0) + 8;
+      const right = side ? pane.right - side.left + 8 : 8;
+      const left = rail ? rail.right - pane.left + 8 : 8;
+      scene.current?.setInsets?.({ top, right, bottom, left });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    const t = window.setTimeout(measure, 450);
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t);
+    };
+  }, [uiHidden, view, sceneReady, display.renderer, hasWorld]);
 
   const fail = useCallback(
     (err: unknown) =>
@@ -175,7 +235,11 @@ export function Cockpit() {
 
   return (
     <ControlsContext.Provider value={controls}>
-      <div className={`cockpit ${replay.active ? 'is-replay' : ''}`}>
+      <div
+        ref={root}
+        className={`cockpit immersive ${replay.active ? 'is-replay' : ''} ${display.night && display.renderer === '3d' ? 'night' : ''} ${uiHidden ? 'ui-hidden' : ''}`}
+        style={{ ['--ga' as string]: display.glass }}
+      >
         <Topbar
           world={world}
           connection={connection}
@@ -411,8 +475,26 @@ export function Cockpit() {
             now={now}
             onSelect={select}
             onEmptyRoom={() => controls.caps.manageDepartments && setDeptDialog(true)}
-            onReady={(s) => (scene.current = s)}
+            renderer={display.renderer}
+            onFallback={() => {
+              setDisplay({ renderer: '2d' });
+              toast({ text: '3D indisponible sur cet appareil : affichage 2D', tone: 'info' });
+            }}
+            onReady={(s) => {
+              scene.current = s;
+              setSceneReady((n) => n + 1);
+            }}
           />
+          {view === 'office' && (
+            <WorldControls
+              prefs={display}
+              onPrefs={setDisplay}
+              view={camView}
+              onView={setCamView}
+              uiHidden={uiHidden}
+              onToggleUi={() => setUiHidden((v) => !v)}
+            />
+          )}
           {world && view === 'office' && !replay.active && (
             <div className="office-overlays">
               <WelcomeBanner

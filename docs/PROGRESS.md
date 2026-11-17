@@ -3,6 +3,27 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-21 (19) — QG en 3D « studio » et interface en verre
+
+### Réalisé
+- Rendu 3D par défaut (`apps/web/src/world/StudioScene.ts`, Three.js) : plateau ouvert aux couleurs des
+  pôles, cloisons basses, mobilier (îlots, écrans, chaises, table de réunion, café, plantes, serveurs),
+  personnages 3D (apparence stable par avatar), marche lissée sur le plan `HQ_MAP`, poses (frappe au
+  clavier, assis, café, discussion, lecture, étirements, arrosage), écrans aux couleurs de l'état réel,
+  halo des agents bloqués, faisceau d'arrivée, pastilles de pôle (présence au poste, local libre
+  cliquable), bulle de réunion, étiquette « Prénom · état » au survol, liens agent → outil.
+- Vues Plongée / 3/4 / Rapprochée, rotation à la souris, déplacement clic droit ou Maj, molette, nuit.
+- Interface en verre (ADR-065) : barre du haut, rail, équipe / inspecteur, fil d'activité, onglets et
+  pôles flottent au-dessus du monde ; curseur « Transparence », touche H, bouton 3D / 2D ; préférences
+  locales (`apps/web/src/lib/display.ts`). Repli automatique en 2D sans WebGL.
+- Contrat commun `HqWorldView` (`apps/web/src/world/types.ts`) pour les deux rendus.
+
+### Tests (exécutés le 2026-11-21)
+- Voir le commit : `pnpm lint && pnpm typecheck && pnpm test`, `pnpm e2e` (Chromium + SwiftShader).
+
+### Prochaine tâche
+- Retour utilisateur sur le rendu 3D en production (performances sur son PC).
+
 ## Session 2026-11-20 (18) — Nouveaux pôles, réunions convoquées, vie de bureau
 
 ### Réalisé
