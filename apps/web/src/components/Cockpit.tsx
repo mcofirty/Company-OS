@@ -152,6 +152,17 @@ export function Cockpit() {
     const el = root.current;
     if (!el) return;
     const measure = (): void => {
+      if (uiHidden) {
+        // Interface masquée : seul la barre de contrôle (en bas) reste.
+        const ctrl = el.querySelector('.world-controls')?.getBoundingClientRect();
+        scene.current?.setInsets?.({
+          top: 12,
+          right: 12,
+          left: 12,
+          bottom: (ctrl?.height ?? 40) + 24,
+        });
+        return;
+      }
       const pane = el.querySelector('.world-pane')?.getBoundingClientRect();
       if (!pane) return;
       const r = (sel: string): DOMRect | null => {

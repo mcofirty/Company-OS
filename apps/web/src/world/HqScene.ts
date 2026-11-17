@@ -767,7 +767,8 @@ export class HqScene extends Phaser.Scene implements HqWorldView {
     }
     if (this.meetingBubble?.getData('id') === m.id) return;
     this.meetingBubble?.destroy();
-    const c = this.P(HQ_MAP.anchors['meeting-seat-01']!.x + 2, 12.5);
+    const seat = HQ_MAP.anchors['meeting-seat-01']!;
+    const c = this.P(seat.x + 2, seat.y + 1.5);
     const text = this.add
       .text(0, 0, `◎ ${m.topic}`, {
         fontFamily: 'Inter, system-ui, sans-serif',

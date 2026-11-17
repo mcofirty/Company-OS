@@ -25,7 +25,7 @@ const W = HQ_MAP.cols;
 const D = HQ_MAP.rows;
 const SPEED = 2.4; // tuiles / s
 const VIEWS: Record<CameraView, { el: number; az: number; zoom: number }> = {
-  top: { el: 1.1, az: 0, zoom: 1 },
+  top: { el: 0.98, az: 0, zoom: 1 },
   tq: { el: 0.72, az: 0.55, zoom: 1 },
   close: { el: 0.85, az: -0.2, zoom: 2.3 },
 };
@@ -136,7 +136,7 @@ export class StudioScene implements HqWorldView {
   private homeDist = 60;
   private insets = { top: 0, right: 0, bottom: 0, left: 0 };
   /** Zone cadrée : locaux occupés (l'aile d'extension n'entre dans le cadre qu'une fois utilisée). */
-  private bounds = { x0: 0, z0: 0, x1: W, z1: 26 };
+  private bounds = { x0: 0, z0: 0, x1: W, z1: 28.2 };
   private boundsKey = '';
   private night = false;
   private reduced = false;
@@ -154,6 +154,10 @@ export class StudioScene implements HqWorldView {
   private sun: THREE.DirectionalLight;
   private lamps: THREE.PointLight[] = [];
   private lampShades: THREE.MeshStandardMaterial[] = [];
+  private windows: THREE.MeshBasicMaterial[] = [];
+  private wallBands = new Map<string, THREE.MeshStandardMaterial>();
+  private wallSigns = new Map<string, THREE.Mesh>();
+  private signNames = new Map<string, string>();
   private selection: Selection | null = null;
   private highlight: string | null = null;
   private linksMode = false;
@@ -287,6 +291,29 @@ export class StudioScene implements HqWorldView {
     mesh(B(0.3, 1.0, D), std('#efe6da'), -0.15, 0.5, D / 2, w);
     mesh(B(0.3, 1.0, D), std('#efe6da'), W + 0.15, 0.5, D / 2, w);
     mesh(B(W + 0.6, 0.45, 0.3), std('#efe6da'), W / 2, 0.22, D + 0.15, w);
+    // Mur du fond : bandeau aux couleurs des pôles, enseigne peinte, grandes baies vitrées.
+    for (const room of HQ_MAP.rooms.filter((r) => r.rect.y0 <= 1)) {
+      const { x0, x1 } = room.rect;
+      const band = new THREE.MeshStandardMaterial({
+        color: pastel(room.color, 0.45),
+        roughness: 0.9,
+      });
+      mesh(B(x1 - x0 + 0.9, 1.35, 0.04), band, (x0 + x1 + 1) / 2, 1.55, 0.02, w, false);
+      this.wallBands.set(room.id, band);
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(4.6, 0.75),
+        new THREE.MeshStandardMaterial({ transparent: true, map: this.signTex(room.label) }),
+      );
+      sign.position.set(x0 + 2.8, 1.92, 0.05);
+      w.add(sign);
+      this.wallSigns.set(room.id, sign);
+      for (let x = x0 + 6; x <= x1 - 1; x += 3) {
+        const glass = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+        this.windows.push(glass);
+        mesh(B(2.2, 0.9, 0.03), std('#7b6a58'), x, 1.65, 0.05, w, false);
+        mesh(B(2.08, 0.8, 0.03), glass, x, 1.65, 0.07, w, false);
+      }
+    }
     for (const room of HQ_MAP.rooms) this.buildRoom(room);
     for (const f of HQ_MAP.furniture) this.buildFurniture(f);
     this.buildMeetingTable();
@@ -317,7 +344,7 @@ export class StudioScene implements HqWorldView {
         [w / 2, d / 2],
       ),
     });
-    m.color.set(pastel(base));
+    m.color.set(pastel(base, 0.45));
     const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m);
     plane.rotation.x = -Math.PI / 2;
     plane.position.set(x0 + w / 2, 0.01, y0 + d / 2);
@@ -376,23 +403,54 @@ export class StudioScene implements HqWorldView {
     const w = this.world;
     switch (f.kind) {
       case 'desk': {
-        // Bureau blanc, piètement bois, cloison verte côté fond, écran tourné vers le siège.
-        mesh(B(0.96, 0.05, 0.62), std('#f6f4f0', 0.6), x, 0.75, z + 0.05, w);
-        mesh(B(0.05, 0.73, 0.58), std('#c99a62'), x - 0.46, 0.37, z + 0.05, w);
-        mesh(B(0.05, 0.73, 0.58), std('#c99a62'), x + 0.46, 0.37, z + 0.05, w);
-        mesh(B(1.0, 0.4, 0.05), std('#4f7a62', 0.9), x, 0.97, z - 0.27, w);
-        mesh(B(0.56, 0.34, 0.04), std('#25272d', 0.4), x, 1.03, z - 0.1, w);
-        mesh(B(0.06, 0.18, 0.06), std('#25272d'), x, 0.86, z - 0.12, w);
+        // Îlot : l'écran regarde le siège, cloison verte côté opposé (postes dos à dos).
+        const seat = Object.values(HQ_MAP.anchors).find(
+          (a) => a.kind === 'desk' && a.facing?.x === f.x && a.facing.y === f.y,
+        );
+        const dir = seat ? Math.sign(seat.y - f.y) || 1 : 1; // +1 : siège côté +z
+        const back = z - dir * 0.47;
+        mesh(B(0.98, 0.05, 0.86), std('#f6f4f0', 0.6), x, 0.75, z, w);
+        mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x - 0.47, 0.37, z, w);
+        mesh(B(0.05, 0.73, 0.8), std('#c99a62'), x + 0.47, 0.37, z, w);
+        mesh(B(1.0, 0.38, 0.04), std('#4f7a62', 0.9), x, 0.96, back, w);
+        mesh(B(0.56, 0.34, 0.04), std('#25272d', 0.4), x, 1.03, back + dir * 0.14, w);
+        mesh(B(0.06, 0.18, 0.06), std('#25272d'), x, 0.86, back + dir * 0.12, w);
         const sm = new THREE.MeshBasicMaterial({ color: '#2a3442' });
-        mesh(B(0.5, 0.28, 0.01), sm, x, 1.03, z - 0.075, w, false);
-        this.screens.set(`${f.x},${f.y + 1}`, sm);
-        mesh(B(0.36, 0.02, 0.12), std('#e4e4e8', 0.5), x, 0.785, z + 0.12, w);
+        mesh(B(0.5, 0.28, 0.01), sm, x, 1.03, back + dir * 0.165, w, false);
+        if (seat) this.screens.set(`${seat.x},${seat.y}`, sm);
+        mesh(B(0.36, 0.02, 0.12), std('#e4e4e8', 0.5), x, 0.785, z + dir * 0.18, w);
         if ((f.x + f.y) % 3 === 0)
           mesh(C(0.045, 0.045, 0.1, 10), std('#e07a5f'), x + 0.34, 0.83, z, w);
         if ((f.x + f.y) % 2 === 1)
-          mesh(B(0.2, 0.005, 0.27), std('#ffffff', 0.9), x - 0.3, 0.78, z + 0.1, w);
+          mesh(B(0.2, 0.005, 0.27), std('#ffffff', 0.9), x - 0.3, 0.78, z + dir * 0.1, w);
+        if ((f.x * 3 + f.y) % 4 === 0) this.deskLamp(x - 0.36, back + dir * 0.12);
         break;
       }
+      case 'tree':
+        // Grand arbre en jardinière ronde, dessiné une fois par groupe de tuiles.
+        if (this.firstOf(f)) this.tree(f);
+        break;
+      case 'booth':
+        this.booth(x, z);
+        break;
+      case 'high_table':
+        if (this.firstOf(f)) this.highTable(f);
+        break;
+      case 'pingpong':
+        if (this.firstOf(f)) this.pingpong(f);
+        break;
+      case 'beanbag': {
+        const c = ['#e98a52', '#5b8fd6', '#e8b84a'][(f.x + f.y) % 3] ?? '#e98a52';
+        const b = mesh(S(0.36), std(c, 0.95), x, 0.2, z, w);
+        b.scale.set(1, 0.6, 1);
+        break;
+      }
+      case 'armchair':
+        this.armchair(x, z, (f.x + f.y) % 2 ? '#8a4e36' : '#3f6b5a');
+        break;
+      case 'round_table':
+        if (this.firstOf(f)) this.roundTable(f);
+        break;
       case 'plant':
         this.plant(
           x,
@@ -470,6 +528,17 @@ export class StudioScene implements HqWorldView {
     }
   }
 
+  private signTex(name: string): THREE.CanvasTexture {
+    return canvasTex(512, 84, (g) => {
+      g.fillStyle = '#3a3530';
+      g.font = '700 44px Inter, system-ui, sans-serif';
+      g.fillText(name.toUpperCase().slice(0, 22), 6, 48);
+      g.fillStyle = '#7a7168';
+      g.font = '400 20px Inter, system-ui, sans-serif';
+      g.fillText('Pôle · espace ouvert', 8, 76);
+    });
+  }
+
   private plant(x: number, z: number, size: number, pot: string): void {
     const g = new THREE.Group();
     g.position.set(x, 0, z);
@@ -492,6 +561,153 @@ export class StudioScene implements HqWorldView {
       );
       leaf.scale.set(0.55, 0.12, 1.25);
       leaf.rotation.set(-0.5, a, 0, 'YXZ');
+    }
+  }
+
+  /** Première tuile (haut-gauche) d'un groupe de meubles du même type. */
+  private firstOf(f: Furniture): boolean {
+    return !HQ_MAP.furniture.some(
+      (g) =>
+        g.kind === f.kind && ((g.x === f.x - 1 && g.y === f.y) || (g.x === f.x && g.y === f.y - 1)),
+    );
+  }
+  private group(f: Furniture): { cx: number; cz: number; w: number; d: number } {
+    const tiles = HQ_MAP.furniture.filter(
+      (g) =>
+        g.kind === f.kind &&
+        Math.abs(g.x - f.x) <= 3 &&
+        Math.abs(g.y - f.y) <= 3 &&
+        g.x >= f.x &&
+        g.y >= f.y,
+    );
+    const x1 = Math.max(...tiles.map((t) => t.x)) + 1;
+    const y1 = Math.max(...tiles.map((t) => t.y)) + 1;
+    return { cx: (f.x + x1) / 2, cz: (f.y + y1) / 2, w: x1 - f.x, d: y1 - f.y };
+  }
+  private deskLamp(x: number, z: number): void {
+    mesh(C(0.06, 0.07, 0.02, 10), std('#2f2f33'), x, 0.79, z, this.world);
+    mesh(C(0.012, 0.012, 0.3, 6), std('#2f2f33'), x, 0.93, z, this.world);
+    const m = new THREE.MeshStandardMaterial({ color: '#f3ead8', roughness: 0.7 });
+    this.lampShades.push(m);
+    mesh(C(0.05, 0.08, 0.08, 10), m, x, 1.08, z, this.world);
+  }
+  private tree(f: Furniture): void {
+    const { cx, cz, w } = this.group(f);
+    const r = w * 0.62;
+    mesh(C(r, r, 0.5, 32), std('#f4f0ea', 0.6), cx, 0.25, cz, this.world);
+    mesh(C(r - 0.12, r - 0.12, 0.04, 32), std('#5b4330'), cx, 0.51, cz, this.world);
+    mesh(C(0.1, 0.14, 2.2, 8), std('#7a5a3c'), cx, 1.5, cz, this.world);
+    for (const [dx, y, dz, rr] of [
+      [0, 2.8, 0, 0.85],
+      [0.45, 2.45, 0.3, 0.65],
+      [-0.45, 2.5, -0.2, 0.7],
+      [0.1, 3.3, -0.25, 0.6],
+      [-0.2, 2.2, 0.45, 0.55],
+    ] as const)
+      mesh(
+        geo(`ico${rr}`, () => new THREE.IcosahedronGeometry(rr, 1)),
+        new THREE.MeshStandardMaterial({ color: '#4e9a52', flatShading: true, roughness: 0.8 }),
+        cx + dx,
+        y,
+        cz + dz,
+        this.world,
+      );
+    // Banquettes rayonnantes autour de la jardinière.
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      const g = new THREE.Group();
+      g.position.set(cx + Math.sin(a) * (r + 0.28), 0, cz + Math.cos(a) * (r + 0.28));
+      g.rotation.y = a;
+      this.world.add(g);
+      mesh(B(0.3, 0.07, 0.42), std('#e8d2ad', 0.8), 0, 0.36, 0, g);
+      mesh(B(0.24, 0.32, 0.05), std('#d7bf98'), 0, 0.16, 0, g);
+    }
+  }
+  private booth(x: number, z: number): void {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    this.world.add(g);
+    const dark = std('#2d2b31', 0.5);
+    mesh(B(0.94, 2.0, 0.06), dark, 0, 1.0, -0.44, g);
+    mesh(B(0.06, 2.0, 0.94), dark, -0.44, 1.0, 0, g);
+    mesh(B(0.06, 2.0, 0.94), dark, 0.44, 1.0, 0, g);
+    mesh(B(0.94, 0.06, 0.94), dark, 0, 2.0, 0, g);
+    mesh(B(0.62, 1.8, 0.04), std('#e0703f', 0.6), -0.12, 0.92, 0.45, g);
+    const glass = new THREE.Mesh(
+      B(0.22, 1.8, 0.02),
+      new THREE.MeshStandardMaterial({
+        color: '#a9c6d6',
+        transparent: true,
+        opacity: 0.45,
+        roughness: 0.1,
+      }),
+    );
+    glass.position.set(0.32, 0.92, 0.45);
+    g.add(glass);
+    mesh(B(0.4, 0.04, 0.24), std('#e9d3b0'), 0, 0.75, -0.3, g);
+  }
+  private highTable(f: Furniture): void {
+    const { cx, cz, w } = this.group(f);
+    mesh(B(w - 0.1, 0.05, 0.7), std('#e9d3b0', 0.6), cx, 1.05, cz, this.world);
+    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx - w / 2 + 0.2, 0.52, cz, this.world);
+    mesh(B(0.06, 1.0, 0.5), std('#cfc3b0'), cx + w / 2 - 0.2, 0.52, cz, this.world);
+    for (let k = 0; k < w; k++) {
+      const sx = f.x + k + 0.5;
+      for (const dz of [-0.62, 0.62]) {
+        mesh(C(0.15, 0.15, 0.05, 14), std('#e08a5a'), sx, 0.72, cz + dz, this.world);
+        mesh(C(0.025, 0.025, 0.7, 6), std('#3a3a3e'), sx, 0.36, cz + dz, this.world);
+      }
+    }
+  }
+  private pingpong(f: Furniture): void {
+    const { cx, cz, w } = this.group(f);
+    mesh(B(w - 0.15, 0.05, 0.95), std('#2f6f5a', 0.6), cx, 0.76, cz, this.world);
+    mesh(B(0.03, 0.12, 0.95), std('#f4f4f4'), cx, 0.84, cz, this.world);
+    mesh(B(w - 0.15, 0.006, 0.02), std('#ffffff'), cx, 0.79, cz, this.world);
+    for (const [dx, dz] of [
+      [-0.8, -0.38],
+      [0.8, -0.38],
+      [-0.8, 0.38],
+      [0.8, 0.38],
+    ] as const)
+      mesh(B(0.05, 0.74, 0.05), std('#2f2f33'), cx + dx, 0.37, cz + dz, this.world);
+    mesh(S(0.035), std('#ffffff', 0.4), cx + 0.4, 0.82, cz + 0.1, this.world);
+  }
+  private armchair(x: number, z: number, c: string): void {
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    g.rotation.y = Math.PI;
+    this.world.add(g);
+    mesh(B(0.74, 0.34, 0.68), std(c, 0.9), 0, 0.24, 0, g);
+    mesh(B(0.74, 0.46, 0.16), std(c, 0.9), 0, 0.58, -0.27, g);
+    mesh(B(0.13, 0.22, 0.62), std(shade(c, -0.04)), -0.32, 0.48, 0.02, g);
+    mesh(B(0.13, 0.22, 0.62), std(shade(c, -0.04)), 0.32, 0.48, 0.02, g);
+    mesh(B(0.48, 0.07, 0.46), std(shade(c, 0.05), 0.95), 0, 0.44, 0.05, g);
+  }
+  private roundTable(f: Furniture): void {
+    const { cx, cz } = this.group(f);
+    const room = HQ_MAP.rooms.find((r) => r.id === f.roomId);
+    this.rug(cx, cz, 3, 3, shade(room?.color ?? '#9fb2dc', 0.08));
+    mesh(C(0.62, 0.62, 0.05, 28), std('#e9d5b2', 0.6), cx, 0.74, cz, this.world);
+    mesh(C(0.05, 0.05, 0.7, 10), std('#cfc3b0'), cx, 0.37, cz, this.world);
+    mesh(B(0.32, 0.02, 0.22), std('#d9dbe0', 0.4), cx + 0.12, 0.78, cz - 0.05, this.world);
+    mesh(B(0.2, 0.005, 0.28), std('#ffffff', 0.9), cx - 0.25, 0.775, cz + 0.15, this.world);
+    const chair = shade(room?.color ?? '#a9bde6', 0.05);
+    for (let k = 0; k < 4; k++) {
+      const a = (k / 4) * Math.PI * 2 + 0.4;
+      const g = new THREE.Group();
+      g.position.set(cx + Math.sin(a) * 0.95, 0, cz + Math.cos(a) * 0.95);
+      g.rotation.y = a + Math.PI;
+      this.world.add(g);
+      mesh(B(0.42, 0.06, 0.4), std(chair, 0.8), 0, 0.46, 0, g);
+      mesh(B(0.4, 0.4, 0.05), std(chair, 0.8), 0, 0.68, -0.19, g);
+      for (const [a1, b1] of [
+        [-0.17, -0.16],
+        [0.17, -0.16],
+        [-0.17, 0.16],
+        [0.17, 0.16],
+      ] as const)
+        mesh(B(0.03, 0.44, 0.03), std('#b8a58c'), a1, 0.22, b1, g);
     }
   }
 
@@ -558,12 +774,19 @@ export class StudioScene implements HqWorldView {
   }
   private deskChair(a: Anchor): void {
     const colors = ['#e8b84a', '#2f2f35', '#3f6fb5', '#d9774a', '#2f2f35'];
-    // Le siège regarde le bureau (vers -z) : dossier côté +z.
-    this.chairAt(a.x + 0.5, a.y + 0.45, Math.PI, colors[(a.x + a.y) % colors.length] ?? '#2f2f35');
+    const f = a.facing ?? { x: a.x, y: a.y - 1 };
+    const dir = Math.sign(a.y - f.y) || 1;
+    // Le siège regarde son bureau, dossier côté opposé.
+    this.chairAt(
+      a.x + 0.5,
+      a.y + 0.5 + dir * 0.05,
+      Math.atan2(f.x - a.x, f.y - a.y),
+      colors[(a.x + a.y) % colors.length] ?? '#2f2f35',
+    );
   }
   private meetingChair(a: Anchor): void {
     const f = a.facing ?? { x: a.x, y: a.y - 1 };
-    const rot = Math.atan2(f.x - a.x, f.y - a.y) + Math.PI;
+    const rot = Math.atan2(f.x - a.x, f.y - a.y);
     this.chairAt(a.x + 0.5, a.y + 0.5, rot, '#2f2f35');
   }
 
@@ -717,7 +940,7 @@ export class StudioScene implements HqWorldView {
     if (intent.mode === 'break' && intent.life === 'chat')
       face = av.agent.id < 'm' ? Math.PI / 2 : -Math.PI / 2;
     // Au poste, l'agent est assis légèrement vers son bureau.
-    const dz = intent.mode === 'desk' ? -0.05 : 0;
+    const dz = intent.mode === 'desk' && a.facing ? Math.sign(a.facing.y - a.y) * 0.05 : 0;
     return { x: a.x + 0.5, z: a.y + 0.5 + dz, key: `${a.id}:${intent.life ?? intent.mode}`, face };
   }
 
@@ -836,8 +1059,18 @@ export class StudioScene implements HqWorldView {
       const html = `<i style="background:${color}"></i><span>${name}</span>${sub ? `<small>${sub}</small>` : ''}`;
       if (pill.innerHTML !== html) pill.innerHTML = html;
       pill.classList.toggle('free', !dept && room.id.startsWith('annex'));
+      const band = this.wallBands.get(room.id);
+      if (band) band.color.set(pastel(color, 0.45));
+      const sign = this.wallSigns.get(room.id);
+      if (sign && this.signNames.get(room.id) !== name) {
+        this.signNames.set(room.id, name);
+        const mat = sign.material as THREE.MeshStandardMaterial;
+        mat.map?.dispose();
+        mat.map = this.signTex(name);
+        mat.needsUpdate = true;
+      }
       floor?.color.set(
-        pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color)),
+        pastel(dept?.color ?? (room.id.startsWith('annex') ? '#d9d4e0' : room.color), 0.45),
       );
     }
     // Cadrage : l'aile d'extension n'est incluse que si un pôle y est installé.
@@ -845,7 +1078,7 @@ export class StudioScene implements HqWorldView {
     const key = annexUsed ? 'all' : 'core';
     if (key !== this.boundsKey) {
       this.boundsKey = key;
-      this.bounds = { x0: 0, z0: 0, x1: W, z1: annexUsed ? D : 25.6 };
+      this.bounds = { x0: 0, z0: 0, x1: W, z1: annexUsed ? D : 28.2 };
       this.home();
     }
     const m = world.meetings.find((x) => x.status === 'in_progress');
@@ -902,9 +1135,15 @@ export class StudioScene implements HqWorldView {
     this.applyLight();
   }
   setInsets(i: { top: number; right: number; bottom: number; left: number }): void {
-    const changed = JSON.stringify(i) !== JSON.stringify(this.insets);
+    if (JSON.stringify(i) === JSON.stringify(this.insets)) return;
     this.insets = i;
-    if (changed) this.home();
+    // Conserve le zoom et le point visé de l'utilisateur ; seul le cadrage de référence change.
+    const ratio = this.homeDist ? this.dist / this.homeDist : 1;
+    const t = this.target.clone();
+    this.fitHome();
+    this.dist = this.homeDist * ratio;
+    if (ratio < 0.95) this.target.copy(t);
+    this.place();
   }
   home(): void {
     this.fitHome();
@@ -1003,6 +1242,7 @@ export class StudioScene implements HqWorldView {
     this.sun.color.set(n ? '#9fb2ee' : '#fff3e0');
     this.lamps.forEach((l) => (l.intensity = n ? 9 : 0));
     this.lampShades.forEach((m) => m.emissive.set(n ? '#ffcf8a' : '#000000'));
+    this.windows.forEach((m) => m.color.set(n ? '#22335c' : '#cfe8ff'));
   }
 
   // ------------------------------------------------------------------ interactions
@@ -1291,7 +1531,11 @@ export class StudioScene implements HqWorldView {
     for (const room of HQ_MAP.rooms) {
       const pill = this.roomPills.get(room.id);
       if (!pill) continue;
-      const [x, y, ok] = proj((room.rect.x0 + room.rect.x1 + 1) / 2, 0.1, room.rect.y0 + 0.75);
+      const [x, y, ok] = proj(
+        (room.rect.x0 + room.rect.x1 + 1) / 2 + 1.5,
+        0.1,
+        room.rect.y0 + 0.45,
+      );
       pill.hidden = !ok;
       pill.classList.toggle('compact', compact);
       pill.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) scale(${sc.toFixed(2)})`;

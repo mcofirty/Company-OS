@@ -15,7 +15,15 @@ export type FurnitureKind =
   | 'whiteboard'
   | 'server'
   | 'sofa'
-  | 'reception';
+  | 'reception'
+  // Plateau ouvert « start-up » : décor bloquant (praticabilité identique en 2D et en 3D).
+  | 'tree'
+  | 'booth'
+  | 'high_table'
+  | 'pingpong'
+  | 'beanbag'
+  | 'armchair'
+  | 'round_table';
 
 export interface Tile {
   x: number;
@@ -73,20 +81,26 @@ interface RoomSpec {
   desks?: number;
 }
 
+/**
+ * Plateau ouvert façon start-up : trois rangées de zones de couleur sans cloisons, séparées par
+ * des atriums (arbre, cabines téléphoniques, mange-debout, ping-pong) ; une quatrième rangée
+ * (aile d'extension) accueille les nouveaux pôles. Les identifiants d'ancres sont stables.
+ */
 const ROOM_SPECS: RoomSpec[] = [
   {
-    id: 'cafe',
-    label: 'Café & communauté',
-    color: '#83C6C1',
-    kind: 'cafe',
-    rect: { x0: 1, y0: 1, x1: 8, y1: 7 },
+    id: 'sales',
+    label: 'Sales',
+    color: '#EA966C',
+    kind: 'department',
+    rect: { x0: 1, y0: 1, x1: 11, y1: 7 },
+    desks: 6,
   },
   {
     id: 'direction',
     label: 'Direction générale',
     color: '#E7C16A',
     kind: 'department',
-    rect: { x0: 11, y0: 1, x1: 22, y1: 7 },
+    rect: { x0: 12, y0: 1, x1: 23, y1: 7 },
     desks: 6,
   },
   {
@@ -94,30 +108,29 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Finance',
     color: '#76C69A',
     kind: 'department',
-    rect: { x0: 25, y0: 1, x1: 34, y1: 7 },
+    rect: { x0: 24, y0: 1, x1: 34, y1: 7 },
     desks: 6,
   },
   {
-    id: 'sales',
-    label: 'Sales',
-    color: '#EA966C',
-    kind: 'department',
-    rect: { x0: 1, y0: 10, x1: 10, y1: 16 },
-    desks: 6,
+    id: 'cafe',
+    label: 'Café & lounge',
+    color: '#83C6C1',
+    kind: 'cafe',
+    rect: { x0: 1, y0: 12, x1: 11, y1: 18 },
   },
   {
     id: 'meeting',
     label: 'Salle de réunion',
     color: '#D8D2C9',
     kind: 'meeting',
-    rect: { x0: 13, y0: 10, x1: 22, y1: 16 },
+    rect: { x0: 12, y0: 12, x1: 23, y1: 18 },
   },
   {
     id: 'marketing',
     label: 'Studio / Marketing',
     color: '#9C84DE',
     kind: 'department',
-    rect: { x0: 25, y0: 10, x1: 34, y1: 16 },
+    rect: { x0: 24, y0: 12, x1: 34, y1: 18 },
     desks: 6,
   },
   {
@@ -125,14 +138,14 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Accueil',
     color: '#D8C0A8',
     kind: 'entry',
-    rect: { x0: 1, y0: 19, x1: 6, y1: 24 },
+    rect: { x0: 1, y0: 22, x1: 11, y1: 27 },
   },
   {
     id: 'rh',
     label: 'Ressources humaines',
     color: '#E8A5C0',
     kind: 'department',
-    rect: { x0: 9, y0: 19, x1: 18, y1: 24 },
+    rect: { x0: 12, y0: 22, x1: 23, y1: 27 },
     desks: 6,
   },
   {
@@ -140,7 +153,7 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Operations',
     color: '#88BADC',
     kind: 'department',
-    rect: { x0: 21, y0: 19, x1: 34, y1: 24 },
+    rect: { x0: 24, y0: 22, x1: 34, y1: 27 },
     desks: 6,
   },
   // ---------- Aile d'extension : locaux libres attribués aux nouveaux pôles ----------
@@ -149,7 +162,7 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Espace libre',
     color: '#CFC6DA',
     kind: 'department',
-    rect: { x0: 1, y0: 27, x1: 11, y1: 33 },
+    rect: { x0: 1, y0: 29, x1: 11, y1: 34 },
     desks: 6,
   },
   {
@@ -157,7 +170,7 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Espace libre',
     color: '#CFC6DA',
     kind: 'department',
-    rect: { x0: 13, y0: 27, x1: 23, y1: 33 },
+    rect: { x0: 12, y0: 29, x1: 23, y1: 34 },
     desks: 6,
   },
   {
@@ -165,7 +178,7 @@ const ROOM_SPECS: RoomSpec[] = [
     label: 'Espace libre',
     color: '#CFC6DA',
     kind: 'department',
-    rect: { x0: 25, y0: 27, x1: 34, y1: 33 },
+    rect: { x0: 24, y0: 29, x1: 34, y1: 34 },
     desks: 6,
   },
 ];
@@ -177,6 +190,39 @@ const key = (t: Tile): string => `${t.x},${t.y}`;
 const inRect = (t: Tile, r: Rect): boolean =>
   t.x >= r.x0 && t.x <= r.x1 && t.y >= r.y0 && t.y <= r.y1;
 const pad = (n: number): string => String(n).padStart(2, '0');
+
+/** Décor des atriums (hors locaux) : chaque tuile listée bloque le passage. */
+const ATRIUM: [FurnitureKind, number, number][] = [
+  // Atrium nord (y 8-11) : cabines, jardinière, mange-debout, grand arbre.
+  ['booth', 2, 9],
+  ['booth', 3, 9],
+  ['plant', 7, 9],
+  ['plant', 8, 9],
+  ['high_table', 16, 9],
+  ['high_table', 17, 9],
+  ['high_table', 18, 9],
+  ['tree', 28, 9],
+  ['tree', 29, 9],
+  ['tree', 28, 10],
+  ['tree', 29, 10],
+  ['plant', 0, 8],
+  ['plant', 35, 8],
+  ['plant', 22, 10],
+  // Atrium sud (y 19-21) : ping-pong, poufs, cabine, plantes.
+  ['pingpong', 7, 20],
+  ['pingpong', 8, 20],
+  ['beanbag', 15, 20],
+  ['beanbag', 17, 20],
+  ['booth', 32, 20],
+  ['plant', 0, 20],
+  ['plant', 35, 20],
+  ['plant', 24, 20],
+  // Passage vers l'aile d'extension.
+  ['plant', 0, 28],
+  ['plant', 35, 28],
+  ['plant', 12, 28],
+  ['plant', 24, 28],
+];
 
 export function buildHqMap(): WorldMap {
   const cols = 36;
@@ -190,65 +236,68 @@ export function buildHqMap(): WorldMap {
 
   for (const spec of ROOM_SPECS) {
     const { rect } = spec;
-    const walls = spec.kind !== 'entry';
-    // Portes de 2 tuiles au centre des bords haut et bas : connexion aux couloirs.
-    const cx = Math.floor((rect.x0 + rect.x1) / 2);
-    const doors = walls
-      ? [
-          { x: cx, y: rect.y0 },
-          { x: cx + 1, y: rect.y0 },
-          { x: cx, y: rect.y1 },
-          { x: cx + 1, y: rect.y1 },
-        ]
-      : [];
+    const { x0, y0, x1, y1 } = rect;
+    // Plateau ouvert : aucune cloison, on circule librement entre les zones.
     rooms.push({
       id: spec.id,
       label: spec.label,
       color: spec.color,
       kind: spec.kind,
       rect,
-      walls,
-      doors,
+      walls: false,
+      doors: [],
     });
 
-    // Intérieur (hors cloisons)
-    const ix0 = rect.x0 + (walls ? 1 : 0);
-    const ix1 = rect.x1 - (walls ? 1 : 0);
-    const iy0 = rect.y0 + (walls ? 1 : 0);
-    const iy1 = rect.y1 - (walls ? 1 : 0);
-
     if (spec.kind === 'department') {
-      // Postes : bureau (bloquant) + siège juste devant (ancre).
-      const slots: Tile[] = [];
-      for (const dy of [1, 3])
-        for (const dx of [1, 4, 7, 10]) slots.push({ x: ix0 + dx - 1, y: iy0 + dy - 1 });
-      const valid = slots.filter(
-        (d) => d.x <= ix1 - 1 && d.y + 1 <= iy1 && d.x !== cx && d.x !== cx + 1,
-      );
-      valid.slice(0, spec.desks ?? 0).forEach((d, i) => {
-        furniture.push({ kind: 'desk', x: d.x, y: d.y, roomId: spec.id });
-        addAnchor({
-          id: `${spec.id}-desk-${pad(i + 1)}`,
-          kind: 'desk',
-          roomId: spec.id,
-          x: d.x,
-          y: d.y + 1,
-          facing: { x: d.x, y: d.y },
-        });
-      });
-      furniture.push({ kind: 'plant', x: ix1, y: iy0, roomId: spec.id });
+      // Îlot de 6 postes dos à dos (3 + 3), séparés par une cloison basse.
+      const rowA = y0 + 2;
+      const rowB = y0 + 3;
+      let n = 1;
+      for (const [row, seatY] of [
+        [rowA, y0 + 1],
+        [rowB, y0 + 4],
+      ] as const) {
+        for (const dx of [1, 2, 3]) {
+          const x = x0 + dx;
+          furniture.push({ kind: 'desk', x, y: row, roomId: spec.id });
+          if (n <= (spec.desks ?? 0))
+            addAnchor({
+              id: `${spec.id}-desk-${pad(n)}`,
+              kind: 'desk',
+              roomId: spec.id,
+              x,
+              y: seatY,
+              facing: { x, y: row },
+            });
+          n++;
+        }
+      }
+      // Coin réunion (table ronde) et coin lounge (fauteuils), tableau mobile, plantes.
+      for (const [dx, dy] of [
+        [0, 0],
+        [1, 0],
+        [0, 1],
+        [1, 1],
+      ] as const)
+        furniture.push({ kind: 'round_table', x: x1 - 4 + dx, y: y0 + 1 + dy, roomId: spec.id });
+      furniture.push({ kind: 'armchair', x: x1 - 1, y: y1 - 1, roomId: spec.id });
+      furniture.push({ kind: 'armchair', x: x1 - 3, y: y1 - 1, roomId: spec.id });
       furniture.push({
         kind: spec.id === 'operations' ? 'server' : 'whiteboard',
-        x: ix1,
-        y: iy1,
+        x: x0 + 6,
+        y: y1,
         roomId: spec.id,
       });
+      furniture.push({ kind: 'plant', x: x1, y: y0, roomId: spec.id });
+      furniture.push({ kind: 'plant', x: x0, y: y1, roomId: spec.id });
     }
 
     if (spec.kind === 'meeting') {
+      const cx = Math.floor((x0 + x1) / 2);
       const tx0 = cx - 1;
       for (let x = tx0; x <= tx0 + 3; x++) {
-        for (const y of [12, 13]) furniture.push({ kind: 'meeting_table', x, y, roomId: spec.id });
+        for (const y of [y0 + 2, y0 + 3])
+          furniture.push({ kind: 'meeting_table', x, y, roomId: spec.id });
       }
       let n = 1;
       for (let x = tx0; x <= tx0 + 3; x++) {
@@ -257,100 +306,78 @@ export function buildHqMap(): WorldMap {
           kind: 'meeting_seat',
           roomId: spec.id,
           x,
-          y: 11,
-          facing: { x, y: 12 },
+          y: y0 + 1,
+          facing: { x, y: y0 + 2 },
         });
         addAnchor({
           id: `meeting-seat-${pad(n++)}`,
           kind: 'meeting_seat',
           roomId: spec.id,
           x,
-          y: 14,
-          facing: { x, y: 13 },
+          y: y0 + 4,
+          facing: { x, y: y0 + 3 },
         });
       }
-      furniture.push({ kind: 'whiteboard', x: ix0, y: iy0, roomId: spec.id });
-      furniture.push({ kind: 'plant', x: ix1, y: iy1, roomId: spec.id });
-      furniture.push({ kind: 'plant', x: ix0, y: iy1, roomId: spec.id });
+      furniture.push({ kind: 'whiteboard', x: x0 + 1, y: y0, roomId: spec.id });
+      furniture.push({ kind: 'armchair', x: x1 - 1, y: y1 - 1, roomId: spec.id });
+      furniture.push({ kind: 'plant', x: x1, y: y0, roomId: spec.id });
+      furniture.push({ kind: 'plant', x: x0, y: y1, roomId: spec.id });
     }
 
     if (spec.kind === 'cafe') {
       const blocked: Furniture[] = [
-        { kind: 'counter', x: ix0, y: iy0, roomId: spec.id },
-        { kind: 'counter', x: ix0 + 1, y: iy0, roomId: spec.id },
-        { kind: 'plant', x: ix1, y: iy0, roomId: spec.id },
-        { kind: 'cafe_table', x: ix0 + 1, y: iy0 + 2, roomId: spec.id },
-        { kind: 'cafe_table', x: ix1 - 1, y: iy0 + 3, roomId: spec.id },
-        { kind: 'sofa', x: ix0, y: iy1, roomId: spec.id },
+        { kind: 'counter', x: x0, y: y0, roomId: spec.id },
+        { kind: 'counter', x: x0 + 1, y: y0, roomId: spec.id },
+        { kind: 'counter', x: x0 + 2, y: y0, roomId: spec.id },
+        { kind: 'plant', x: x1, y: y0, roomId: spec.id },
+        { kind: 'cafe_table', x: x0 + 2, y: y0 + 3, roomId: spec.id },
+        { kind: 'cafe_table', x: x0 + 6, y: y0 + 3, roomId: spec.id },
+        { kind: 'sofa', x: x0 + 1, y: y1, roomId: spec.id },
+        { kind: 'sofa', x: x0 + 2, y: y1, roomId: spec.id },
+        { kind: 'armchair', x: x1 - 1, y: y1, roomId: spec.id },
+        { kind: 'beanbag', x: x1 - 2, y: y1 - 2, roomId: spec.id },
       ];
       furniture.push(...blocked);
       const isBlocked = (t: Tile): boolean => blocked.some((f) => f.x === t.x && f.y === t.y);
       let n = 1;
-      for (let y = iy0; y <= iy1; y++) {
-        for (let x = ix0; x <= ix1; x++) {
+      for (let y = y0 + 1; y <= y1 - 1; y++) {
+        for (let x = x0; x <= x1; x++) {
           const t = { x, y };
-          const nearDoor = x === cx || x === cx + 1;
-          if (!isBlocked(t) && !nearDoor)
+          if (!isBlocked(t))
             addAnchor({ id: `cafe-spot-${pad(n++)}`, kind: 'cafe', roomId: spec.id, x, y });
         }
       }
     }
 
     if (spec.kind === 'entry') {
-      furniture.push({ kind: 'reception', x: 2, y: 20, roomId: spec.id });
-      furniture.push({ kind: 'plant', x: 6, y: 24, roomId: spec.id });
-      addAnchor({ id: 'entry-spawn', kind: 'entry_spawn', roomId: spec.id, x: 3, y: 23 });
+      furniture.push({ kind: 'reception', x: x0 + 1, y: y0 + 1, roomId: spec.id });
+      furniture.push({ kind: 'plant', x: x1, y: y1, roomId: spec.id });
+      furniture.push({ kind: 'armchair', x: x0 + 7, y: y0 + 1, roomId: spec.id });
+      furniture.push({ kind: 'armchair', x: x0 + 9, y: y0 + 1, roomId: spec.id });
+      addAnchor({ id: 'entry-spawn', kind: 'entry_spawn', roomId: spec.id, x: x0 + 2, y: y1 });
       let n = 1;
       for (const t of [
-        { x: 4, y: 21 },
-        { x: 5, y: 21 },
-        { x: 4, y: 22 },
-        { x: 5, y: 22 },
+        { x: x0 + 7, y: y0 + 3 },
+        { x: x0 + 8, y: y0 + 3 },
+        { x: x0 + 7, y: y0 + 4 },
+        { x: x0 + 8, y: y0 + 4 },
       ]) {
         addAnchor({ id: `entry-wait-${pad(n++)}`, kind: 'waiting', roomId: spec.id, ...t });
       }
     }
   }
-  // Plantes de couloir
-  for (const t of [
-    { x: 0, y: 8 },
-    { x: 35, y: 8 },
-    { x: 11, y: 17 },
-    { x: 35, y: 17 },
-    { x: 23, y: 0 },
-    { x: 0, y: 26 },
-    { x: 35, y: 26 },
-  ]) {
-    furniture.push({ kind: 'plant', ...t, roomId: null });
-  }
+  for (const [kind, x, y] of ATRIUM) furniture.push({ kind, x, y, roomId: null });
 
   const furnitureAt = new Map(furniture.map((f) => [key(f), f]));
-  const doorSet = new Set(rooms.flatMap((r) => r.doors.map(key)));
 
   const roomAt = (t: Tile): Room | null => rooms.find((r) => inRect(t, r.rect)) ?? null;
-  const tileKind = (t: Tile): TileKind => {
-    if (doorSet.has(key(t))) return 'door';
-    const r = roomAt(t);
-    if (!r) return 'corridor';
-    if (
-      r.walls &&
-      (t.x === r.rect.x0 || t.x === r.rect.x1 || t.y === r.rect.y0 || t.y === r.rect.y1)
-    ) {
-      return 'wall';
-    }
-    return 'floor';
-  };
+  const tileKind = (t: Tile): TileKind => (roomAt(t) ? 'floor' : 'corridor');
   const isWalkable = (t: Tile): boolean =>
-    t.x >= 0 &&
-    t.y >= 0 &&
-    t.x < cols &&
-    t.y < rows &&
-    tileKind(t) !== 'wall' &&
-    !furnitureAt.has(key(t));
+    t.x >= 0 && t.y >= 0 && t.x < cols && t.y < rows && !furnitureAt.has(key(t));
 
   return {
     id: 'hq-v1',
-    version: 2,
+    version: 3,
     cols,
     rows,
     tileWidth: 64,

@@ -3715,3 +3715,6 @@ kbd {
 .cockpit.immersive .agent-popover {
   z-index: 28;
 }
+.studio-labels [hidden] {
+  display: none !important;
+}

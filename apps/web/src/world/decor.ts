@@ -672,6 +672,21 @@ export function furnitureSprite(scene: Phaser.Scene, f: Furniture, room: Room | 
       return texture(scene, 'sofa', TILE_SPEC, drawSofa);
     case 'reception':
       return texture(scene, 'reception', { w: 200, h: 150, ax: 80, ay: 112 }, drawReception);
+    // Décor du plateau ouvert : équivalents 2D simples des meubles 3D.
+    case 'tree':
+    case 'beanbag': {
+      const variant = Math.floor(h * 3);
+      return texture(scene, `plant:${variant}`, TILE_SPEC, (c) => drawPlant(c, variant));
+    }
+    case 'armchair':
+      return texture(scene, 'sofa', TILE_SPEC, drawSofa);
+    case 'round_table':
+    case 'high_table':
+      return texture(scene, 'cafe_table', TILE_SPEC, drawCafeTable);
+    case 'booth':
+      return texture(scene, 'server', TILE_SPEC, drawServer);
+    case 'pingpong':
+      return texture(scene, 'mtable:0', TILE_SPEC, (c) => drawMeetingTile(c, 0));
   }
 }
 
@@ -888,8 +903,9 @@ export function bakeStatic(scene: Phaser.Scene, origin: { x: number; y: number }
       const t = HQ_MAP.furniture.filter((f) => f.kind === 'meeting_table');
       const tx0 = Math.min(...t.map((f) => f.x));
       const tx1 = Math.max(...t.map((f) => f.x));
-      rug(tx0 - 0.7, 10.6, tx1 + 1.7, 15.4, 0xc9c0e6, 0x9c84de);
-      quad(tx0 + 0.05, 12.05, tx1 + 1.2, 14.2, 0x2a1e40, 0.12);
+      const ty0 = Math.min(...t.map((f) => f.y));
+      rug(tx0 - 0.7, ty0 - 1.4, tx1 + 1.7, ty0 + 3.4, 0xc9c0e6, 0x9c84de);
+      quad(tx0 + 0.05, ty0 + 0.05, tx1 + 1.2, ty0 + 2.2, 0x2a1e40, 0.12);
     } else if (room.kind === 'cafe') {
       const cu = (x0 + x1) / 2 + 0.8;
       const cv = y0 + 3.6;
@@ -899,7 +915,7 @@ export function bakeStatic(scene: Phaser.Scene, origin: { x: number; y: number }
       c.disc(cu, cv, 0, 1.0, 0xf6b29a);
       c.disc(cu, cv, 0, 0.8, 0xfbd3c2);
     } else if (room.kind === 'entry') {
-      rug(2.6, 22.6, 4.4, 24.2, 0xe7c16a, 0xc79d4a);
+      rug(x0 + 1.6, room.rect.y1 - 1.4, x0 + 3.4, room.rect.y1 + 0.2, 0xe7c16a, 0xc79d4a);
     }
   }
 
