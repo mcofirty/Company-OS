@@ -52,7 +52,9 @@ test('Cockpit v2 — gérer un agent, planifier, suite, pages et réglages', asy
     .fill('Rapport le lundi : missions, coûts, risques, trois priorités.');
   await page.getByTestId('version-model').selectOption('economy');
   await page.getByTestId('version-save').click();
-  await expect(page.getByTestId('agent-model-label')).toHaveText('Économique', { timeout: 15_000 });
+  await expect(page.getByTestId('agent-model-label')).toHaveText('Tier 1 · Léger · Haiku', {
+    timeout: 15_000,
+  });
   await page.getByTestId('agent-budget-input').fill('12');
   await page.getByTestId('agent-budget-save').click();
   await expect

@@ -17,7 +17,8 @@ Pour chaque changement : horodatage UTC, commit (si disponible), tâches termin�
 
 ### Tests (exécutés le 2026-11-22)
 - `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 187/187 (dont `routing.test.ts`,
-  `model-routing.test.ts`, `agent-insights.test.ts`). `pnpm e2e` : voir commit.
+  `model-routing.test.ts`, `agent-insights.test.ts`). `pnpm e2e` : 26/26 (25 + cockpit-v2 relancé après
+  mise à jour du libellé de modèle).
 
 ### Prochaine tâche
 - Retour utilisateur en production (coûts observés par niveau).
