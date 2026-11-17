@@ -79,6 +79,7 @@ export function AgentCard({
   onMission,
   onSelect,
   onProfileSaved,
+  extras,
 }: {
   world: WorldSnapshot;
   agent: AgentView;
@@ -89,6 +90,8 @@ export function AgentCard({
   onMission: () => void;
   onSelect: (s: Selection) => void;
   onProfileSaved: () => void;
+  /** Activité en direct, indicateurs, actions rapides, relations (fiche flottante). */
+  extras?: ReactNode;
 }) {
   const dept = world.departments.find((d) => d.id === agent.departmentId);
   const manager = world.agents.find((a) => a.id === agent.managerId);
@@ -198,6 +201,8 @@ export function AgentCard({
         <span>{status.text}</span>
       </button>
 
+      {extras}
+
       <Block title="Son job au QG">
         <p className="card-text">{profile ? (profile.goal ?? '—') : 'Chargement…'}</p>
       </Block>
@@ -303,7 +308,7 @@ export function AgentCard({
         </>
       )}
 
-      {team.length > 0 && (
+      {team.length > 0 && (!extras || reports.length === 0) && (
         <Block title={reports.length > 0 ? 'Son équipe' : 'Son pôle'}>
           <div className="team-faces">
             {team.slice(0, 12).map((a) => (

@@ -867,7 +867,13 @@ export function TeamRows({
 }
 
 /** « Demander une suite » : même agent, il reçoit le résultat précédent et la nouvelle demande. */
-function FollowUp({ taskId, onCreated }: { taskId: string; onCreated: (id: string) => void }) {
+export function FollowUp({
+  taskId,
+  onCreated,
+}: {
+  taskId: string;
+  onCreated: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);

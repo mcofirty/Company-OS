@@ -80,10 +80,20 @@ test('clic sur un avatar dans la carte -> fiche à côté de l’avatar', async 
   await expect(pop).toContainText('Facturation');
   // La fiche n'est jamais dupliquée dans le panneau de droite.
   await expect(page.locator('.side [data-testid="inspector"]')).toHaveCount(0);
+  // Indicateurs réels (7 jours, coût du mois, temps moyen) et relations.
+  await expect(pop.getByTestId('agent-stats')).toContainText('7 derniers jours');
+  await expect(pop.getByTestId('agent-stats')).toContainText('Coût IA du mois');
   await pop.getByTestId('popover-tab-work').click();
   await expect(pop.getByTestId('inspector')).toContainText('DEMO');
+  // Fiche épinglée : elle reste ouverte quand on ouvre la fiche d'un autre agent.
+  await pop.getByTestId('popover-pin').click();
+  await page.getByTestId('team-list').locator('li', { hasText: 'Sam' }).first().click();
+  await expect(page.getByTestId('agent-popover')).toHaveCount(2);
   await page.keyboard.press('Escape');
-  await expect(pop).toHaveCount(0);
+  await expect(page.getByTestId('agent-popover')).toHaveCount(1);
+  // Désépinglée et plus sélectionnée : la fiche se ferme.
+  await page.getByTestId('agent-popover').getByTestId('popover-pin').click();
+  await expect(page.getByTestId('agent-popover')).toHaveCount(0);
 });
 
 test('S02 — cycle complet : tâche -> CRM -> succès, timeline/KPI, refresh sans perte', async ({

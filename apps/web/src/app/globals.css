@@ -3753,3 +3753,204 @@ kbd {
 .cockpit.immersive .agent-popover .agent-card {
   border-radius: 0 0 18px 18px;
 }
+
+/* ---------- Fiche agent : épingle, activité en direct, indicateurs, actions, relations ---------- */
+.popover-pin {
+  position: absolute;
+  top: 10px;
+  right: 46px;
+  z-index: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  cursor: pointer;
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+.popover-pin.on {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.agent-live {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--success) 9%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--success) 30%, var(--outline));
+}
+.agent-live .live-task,
+.agent-live .live-tool {
+  border: 0;
+  background: none;
+  padding: 0;
+  text-align: left;
+  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink);
+}
+.agent-live .live-tool {
+  font-weight: 550;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+.agent-live .live-tool em {
+  color: var(--warning);
+  font-style: normal;
+}
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 25%, transparent);
+}
+.live-progress {
+  display: grid;
+  gap: 3px;
+}
+.live-doc {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px dashed var(--outline);
+  padding-top: 6px;
+}
+.stat-bar {
+  display: block;
+  height: 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--ink) 10%, transparent);
+  overflow: hidden;
+}
+.stat-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+  border-radius: 3px;
+  transition: width 0.4s;
+}
+.stat-bar > span.hot {
+  background: var(--danger);
+}
+.agent-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.agent-stats .stat {
+  display: grid;
+  gap: 3px;
+  align-content: start;
+  padding: 8px 9px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--outline);
+  min-width: 0;
+}
+.stat-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.stat-value {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.stat-value b {
+  font-size: 16px;
+  color: var(--ink);
+}
+.stat-value b.ok {
+  color: var(--success);
+}
+.stat-sub {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+}
+.stat-sub b.bad {
+  color: var(--danger);
+}
+.agent-quick .quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.quick-btn {
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.quick-btn:hover:not(:disabled),
+.quick-btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.quick-panel {
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 10px;
+  background: var(--surface-muted);
+  border: 1px solid var(--outline);
+}
+.agent-relations {
+  display: grid;
+  gap: 6px;
+}
+.rel-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.rel-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.rel-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rel-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--outline);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 3px 9px 3px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  justify-self: start;
+}
+.rel-pill i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.rel-pill small {
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+.rel-pill:hover {
+  border-color: var(--accent);
+}

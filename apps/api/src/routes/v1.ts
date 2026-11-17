@@ -62,6 +62,8 @@ import {
   createDepartment,
   endMeeting,
   updateDepartment,
+  agentInsights,
+  duplicateAgent,
 } from '@company-os/db';
 import { principalOf, requireRole } from '../auth';
 
@@ -228,9 +230,27 @@ export function registerV1(
         activeVersion: agent.activeVersion,
         recentTasks: tasks.map(taskView),
         recentInvocations: invocations.map(invocationView),
+        // Fiche : indicateurs réels (7 jours, durée moyenne, exécution en cours, collègues, livrable).
+        insights: await agentInsights(db, p.orgId, agent.id),
       },
       meta,
     };
+  });
+
+  /** Dupliquer un agent (live, administrateur) : mêmes droits, consignes, modèle et budget. */
+  app.post('/v1/agents/:id/duplicate', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = SlugParam.parse(req.params);
+    const key = IdempotencyKeySchema.safeParse(req.headers['idempotency-key']);
+    if (!key.success) throw new DomainError('VALIDATION_ERROR', 'En-tête Idempotency-Key requis');
+    const { agentId, created } = await duplicateAgent(db, {
+      orgId: p.orgId,
+      actor: { kind: 'user', id: p.userId },
+      agentId: id,
+      idempotencyKey: key.data,
+    });
+    return reply.status(created ? 201 : 200).send({ data: { agentId }, meta });
   });
 
   /** Organigramme : rattachement et rôle d'un agent (administrateur humain seulement). */

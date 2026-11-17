@@ -12,8 +12,22 @@ import type { WorldSnapshot } from '@company-os/contracts';
 import { api } from '../../lib/api';
 import type { HqWorldView, Selection } from '../../world/types';
 import { AgentCard, type AgentProfile } from '../panels/AgentCard';
+import {
+  AgentLive,
+  AgentQuickActions,
+  AgentRelations,
+  AgentStats,
+  type AgentInsights,
+} from '../panels/AgentCardExtras';
 
 const CARD_W = 380;
+
+interface Remote {
+  grants: { toolId: string; actions: string[] }[];
+  profile: AgentProfile;
+  insights?: AgentInsights;
+  budget: { limitMicros: number; usedMicros: number } | null;
+}
 const GAP = 34; // distance au personnage
 
 /**
@@ -31,6 +45,11 @@ export function AgentPopover({
   onSelect,
   onClose,
   details,
+  now,
+  pinned,
+  onPin,
+  onLifecycle,
+  toast,
 }: {
   world: WorldSnapshot;
   agentId: string;
@@ -42,27 +61,37 @@ export function AgentPopover({
   onClose: () => void;
   /** Travail en cours, historique et réglages (inspecteur de l'agent), dans un onglet. */
   details?: ReactNode;
+  now: number;
+  /** Fiche épinglée : reste ouverte et suit l'agent. */
+  pinned: boolean;
+  onPin?: () => void;
+  onLifecycle: (agentId: string, action: 'pause' | 'resume', reason: string) => Promise<void>;
+  toast: (t: { text: string; tone: 'info' | 'danger' | 'success' }) => void;
 }) {
   const [tab, setTab] = useState<'card' | 'work'>('card');
   const box = useRef<HTMLDivElement>(null);
   const [version, setVersion] = useState(0);
-  const [remote, setRemote] = useState<{
-    grants: { toolId: string; actions: string[] }[];
-    profile: AgentProfile;
-  } | null>(null);
+  const [remote, setRemote] = useState<Remote | null>(null);
+  useEffect(() => setRemote(null), [agentId]);
 
+  const agentNow = world.agents.find((a) => a.id === agentId);
+  const busy = !!agentNow?.currentTaskId;
+  const liveKey = `${agentNow?.activity ?? ''}|${agentNow?.currentTaskId ?? ''}|${agentNow?.status ?? ''}`;
   useEffect(() => {
     let cancelled = false;
-    setRemote(null);
-    api<{ grants: { toolId: string; actions: string[] }[]; profile: AgentProfile }>(
-      `/v1/agents/${agentId}`,
-    )
-      .then((r) => !cancelled && setRemote(r.data))
-      .catch(() => !cancelled && setRemote(null));
+    const load = (): void => {
+      api<Remote>(`/v1/agents/${agentId}`)
+        .then((r) => !cancelled && setRemote(r.data))
+        .catch(() => undefined);
+    };
+    load();
+    // Pendant une mission : progression rafraîchie toutes les 6 s (sinon à chaque changement d'état).
+    const t = busy ? window.setInterval(load, 6000) : 0;
     return () => {
       cancelled = true;
+      window.clearInterval(t);
     };
-  }, [agentId, version]);
+  }, [agentId, version, liveKey, busy]);
 
   // Suivi de l'avatar : position écran du personnage -> position de la fiche (sans re-rendu React).
   useLayoutEffect(() => {
@@ -111,6 +140,18 @@ export function AgentPopover({
   if (!agent) return null;
   return (
     <div ref={box} className="agent-popover" style={{ width: CARD_W }} data-testid="agent-popover">
+      {onPin && (
+        <button
+          className={`popover-pin ${pinned ? 'on' : ''}`}
+          onClick={onPin}
+          aria-pressed={pinned}
+          aria-label={pinned ? 'Désépingler la fiche' : 'Épingler la fiche'}
+          title={pinned ? 'Désépingler' : 'Épingler (garder ouverte, 2 max)'}
+          data-testid="popover-pin"
+        >
+          📌
+        </button>
+      )}
       <button className="popover-close" onClick={onClose} aria-label="Fermer la fiche">
         ✕
       </button>
@@ -144,6 +185,34 @@ export function AgentPopover({
           onMission={() => onMission(agent.id)}
           onSelect={onSelect}
           onProfileSaved={() => setVersion((v) => v + 1)}
+          extras={
+            <>
+              <AgentLive
+                world={world}
+                agent={agent}
+                insights={remote?.insights ?? null}
+                now={now}
+                onSelect={onSelect}
+              />
+              <AgentStats
+                insights={remote?.insights ?? null}
+                budget={remote ? remote.budget : null}
+              />
+              <AgentQuickActions
+                world={world}
+                agent={agent}
+                onSelect={onSelect}
+                onLifecycle={onLifecycle}
+                toast={toast}
+              />
+              <AgentRelations
+                world={world}
+                agent={agent}
+                insights={remote?.insights ?? null}
+                onSelect={onSelect}
+              />
+            </>
+          }
         />
       )}
     </div>

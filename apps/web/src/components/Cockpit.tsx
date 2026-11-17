@@ -104,6 +104,8 @@ export function Cockpit() {
   const [display, setDisplay] = useDisplay();
   const [camView, setCamView] = useState<CameraView>('top');
   const [uiHidden, setUiHidden] = useState(false);
+  /** Fiches d'agents épinglées (restent ouvertes pour suivre leur travail), 2 au plus. */
+  const [pinned, setPinned] = useState<string[]>([]);
   const [sceneReady, setSceneReady] = useState(0);
   const root = useRef<HTMLDivElement>(null);
 
@@ -601,20 +603,43 @@ export function Cockpit() {
               toast={toast}
             />
           )}
-          {world && view === 'office' && selection?.kind === 'agent' && !uiHidden && (
-            <AgentPopover
-              key={selection.id}
-              world={world}
-              agentId={selection.id}
-              scene={scene}
-              canEdit={controls.caps.editProfile ?? false}
-              canMission={controls.caps.createMission}
-              onMission={(agentId) => setMissionFor(agentId)}
-              onSelect={select}
-              onClose={() => setSelection(null)}
-              details={inspectorFor(selection)}
-            />
-          )}
+          {world &&
+            view === 'office' &&
+            !uiHidden &&
+            // Fiches épinglées (2 max) + fiche de l'agent sélectionné, chacune à côté de son avatar.
+            [
+              ...pinned,
+              ...(selection?.kind === 'agent' && !pinned.includes(selection.id)
+                ? [selection.id]
+                : []),
+            ]
+              .filter((id) => world.agents.some((a) => a.id === id))
+              .map((id) => (
+                <AgentPopover
+                  key={id}
+                  world={world}
+                  agentId={id}
+                  scene={scene}
+                  now={now}
+                  canEdit={controls.caps.editProfile ?? false}
+                  canMission={controls.caps.createMission}
+                  onMission={(agentId) => setMissionFor(agentId)}
+                  onSelect={select}
+                  pinned={pinned.includes(id)}
+                  onPin={() =>
+                    setPinned((p) =>
+                      p.includes(id) ? p.filter((x) => x !== id) : [...p, id].slice(-2),
+                    )
+                  }
+                  onClose={() => {
+                    setPinned((p) => p.filter((x) => x !== id));
+                    if (selection?.kind === 'agent' && selection.id === id) setSelection(null);
+                  }}
+                  onLifecycle={onLifecycle}
+                  toast={toast}
+                  details={inspectorFor({ kind: 'agent', id })}
+                />
+              ))}
           <div className="legend" aria-hidden>
             <span>
               Glisser : déplacer · Molette : zoom · Double-clic : recentrer · Ctrl/Cmd+K :
