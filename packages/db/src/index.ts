@@ -19,3 +19,4 @@ export * from './services/documents';
 export * from './services/status';
 export * from './services/connectors';
 export * from './services/hierarchy';
+export * from './services/purge';

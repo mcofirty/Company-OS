@@ -22,6 +22,12 @@ fi
 echo "==> Reconstruction et redémarrage"
 compose build
 compose up -d --wait
+# Serveur « réel uniquement » (défaut) : la démonstration et ses données sont retirées.
+# Idempotent ; la base a été sauvegardée juste avant. Pour garder une démo : HIDE_DEMO_ORG=false.
+if [ "$(envget HIDE_DEMO_ORG)" != "false" ]; then
+  echo "==> Retrait de la démonstration (données fictives)"
+  compose --profile tools run --rm admin src/purge-demo-cli.ts
+fi
 docker image prune -f >/dev/null
 echo "==> À jour. État :"
 compose ps --format 'table {{.Service}}\t{{.Status}}'

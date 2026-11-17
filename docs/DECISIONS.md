@@ -249,3 +249,10 @@ ADR-053 — **Fiche agent ancrée au personnage.** La fiche (pôle, rattachement
 compétences, outils, tâches habituelles, équipe) s'affiche à côté de l'avatar et le suit image par image
 (position écran exposée par la scène) ; l'inspecteur de droite garde détails et historique. Compétences
 et tâches habituelles : saisies par un humain (`agent.profile.updated`), purement descriptives.
+
+ADR-054 — **Production « réel uniquement ».** Avec `HIDE_DEMO_ORG=true` (défaut du compose de production) :
+aucune organisation ni donnée de démonstration (`update.sh` lance `purge:demo` après sauvegarde,
+idempotent), aucun outil fictif recréé (`ensureCatalogTools({ liveOnly })`), page `/bench` absente
+(`NEXT_PUBLIC_LIVE_ONLY` au build), aucune mention « démo » dans le cockpit. Le mode démo déterministe
+reste disponible pour le développement local et les tests automatiques (règle CLAUDE.md inchangée),
+jamais livré sur ce serveur.

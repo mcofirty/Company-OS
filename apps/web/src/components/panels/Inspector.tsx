@@ -697,9 +697,11 @@ function InvocationInspector({ world, id, now, onSelect }: Props & { id: string 
           ))}
         </ol>
       </Section>
-      <p className="hint">
-        Mode démo : adaptateur fictif côté serveur, aucun appel réseau externe.
-      </p>
+      {world.org.mode === 'demo' && (
+        <p className="hint">
+          Mode démo : adaptateur fictif côté serveur, aucun appel réseau externe.
+        </p>
+      )}
     </>
   );
 }

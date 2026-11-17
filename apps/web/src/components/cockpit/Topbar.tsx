@@ -76,7 +76,7 @@ export function Topbar({
           title={
             world.org.mode === 'demo'
               ? 'Simulation déterministe côté serveur : aucune action externe, aucun appel LLM.'
-              : 'Missions exécutées par un vrai modèle Claude (coûts réels plafonnés). Outils en mode démo : aucun effet externe ; tout envoi exige une validation humaine.'
+              : 'Missions exécutées par un vrai modèle Claude (coûts réels plafonnés). Outils réels : web, état de l’entreprise, bibliothèque, équipe et vos connecteurs ; toute action externe sensible exige votre validation.'
           }
         >
           <strong>{world.org.mode === 'demo' ? 'DEMO' : 'LIVE'}</strong>

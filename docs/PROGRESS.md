@@ -3,6 +3,18 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-17 (13) — Production « réel uniquement »
+
+### Réalisé
+- `purgeDemoData` + `pnpm --filter @company-os/db purge:demo` : organisations démo, leurs données et
+  les outils fictifs inutilisés supprimés en une transaction ; lancé par `update.sh` après sauvegarde.
+- Outils fictifs jamais recréés sur un serveur réel ; `/bench` en 404 (`NEXT_PUBLIC_LIVE_ONLY`) ;
+  mentions « démo » retirées des écrans live (ADR-054).
+
+### Tests (exécutés le 2026-11-17)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 149/149. `pnpm e2e` : 24/24.
+- Image web de production construite avec `NEXT_PUBLIC_LIVE_ONLY=true` : `/bench` = 404, `/` = 200.
+
 ## Session 2026-11-17 (12) — Fiche agent, organigramme, équipes des managers
 
 ### Réalisé

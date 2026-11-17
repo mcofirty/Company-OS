@@ -32,7 +32,7 @@ export async function initLiveOrg(
     }
     return { orgId: existing.id, created: false };
   }
-  await ensureCatalogTools(db);
+  await ensureCatalogTools(db, { liveOnly: true });
   const orgId = randomUUID();
   const prefix = orgId.slice(0, 8);
   await db.$transaction(async (tx) => {

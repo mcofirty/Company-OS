@@ -21,7 +21,7 @@ const stopTelemetry = initTelemetry(process.env);
 
 const db = createDb(env.DATABASE_URL);
 // Nouveaux outils du catalogue disponibles après une mise à jour, sans relancer de seed.
-await ensureCatalogTools(db);
+await ensureCatalogTools(db, { liveOnly: cfg.auth.hideDemoOrg ?? false });
 
 // Client Temporal paresseux : l'API démarre même si Temporal est indisponible
 // (le workflow revérifie alors la décision en base toutes les 20 s).

@@ -124,7 +124,9 @@ services:
     build:
       context: ..
       dockerfile: infra/docker/web.Dockerfile
-      args: { NEXT_PUBLIC_API_BASE_URL: '${PUBLIC_API_URL:?}' }
+      args:
+        NEXT_PUBLIC_API_BASE_URL: '${PUBLIC_API_URL:?}'
+        NEXT_PUBLIC_LIVE_ONLY: '${HIDE_DEMO_ORG:-true}'
     restart: unless-stopped
     ports: ['${WEB_PUBLISH:-127.0.0.1:3000}:3000']
     depends_on: [api]

@@ -12,6 +12,9 @@ WORKDIR /app
 
 FROM base AS build
 ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+# true : serveur « réel uniquement » (aucune page ni mention de démonstration).
+ARG NEXT_PUBLIC_LIVE_ONLY=false
+ENV NEXT_PUBLIC_LIVE_ONLY=$NEXT_PUBLIC_LIVE_ONLY
 ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL NEXT_TELEMETRY_DISABLED=1 NEXT_OUTPUT=standalone
 COPY . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store --mount=type=secret,id=extra_ca,required=false \

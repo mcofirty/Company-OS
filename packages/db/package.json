@@ -13,6 +13,7 @@
     "seed": "tsx src/seed-cli.ts",
     "users": "tsx src/access-cli.ts",
     "live:init": "tsx src/live-cli.ts",
+    "purge:demo": "tsx src/purge-demo-cli.ts",
     "ops": "tsx src/ops/backup-cli.ts",
     "reset": "prisma migrate reset --force",
     "postinstall": "prisma generate",

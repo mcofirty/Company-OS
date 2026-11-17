@@ -22,8 +22,9 @@ export const DEFAULT_LIMITS = {
  * d'une organisation live et au démarrage de l'API : un nouvel outil réel est disponible après
  * une mise à jour sans relancer de seed.
  */
-export async function ensureCatalogTools(db: Db): Promise<void> {
-  for (const t of TOOL_CATALOG) {
+export async function ensureCatalogTools(db: Db, opts: { liveOnly?: boolean } = {}): Promise<void> {
+  // Serveur « réel uniquement » : aucun outil fictif n'est (re)créé.
+  for (const t of TOOL_CATALOG.filter((x) => !opts.liveOnly || x.availability === 'live')) {
     const data = {
       name: t.name,
       code: t.code,
