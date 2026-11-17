@@ -33,15 +33,23 @@ export function AlertCenter({
   world,
   onSelect,
   onAck,
+  onAckAll,
+  now,
 }: {
   world: WorldSnapshot | null;
   onSelect: (s: Selection) => void;
   onAck: (id: string) => Promise<void>;
+  onAckAll: () => Promise<void>;
+  now: number;
 }) {
   const [open, setOpen] = useState(false);
+  const [older, setOlder] = useState(false);
   const { caps } = useControls();
-  const alerts = world?.alerts ?? [];
-  const unacked = alerts.filter((a) => a.ackedAt === null);
+  const all = world?.alerts ?? [];
+  // Badge et liste : alertes des dernières 24 h (les plus anciennes restent consultables).
+  const recentAlerts = all.filter((a) => now - Date.parse(a.createdAt) < 86_400_000);
+  const alerts = older ? all : recentAlerts;
+  const unacked = recentAlerts.filter((a) => a.ackedAt === null);
   const worst = unacked.some((a) => a.level === 'critical')
     ? 'critical'
     : unacked.some((a) => a.level === 'error')
@@ -69,9 +77,18 @@ export function AlertCenter({
         >
           <header className="panel-head">
             <h2>Alertes</h2>
-            <span className="muted">{unacked.length} non acquittée(s)</span>
+            <span className="muted">{unacked.length} non lue(s) · 24 h</span>
+            {caps.ackAlert && all.some((a) => a.ackedAt === null) && (
+              <button
+                className="btn small-btn"
+                onClick={() => void onAckAll()}
+                data-testid="alerts-ack-all"
+              >
+                Tout marquer comme lu
+              </button>
+            )}
           </header>
-          {alerts.length === 0 && <p className="empty">Aucune alerte.</p>}
+          {alerts.length === 0 && <p className="empty">Aucune alerte ces dernières 24 h.</p>}
           {alerts.map((a) => {
             const t = target(a);
             return (
@@ -106,6 +123,13 @@ export function AlertCenter({
               </div>
             );
           })}
+          {all.length > recentAlerts.length && (
+            <button className="linklike" onClick={() => setOlder((o) => !o)}>
+              {older
+                ? 'Masquer les anciennes'
+                : `Voir les plus anciennes (${all.length - recentAlerts.length})`}
+            </button>
+          )}
         </div>
       )}
     </div>

@@ -30,7 +30,7 @@ test('Connecteurs — ajout d’un serveur MCP, politiques, outil proposé aux a
   await page.getByTestId('org-switcher').selectOption(orgId);
   await expect(page.getByTestId('mode-badge')).toContainText('LIVE', { timeout: 20_000 });
 
-  await page.getByTestId('open-connectors').click();
+  await page.getByTestId('tab-settings').click(); // Réglages > Connecteurs
   await expect(page.getByTestId('connectors-empty')).toBeVisible();
   await page.getByTestId('connector-name').fill('Notes équipe');
   await page.getByTestId('connector-url').fill(mcp.url);

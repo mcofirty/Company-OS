@@ -3,6 +3,32 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-18 (16) — Agents pilotables, missions récurrentes, notifications, cockpit v2
+
+### Réalisé
+- Agents : nouvelle version (objectif, consignes, modèle) avec historique ; niveaux de modèle avec coût
+  estimé ; budgets modifiables ; remise à zéro mensuelle des budgets (correctif).
+- Missions récurrentes (worker, fuseau horaire, plafond par exécution, « Lancer maintenant »).
+- Délégation qui attend (`team.wait`), attentes exclues du délai de run (correctif), mémoire du pôle,
+  « Demander une suite ».
+- Notifications ntfy (téléphone + email), réglables dans Réglages > Notifications, bouton de test.
+- Cockpit v2 (ADR-062) : onglets, pages Missions / Livrables / Réglages, organigramme en page, KPI
+  cliquables, incidents et alertes 24 h + « Tout marquer comme lu », fil d'activité par mission, bulles et
+  halo sur la carte, dock d'outils mis à jour en direct (correctif), bandeau de retour, premier démarrage,
+  thème sombre, vue téléphone.
+- Migrations : `20261118090000_budget_period`, `20261118100000_schedules_notifications`.
+
+### Tests (exécutés le 2026-11-18)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 161/161. `pnpm e2e` : 25/25 (dont
+  `cockpit-v2.spec.ts`). Build web de production (`NEXT_PUBLIC_LIVE_ONLY=true`) : OK.
+
+### Écarts connus
+- Thème sombre : la carte isométrique garde ses couleurs (pixel art) ; seuls les panneaux changent.
+- Notifications : l'email passe par la fonction email de ntfy (limites du service ntfy.sh).
+
+### Prochaine tâche exacte
+OAuth des connecteurs MCP ; tableau de bord des coûts par agent et par jour.
+
 ## Session 2026-11-17 (15) — Arrêt des missions en cours, suppression fiable
 
 ### Réalisé

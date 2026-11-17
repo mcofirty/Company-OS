@@ -44,9 +44,15 @@ export function ToolWall({
     )
     .slice(0, 20);
   const list = tab === 'active' ? active : recent;
+  // Rien en cours : le panneau se replie à une ligne et rend la place à l'équipe.
+  const collapsed = tab === 'active' && active.length === 0;
 
   return (
-    <section className="toolwall" aria-label="Outils utilisés" data-testid="toolwall">
+    <section
+      className={`toolwall ${collapsed ? 'collapsed' : ''}`}
+      aria-label="Outils utilisés"
+      data-testid="toolwall"
+    >
       <header className="toolwall-head">
         <h2>Outils</h2>
         <div className="tabs" role="tablist">

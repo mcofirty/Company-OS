@@ -14,7 +14,7 @@ import {
   type WorldSnapshot,
 } from '@company-os/contracts';
 import { departmentPresence } from '@company-os/world';
-import { api, ApiFailure } from '../../lib/api';
+import { api, apiPost, ApiFailure } from '../../lib/api';
 import {
   ACTIVITY_LABEL,
   ACTIVITY_TONE,
@@ -32,6 +32,7 @@ import { Badge, ConfirmAction, Empty, Provenance, Section, ToolIcon } from '../c
 import { ApprovalInspector, MeetingInspector, type DecideFn } from './Governance';
 import { TaskDocuments } from './Documents';
 import type { AgentProfile } from './AgentCard';
+import { AgentManage, AgentWork, type AgentRemote } from './AgentWork';
 import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
 
 interface Props {
@@ -128,16 +129,14 @@ function AgentInspector({
   const [grantsVersion, setGrantsVersion] = useState(0);
   const [editGrants, setEditGrants] = useState<Record<string, string[]> | null>(null);
   const [grantsError, setGrantsError] = useState<string | null>(null);
-  const remote = useRemote<{
-    grants: { toolId: string; actions: string[] }[];
-    profile: AgentProfile;
-  }>(`/v1/agents/${id}`, `${id}-${grantsVersion}`);
+  const remote = useRemote<AgentRemote & { profile: AgentProfile }>(
+    `/v1/agents/${id}`,
+    `${id}-${grantsVersion}-${agent?.currentTaskId ?? ''}-${agent?.status ?? ''}`,
+  );
   const [busy, setBusy] = useState(false);
   if (!agent) return <Empty>Agent introuvable.</Empty>;
   const dept = world.departments.find((d) => d.id === agent.departmentId);
   const manager = world.agents.find((a) => a.id === agent.managerId);
-  const budget = world.budgets.find((b) => b.scopeType === 'agent' && b.scopeId === agent.id);
-  const task = world.tasks.find((t) => t.id === agent.currentTaskId);
   const activeInv = world.invocations.filter(
     (i) => i.agentId === id && ACTIVE_INVOCATION_STATUSES.includes(i.status),
   );
@@ -161,64 +160,51 @@ function AgentInspector({
         <div>
           <h2 data-testid="inspector-title">{agent.name}</h2>
           <p className="muted">
-            {agent.title} · {dept?.name} · fiche à côté du personnage
+            {agent.title} · {dept?.name}
           </p>
         </div>
       </header>
-      <h3 className="details-title">Détails et historique</h3>
       <div className="insp-badges">
         <Badge tone={ACTIVITY_TONE[agent.activity]}>{ACTIVITY_LABEL[agent.activity]}</Badge>
         <Badge tone="neutral">{agent.status}</Badge>
         <Provenance value={agent.provenance} />
         {onBreak && <Badge tone="neutral">pause café (cosmétique)</Badge>}
       </div>
-      <Kv
-        rows={[
-          [
-            'Manager',
-            manager ? (
-              <a onClick={() => onSelect({ kind: 'agent', id: manager.id })}>{manager.name}</a>
-            ) : (
-              '—'
-            ),
-          ],
-          ['Rôle', agent.role],
-          [
-            'Poste',
-            agent.deskAnchor.startsWith('retired:') ? 'libéré (agent désactivé)' : agent.deskAnchor,
-          ],
-          ['Identifiant', <code key="id">{agent.id}</code>],
-          [
-            'Budget IA',
-            budget
-              ? `${usd(budget.usedMicros)} / ${usd(budget.limitMicros)} ce mois${budget.hardStop ? ' · plafond dur' : ''}`
-              : '—',
-          ],
-        ]}
+      <AgentWork
+        world={world}
+        agent={agent}
+        now={now}
+        remote={remote}
+        canSchedule={caps.manageSchedules ?? false}
+        onSelect={onSelect}
       />
-      <Section title="Travail actuel">
-        {task ? (
-          <button className="link-card" onClick={() => onSelect({ kind: 'task', id: task.id })}>
-            <strong>{task.title}</strong>
-            <span>
-              {TASK_STATUS_LABEL[task.status]} · depuis{' '}
-              {task.startedAt ? duration(now - Date.parse(task.startedAt)) : '—'}
-            </span>
-          </button>
-        ) : (
-          <Empty>Aucune tâche active.</Empty>
-        )}
-      </Section>
-      <Section title="Outils actifs">
-        {activeInv.length === 0 ? (
-          <Empty>Aucun outil utilisé actuellement.</Empty>
-        ) : (
-          activeInv.map((i) => (
+      {activeInv.length > 0 && (
+        <Section title="Outil utilisé en ce moment">
+          {activeInv.map((i) => (
             <InvLink key={i.id} inv={i} world={world} now={now} onSelect={onSelect} />
-          ))
-        )}
-      </Section>
+          ))}
+        </Section>
+      )}
+      {(caps.editAgent || caps.editBudget || world.org.mode === 'live') && (
+        <AgentManage
+          world={world}
+          agent={agent}
+          remote={remote}
+          canEditAgent={caps.editAgent ?? false}
+          canEditBudget={caps.editBudget ?? false}
+          onChanged={() => setGrantsVersion((v) => v + 1)}
+        />
+      )}
       <Section title="Outils autorisés">
+        <p className="muted small">
+          Rend compte à{' '}
+          {manager ? (
+            <a onClick={() => onSelect({ kind: 'agent', id: manager.id })}>{manager.name}</a>
+          ) : (
+            'l’administrateur'
+          )}{' '}
+          · identifiant <code>{agent.id}</code>
+        </p>
         {editGrants ? (
           <div className="grant-editor" data-testid="grant-editor">
             <GrantPicker
@@ -284,7 +270,8 @@ function AgentInspector({
           </div>
         )}
       </Section>
-      <Section title="Dernières actions">
+      <details className="tech-log">
+        <summary>Journal technique de l’agent</summary>
         <ol className="mini-log">
           {recent.map((e) => (
             <li key={e.eventId}>
@@ -292,7 +279,7 @@ function AgentInspector({
             </li>
           ))}
         </ol>
-      </Section>
+      </details>
       <div className="actions">
         {world.org.mode === 'live' && caps.createMission && agent.status === 'active' && (
           <button
@@ -573,6 +560,11 @@ function TaskInspector({ world, id, onSelect, onCancelTask, onRetryTask }: Props
             )}
           </div>
         )}
+      {world.org.mode === 'live' &&
+        caps.createMission &&
+        ['succeeded', 'failed', 'blocked', 'cancelled'].includes(task.status) && (
+          <FollowUp taskId={task.id} onCreated={(id) => onSelect({ kind: 'task', id })} />
+        )}
       <TaskDocuments taskId={task.id} version={`${task.status}-${world.lastSeq}`} />
       <Section title="Exécution (run)">
         {detail?.runs.map((r) => (
@@ -849,5 +841,58 @@ export function TeamRows({
         );
       })}
     </ul>
+  );
+}
+
+/** « Demander une suite » : même agent, il reçoit le résultat précédent et la nouvelle demande. */
+function FollowUp({ taskId, onCreated }: { taskId: string; onCreated: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!open) {
+    return (
+      <div className="actions row">
+        <button className="btn" onClick={() => setOpen(true)} data-testid="task-follow-up">
+          ↪ Demander une suite
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="confirm-box neutral" data-testid="follow-up-box">
+      <p>
+        Que doit faire l’agent ensuite ? Il recevra le résultat et les documents de cette mission.
+      </p>
+      <textarea
+        rows={3}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        maxLength={2500}
+        placeholder="ex. Refais la partie 2 avec des sources ; ajoute un plan d’action."
+        data-testid="follow-up-text"
+      />
+      {error && <p className="form-error">{error}</p>}
+      <div className="actions row">
+        <button
+          className="btn primary"
+          disabled={busy || text.trim().length < 5}
+          data-testid="follow-up-send"
+          onClick={() => {
+            setBusy(true);
+            setError(null);
+            apiPost<{ id: string }>(`/v1/tasks/${taskId}/follow-up`, { instructions: text.trim() })
+              .then((r) => onCreated(r.data.id))
+              .catch((e: unknown) => setError(e instanceof ApiFailure ? e.message : 'Erreur'))
+              .finally(() => setBusy(false));
+          }}
+        >
+          Lancer la suite
+        </button>
+        <button className="btn ghost" onClick={() => setOpen(false)}>
+          Annuler
+        </button>
+      </div>
+    </div>
   );
 }

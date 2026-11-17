@@ -108,6 +108,42 @@ export async function ackAlert(db: Db, input: { orgId: string; alertId: string; 
   });
 }
 
+/** « Tout marquer comme lu » : acquitte toutes les alertes ouvertes de l'organisation. */
+export async function ackAllAlerts(db: Db, input: { orgId: string; userId: string }) {
+  const now = new Date();
+  const r = await db.alert.updateMany({
+    where: { orgId: input.orgId, ackedAt: null },
+    data: { ackedAt: now, ackedBy: input.userId },
+  });
+  return { acked: r.count, ackedAt: now.toISOString() };
+}
+
+/** « Depuis ta dernière visite » : ce qui s'est passé depuis `since` (compteurs réels). */
+export async function activitySince(db: Db, orgId: string, since: Date) {
+  const [completed, failed, blocked, documents, pending, cost, agents] = await Promise.all([
+    db.task.count({ where: { orgId, status: 'succeeded', endedAt: { gte: since } } }),
+    db.task.count({ where: { orgId, status: 'failed', endedAt: { gte: since } } }),
+    db.task.count({ where: { orgId, status: 'blocked', createdAt: { gte: since } } }),
+    db.document.count({ where: { orgId, createdAt: { gte: since } } }),
+    db.approvalRequest.count({ where: { orgId, status: 'pending' } }),
+    db.llmUsage.aggregate({
+      where: { orgId, createdAt: { gte: since } },
+      _sum: { costMicros: true },
+    }),
+    db.agent.count({ where: { orgId, createdAt: { gte: since }, deletedAt: null } }),
+  ]);
+  return {
+    since: since.toISOString(),
+    completed,
+    failed,
+    blocked,
+    documents,
+    pendingApprovals: pending,
+    costMicros: cost._sum.costMicros ?? 0,
+    newAgents: agents,
+  };
+}
+
 export type MetricsWindow = '1h' | '24h' | '7d';
 const WINDOW_MS: Record<MetricsWindow, number> = {
   '1h': 3600_000,

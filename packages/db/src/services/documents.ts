@@ -70,13 +70,14 @@ export async function saveDocument(
 export async function listDocuments(
   db: Db,
   orgId: string,
-  opts: { taskId?: string; query?: string; limit?: number } = {},
+  opts: { taskId?: string; query?: string; limit?: number; agentId?: string } = {},
 ): Promise<DocumentView[]> {
   const q = opts.query && opts.query !== 'tout' ? opts.query : undefined;
   const rows = await db.document.findMany({
     where: {
       orgId,
       ...(opts.taskId ? { taskId: opts.taskId } : {}),
+      ...(opts.agentId ? { agentId: opts.agentId } : {}),
       ...(q ? { title: { contains: q, mode: 'insensitive' as const } } : {}),
     },
     orderBy: { createdAt: 'desc' },

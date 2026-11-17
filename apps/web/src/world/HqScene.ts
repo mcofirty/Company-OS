@@ -70,6 +70,8 @@ interface AvatarObj {
   chip: Phaser.GameObjects.Container;
   chipText: Phaser.GameObjects.Text;
   chipBg: Phaser.GameObjects.Graphics;
+  /** Halo rouge pulsé : agent bloqué (visible de loin). */
+  halo: Phaser.GameObjects.Ellipse;
   hit: Phaser.GameObjects.Zone;
   tile: Tile;
   target: Anchor | null;
@@ -79,6 +81,27 @@ interface AvatarObj {
   walking: boolean;
   hovered: boolean;
   frameTimer: Phaser.Time.TimerEvent | null;
+}
+
+/** 2-3 premiers mots d'un titre, pour une bulle courte. */
+function shortWords(s: string, n: number): string {
+  const words = s
+    .replace(/[«»"—–-]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, n)
+    .join(' ');
+  return words.length > 24 ? `${words.slice(0, 23)}…` : words;
+}
+/** Pictogramme selon la nature de la mission. */
+function pictogram(title: string): string {
+  const t = title.toLowerCase();
+  if (/rapport|synth|bilan|point/.test(t)) return '📊';
+  if (/veille|recherche|analyse|étude/.test(t)) return '🔎';
+  if (/email|mail|relance|répon/.test(t)) return '✉';
+  if (/factur|budget|compta|paie/.test(t)) return '€';
+  if (/recrut|candidat/.test(t)) return '👤';
+  return '✍';
 }
 
 export class HqScene extends Phaser.Scene {
@@ -99,6 +122,11 @@ export class HqScene extends Phaser.Scene {
   private reducedMotion = false;
   private dragging = false;
   private dragMoved = 0;
+  /** Échelle inverse du zoom appliquée aux textes (lisibles quel que soit le zoom). */
+  private textScale = 1;
+  private lastZoom = 0;
+  private dockKey = '';
+  private dockObjs: Phaser.GameObjects.GameObject[] = [];
 
   constructor(private readonly cb: HqSceneCallbacks) {
     super('hq');
@@ -236,10 +264,10 @@ export class HqScene extends Phaser.Scene {
     const text = this.add
       .text(p.x, p.y - 34, room.label, {
         fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
-        fontSize: '20px',
+        fontSize: '15px',
         fontStyle: 'bold',
         color: '#222035',
-        padding: { left: 30, right: 14, top: 7, bottom: 7 },
+        padding: { left: 24, right: 10, top: 5, bottom: 5 },
       })
       .setOrigin(0.5)
       .setResolution(2)
@@ -271,7 +299,8 @@ export class HqScene extends Phaser.Scene {
     l.bg.lineStyle(3, l.color, 1);
     l.bg.strokeRoundedRect(b.x, b.y, b.width, b.height, 14);
     l.bg.fillStyle(l.color, 1);
-    l.bg.fillRoundedRect(b.x + 9, b.y + b.height / 2 - 7, 14, 14, 4);
+    const sq = 10 * this.textScale;
+    l.bg.fillRoundedRect(b.x + 8 * this.textScale, b.y + b.height / 2 - sq / 2, sq, sq, 3);
   }
 
   // ---------- caméra ----------
@@ -356,6 +385,7 @@ export class HqScene extends Phaser.Scene {
         activeInv.set(i.agentId, i);
     }
     const toolColor = new Map(world.tools.map((t) => [t.id, t]));
+    const taskTitle = new Map(world.tasks.map((t) => [t.id, t.title]));
 
     const seats = meetingSeats(world.meetings);
     this.updateMeetingBubble(world);
@@ -368,7 +398,7 @@ export class HqScene extends Phaser.Scene {
         this.moveTo(av, intent.anchor);
       av.intent = intent;
       av.container.setVisible(intent !== null);
-      this.updateChip(av, activeInv.get(agent.id), toolColor);
+      this.updateChip(av, activeInv.get(agent.id), toolColor, taskTitle);
       if (!av.walking) this.applyPose(av);
       const selected = sel?.kind === 'agent' && sel.id === agent.id;
       av.ring.setVisible(selected);
@@ -442,6 +472,21 @@ export class HqScene extends Phaser.Scene {
       .setFillStyle(0x7c60c9, 0.18)
       .setVisible(false);
     const shadow = this.add.ellipse(0, 1, 32, 12, 0x2a2140, 0.22);
+    const halo = this.add
+      .ellipse(0, 0, 70, 30, 0xce4b61, 0.28)
+      .setStrokeStyle(4, 0xce4b61, 0.9)
+      .setVisible(false);
+    if (!this.reducedMotion) {
+      this.tweens.add({
+        targets: halo,
+        scaleX: 1.25,
+        scaleY: 1.25,
+        alpha: 0.35,
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+      });
+    }
     const body = this.add
       .image(0, 4, AVATAR_TEX, avatarKey(agent.avatarId, 'front', 'idle'))
       .setOrigin(0.5, 1);
@@ -462,16 +507,16 @@ export class HqScene extends Phaser.Scene {
     const chipBg = this.add.graphics();
     const chipText = this.add
       .text(0, 0, '', {
-        fontFamily: 'ui-monospace, Menlo, monospace',
-        fontSize: '15px',
+        fontFamily: 'Inter, system-ui, sans-serif',
+        fontSize: '14px',
         fontStyle: 'bold',
         color: '#ffffff',
-        padding: { x: 6, y: 3 },
+        padding: { x: 7, y: 4 },
       })
       .setOrigin(0.5, 1)
       .setResolution(2);
-    const chip = this.add.container(24, -AVATAR_H * PX - 2, [chipBg, chipText]).setVisible(false);
-    container.add([ring, shadow, body, chip, name]);
+    const chip = this.add.container(0, -AVATAR_H * PX - 6, [chipBg, chipText]).setVisible(false);
+    container.add([halo, ring, shadow, body, chip, name]);
     container.setDepth(start.x + start.y + 1.5);
 
     // Zone cliquable découplée du rendu (docs/06 §3).
@@ -488,6 +533,7 @@ export class HqScene extends Phaser.Scene {
       chip,
       chipText,
       chipBg,
+      halo,
       hit,
       tile: { x: start.x, y: start.y },
       target: animate ? null : (intent?.anchor ?? null),
@@ -572,39 +618,72 @@ export class HqScene extends Phaser.Scene {
     }
   }
 
+  /** Bulle d'activité au-dessus de l'avatar : ce qu'il fait, en 2-3 mots. */
   private updateChip(
     av: AvatarObj,
     inv: InvocationView | undefined,
-    tools: Map<string, { code: string; color: string }>,
+    tools: Map<string, { code: string; color: string; name: string }>,
+    taskTitles: Map<string, string>,
   ): void {
     let label = '';
     let color = 0x222035;
-    if (av.agent.activity === 'using_tool' && inv) {
+    const a = av.agent;
+    const title = a.currentTaskId ? taskTitles.get(a.currentTaskId) : undefined;
+    if (a.activity === 'using_tool' && inv) {
       const t = tools.get(inv.toolId);
-      label = t?.code ?? inv.toolId;
+      label = `🛠 ${shortWords(t?.name ?? inv.toolId, 2)}`;
       color = t ? hex(t.color) : color;
-    } else if (av.agent.activity === 'waiting_approval') {
-      label = 'VALIDATION';
+    } else if (a.activity === 'waiting_approval') {
+      label = '⏳ Attend ta validation';
       color = 0xd49c30;
-    } else if (av.agent.activity === 'in_meeting') {
-      label = 'RÉUNION';
+    } else if (a.activity === 'in_meeting') {
+      label = '◎ En réunion';
       color = 0x7c60c9;
-    } else if (av.agent.activity === 'blocked') {
-      label = '! BLOQUÉ';
+    } else if (a.activity === 'blocked') {
+      label = '⚠ Bloqué';
       color = 0xce4b61;
+    } else if ((a.activity === 'working' || a.currentTaskId) && title) {
+      label = `${pictogram(title)} ${shortWords(title, 3)}`;
+      color = 0x3b7dd8;
     } else if (av.intent?.mode === 'break') {
-      label = 'PAUSE';
+      label = '☕ Pause';
       color = 0x83c6c1;
     }
+    av.halo.setVisible(a.activity === 'blocked');
     av.chip.setVisible(label !== '');
+    av.chip.setScale(this.textScale);
+    av.name.setScale(this.textScale);
     if (!label || av.chipText.text === label) return;
     av.chipText.setText(label);
     const b = av.chipText.getBounds();
+    const w = b.width / av.chip.scaleX;
+    const h = b.height / av.chip.scaleY;
     av.chipBg.clear();
+    av.chipBg.fillStyle(0x000000, 0.18);
+    av.chipBg.fillRoundedRect(-w / 2 + 1, -h + 3, w, h, 9);
     av.chipBg.fillStyle(color, 1);
-    av.chipBg.fillRoundedRect(-b.width / 2, -b.height, b.width, b.height, 7);
-    av.chipBg.lineStyle(2, 0xffffff, 0.9);
-    av.chipBg.strokeRoundedRect(-b.width / 2, -b.height, b.width, b.height, 7);
+    av.chipBg.fillRoundedRect(-w / 2, -h, w, h, 9);
+    av.chipBg.lineStyle(2, 0xffffff, 0.95);
+    av.chipBg.strokeRoundedRect(-w / 2, -h, w, h, 9);
+    // Pointe de bulle vers l'avatar.
+    av.chipBg.fillStyle(color, 1);
+    av.chipBg.fillTriangle(-5, -1, 5, -1, 0, 6);
+  }
+
+  /** Textes lisibles à tout zoom : échelle inverse du zoom, bornée. */
+  private applyTextScale(): void {
+    const zoom = this.cameras.main.zoom;
+    if (Math.abs(zoom - this.lastZoom) < 0.01) return;
+    this.lastZoom = zoom;
+    this.textScale = Phaser.Math.Clamp(0.7 / zoom, 1, 2.3);
+    for (const [id, l] of this.labels) {
+      l.text.setScale(this.textScale);
+      this.paintLabel(id);
+    }
+    for (const av of this.avatars.values()) {
+      av.chip.setScale(this.textScale);
+      av.name.setScale(this.textScale);
+    }
   }
 
   private moveTo(av: AvatarObj, target: Anchor): void {
@@ -725,7 +804,14 @@ export class HqScene extends Phaser.Scene {
 
   /** Dock d'outils le long du bord avant-droit de la dalle (cliquable). */
   private ensureDock(world: WorldSnapshot): void {
-    if (this.dock.size > 0 || world.tools.length === 0) return;
+    // Reconstruit le dock quand la liste d'outils change (ex. connecteur ajouté / retiré).
+    const key = world.tools.map((t) => `${t.id}:${t.code}:${t.color}`).join('|');
+    if (key === this.dockKey) return;
+    this.dockKey = key;
+    for (const o of this.dockObjs) o.destroy();
+    this.dockObjs = [];
+    this.dock.clear();
+    if (world.tools.length === 0) return;
     const n = world.tools.length;
     world.tools.forEach((tool, i) => {
       const p = this.P(COLS + 1.9, 1.5 + (i * (ROWS - 3)) / Math.max(1, n - 1));
@@ -746,17 +832,34 @@ export class HqScene extends Phaser.Scene {
       bg.lineStyle(3, 0xffffff, 0.9);
       bg.strokeRoundedRect(-b.width / 2, -b.height / 2, b.width, b.height, 8);
       const c = this.add.container(p.x, p.y, [bg, text]).setDepth(6000);
+      // Nom complet au survol (les codes à 3 lettres ne suffisent pas).
+      const tip = this.add
+        .text(p.x + b.width / 2 + 8, p.y, tool.name, {
+          fontFamily: 'Inter, system-ui, sans-serif',
+          fontSize: '16px',
+          fontStyle: 'bold',
+          color: '#ffffff',
+          backgroundColor: '#222035',
+          padding: { x: 8, y: 5 },
+        })
+        .setOrigin(0, 0.5)
+        .setResolution(2)
+        .setDepth(9500)
+        .setVisible(false);
       text.setInteractive({ useHandCursor: true });
+      text.on('pointerover', () => tip.setScale(this.textScale).setVisible(true));
+      text.on('pointerout', () => tip.setVisible(false));
       text.on('pointerup', () => {
         if (this.dragMoved < 6) this.cb.onSelect({ kind: 'tool', id: tool.id });
       });
-      void c;
+      this.dockObjs.push(c, tip);
       this.dock.set(tool.id, p);
     });
-    this.linkGfx = this.add.graphics().setDepth(5900);
+    this.linkGfx ??= this.add.graphics().setDepth(5900);
   }
 
   override update(_time: number, delta: number): void {
+    this.applyTextScale();
     if (!this.linkGfx || !this.lastWorld) return;
     this.linkPhase = (this.linkPhase + delta * 0.05) % 20;
     this.drawLinks(this.lastWorld);

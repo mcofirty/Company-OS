@@ -122,6 +122,15 @@ La clé qui chiffre les jetons (`CONNECTOR_SECRET_KEY`) est créée automatiquem
 `/opt/company-os/.env.production` par `update.sh` : **ne la changez jamais** et gardez une copie de ce
 fichier hors du serveur (sans elle, les jetons enregistrés sont illisibles).
 
+### Être prévenu sur ton téléphone
+Installe l'application **ntfy** (gratuite), abonne-toi à un sujet au nom difficile à deviner, puis dans
+le cockpit : **Réglages → Notifications** → colle `https://ntfy.sh/ton-sujet` → Enregistrer → « Envoyer
+un test ». Tu peux aussi ajouter un email.
+
+### Missions récurrentes
+**Missions → Récurrentes → « Mission récurrente »** : agent, consignes, fréquence (jour / semaine / mois),
+heure, plafond de coût par exécution. Exemple : chaque lundi à 9 h, ton DG fait le rapport de la semaine.
+
 ## 7. Restaurer après un incident
 
 ⚠️ Remplace la base actuelle par la sauvegarde choisie. Faites d'abord une sauvegarde de l'état

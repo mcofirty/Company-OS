@@ -25,7 +25,9 @@ export function OrgChart({
   canEdit,
   onClose,
   onSelect,
+  asPage,
 }: {
+  asPage?: boolean;
   world: WorldSnapshot;
   canEdit: boolean;
   onClose: () => void;
@@ -205,8 +207,12 @@ export function OrgChart({
   const managers = agents.filter((a) => a.role === 'manager').length;
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Organigramme">
-      <div className="modal org-modal" data-testid="org-chart">
+    <div
+      className={asPage ? 'page org-page' : 'modal-backdrop'}
+      role={asPage ? 'region' : 'dialog'}
+      aria-label="Organigramme"
+    >
+      <div className={asPage ? 'org-modal as-page' : 'modal org-modal'} data-testid="org-chart">
         <header className="org-head">
           <div>
             <h2>Organigramme</h2>

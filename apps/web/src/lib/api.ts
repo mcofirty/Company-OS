@@ -123,3 +123,12 @@ export async function api<T>(
   }
   return body as { data: T; meta: Record<string, unknown> };
 }
+
+/** POST JSON avec clé d'idempotence (un clic = une action). */
+export function apiPost<T = unknown>(path: string, body: object = {}) {
+  return api<T>(path, {
+    method: 'POST',
+    headers: { 'idempotency-key': crypto.randomUUID() },
+    body: JSON.stringify(body),
+  });
+}

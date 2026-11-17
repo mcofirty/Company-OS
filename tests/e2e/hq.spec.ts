@@ -42,11 +42,18 @@ test('S01 — premier affichage : carte, départements, 12 agents, outils, KPI, 
   await expect(page.getByTestId('toolwall')).toBeVisible();
   await expect(page.getByTestId('kpis')).toContainText('Agents actifs');
   const boot = (await (await page.request.get(`${API}/v1/bootstrap`)).json()) as {
-    data: { departments: unknown[]; tools: unknown[]; agents: { provenance: string }[] };
+    data: {
+      departments: unknown[];
+      tools: unknown[];
+      agents: { provenance: string; status: string }[];
+    };
   };
   // ≥ 12 agents seedés (des recrutements approuvés lors d'autres scénarios peuvent s'ajouter).
   expect(boot.data.agents.length).toBeGreaterThanOrEqual(12);
-  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(boot.data.agents.length);
+  // Liste d'équipe : agents en activité (les anciens, désactivés, sont masqués par défaut).
+  await expect(page.getByTestId('team-list').locator('li')).toHaveCount(
+    boot.data.agents.filter((a) => a.status !== 'deactivated').length,
+  );
   expect(boot.data.departments.length).toBeGreaterThanOrEqual(6);
   expect(boot.data.tools.length).toBeGreaterThanOrEqual(8);
   expect(boot.data.agents.every((a) => a.provenance === 'demo')).toBe(true);
@@ -153,8 +160,9 @@ test('S03 — coupure WebSocket pendant un run : aucun événement perdu ni doub
     .toBeLessThanOrEqual(0);
   await page.getByTestId('timeline').locator('button').first().waitFor();
   const seqs = await page.evaluate(() => {
-    const titles = [...document.querySelectorAll('[data-testid=timeline] button')].map((b) =>
-      b.getAttribute('title'),
+    // Chaque événement (même replié dans une mission) a exactement un bouton dans le fil.
+    const titles = [...document.querySelectorAll('[data-testid=timeline] button.tl-item')].map(
+      (b) => b.getAttribute('title'),
     );
     return titles.map((t) => Number(t?.match(/#(\d+)/)?.[1]));
   });
@@ -261,7 +269,13 @@ test('S06 — réunion réelle : participants, décisions et tâche déléguée 
   const m = meetings.data.find((x) => x.taskId === id)!;
   expect(m.participantAgentIds.length).toBeGreaterThanOrEqual(2);
   expect(m.decisions.length).toBeGreaterThan(0);
-  await page.getByTestId('timeline').locator('button[title*="meeting.completed"]').first().click();
+  // Fil groupé par mission : déplier la mission qui contient la réunion, puis l'ouvrir.
+  const group = page
+    .getByTestId('timeline')
+    .locator('li.feed-group', { has: page.locator('button[title*="meeting.completed"]') })
+    .first();
+  await group.locator('.feed-toggle').click();
+  await group.locator('button[title*="meeting.completed"]').first().click();
   await expect(page.getByTestId('inspector-title')).toContainText('Remise');
   await expect(page.getByTestId('inspector')).toContainText('Décisions');
   await expect(page.getByTestId('inspector')).toContainText('Préparer une offre');

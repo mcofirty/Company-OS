@@ -48,6 +48,8 @@ import {
   updateBudgetLimit,
   listSchedules,
   createFollowUp,
+  ackAllAlerts,
+  activitySince,
   saveSchedule,
   deleteSchedule,
   runDueSchedules,
@@ -211,6 +213,12 @@ export function registerV1(
         },
         // Versions (objectif, consignes de l'administrateur, modèle) : la première est l'active.
         versions: await agentVersions(db, agent.id),
+        budget: await db.budget
+          .findFirst({
+            where: { orgId: p.orgId, scopeType: 'agent', scopeId: agent.id },
+            select: { limitMicros: true, usedMicros: true },
+          })
+          .then((b) => b ?? null),
         activeVersion: agent.activeVersion,
         recentTasks: tasks.map(taskView),
         recentInvocations: invocations.map(invocationView),
@@ -436,17 +444,32 @@ export function registerV1(
   app.get('/v1/documents', async (req) => {
     const p = principalOf(req);
     const q = z
-      .object({ taskId: z.uuid().optional(), query: z.string().max(120).optional() })
+      .object({
+        taskId: z.uuid().optional(),
+        query: z.string().max(120).optional(),
+        agentId: z.string().max(64).optional(),
+        limit: z.coerce.number().int().min(1).max(200).default(100),
+      })
       .parse(req.query);
     return {
       data: await listDocuments(db, p.orgId, {
         ...(q.taskId ? { taskId: q.taskId } : {}),
         ...(q.query ? { query: q.query } : {}),
-        limit: 100,
+        ...(q.agentId ? { agentId: q.agentId } : {}),
+        limit: q.limit,
       }),
       meta,
     };
   });
+  /** « Depuis ta dernière visite » (bandeau d'accueil). */
+  app.get('/v1/summary', async (req) => {
+    const p = principalOf(req);
+    const q = z.object({ since: z.iso.datetime() }).parse(req.query);
+    const since = new Date(q.since);
+    const floor = new Date(Date.now() - 30 * 86_400_000);
+    return { data: await activitySince(db, p.orgId, since < floor ? floor : since), meta };
+  });
+
   app.get('/v1/documents/:id', async (req) => {
     const p = principalOf(req);
     const { id } = Id.parse(req.params);
@@ -737,6 +760,13 @@ export function registerV1(
   }
 
   // ---------- Alertes ----------
+  /** « Tout marquer comme lu ». */
+  app.post('/v1/alerts/ack-all', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    return { data: await ackAllAlerts(db, { orgId: p.orgId, userId: p.userId }), meta };
+  });
+
   app.get('/v1/alerts', async (req) => {
     const p = principalOf(req);
     const q = z

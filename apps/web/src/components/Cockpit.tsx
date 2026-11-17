@@ -14,10 +14,16 @@ import { BackendSettings } from './cockpit/BackendSettings';
 import { LoginPanel } from './cockpit/LoginPanel';
 import { ReplayBar } from './cockpit/ReplayBar';
 import { SearchPalette } from './cockpit/SearchPalette';
-import { Timeline } from './cockpit/Timeline';
+import { ActivityFeed } from './cockpit/ActivityFeed';
+import { MobileView } from './cockpit/MobileView';
+import { Onboarding, WelcomeBanner } from './cockpit/Welcome';
+import { DeliverablesPage } from './pages/Deliverables';
+import { MissionsPage, type MissionsTab } from './pages/Missions';
+import { SettingsPage, type SettingsSection } from './pages/Settings';
+import { applyTheme } from '../lib/theme';
 import { OrgSwitcher, Topbar } from './cockpit/Topbar';
+import { computeMetrics as metricsFor } from '@company-os/world';
 import { AgentForm, MissionForm } from './cockpit/LiveForms';
-import { ConnectorsPanel } from './cockpit/Connectors';
 import { AgentPopover } from './cockpit/AgentPopover';
 import { OrgChart } from './cockpit/OrgChart';
 import { ApprovalsInbox } from './panels/Governance';
@@ -32,7 +38,29 @@ const WorldViewport = dynamic(
   },
 );
 
-/** Écran unique (docs/01 §3) : carte dominante, KPI, outils, inspecteur, timeline. */
+type View = 'office' | 'org' | 'missions' | 'deliverables' | 'settings';
+const VIEWS: [View, string, string, string][] = [
+  ['office', 'Bureau', '⌂', 'tab-office'],
+  ['org', 'Organigramme', '⑂', 'open-orgchart'],
+  ['missions', 'Missions', '☑', 'tab-missions'],
+  ['deliverables', 'Livrables', '📄', 'tab-deliverables'],
+  ['settings', 'Réglages', '⚙', 'tab-settings'],
+];
+
+/** Petit écran (téléphone) : vue simplifiée validations + activité. */
+function useIsMobile(): boolean {
+  const [m, setM] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia('(max-width: 760px)');
+    const on = () => setM(q.matches);
+    on();
+    q.addEventListener('change', on);
+    return () => q.removeEventListener('change', on);
+  }, []);
+  return m;
+}
+
+/** Écran unique (docs/01 §3) : carte dominante, KPI, outils, inspecteur, fil d'activité. */
 export function Cockpit() {
   const hq = useHq();
   const { connection, error, toasts, toast } = hq;
@@ -44,8 +72,13 @@ export function Cockpit() {
   const [links, setLinks] = useState(false);
   const [metricsWindow, setMetricsWindow] = useState<MetricsWindow>('24h');
   const [agentFormOpen, setAgentFormOpen] = useState(false);
-  const [connectorsOpen, setConnectorsOpen] = useState(false);
-  const [orgOpen, setOrgOpen] = useState(false);
+  /** Vue principale : bureau (QG) ou une page. Le QG reste monté (Phaser) sous les pages. */
+  const [view, setView] = useState<View>('office');
+  const [missionsTab, setMissionsTab] = useState<MissionsTab>('open');
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>('connectors');
+  const [showFormer, setShowFormer] = useState(false);
+  const isMobile = useIsMobile();
+  useEffect(() => applyTheme(), []);
   /** undefined = fermé ; '' = mission sans agent présélectionné. */
   const [missionFor, setMissionFor] = useState<string | undefined>(undefined);
   const scene = useRef<HqScene | null>(null);
@@ -59,6 +92,9 @@ export function Cockpit() {
   const metrics = replay.active ? null : liveMetrics;
 
   const select = useCallback((s: Selection | null) => setSelection(s), []);
+  // Équipe : agents en activité ; les anciens (désactivés) sont masqués par défaut.
+  const activeAgents = (world?.agents ?? []).filter((a) => a.status !== 'deactivated');
+  const formerAgents = (world?.agents ?? []).filter((a) => a.status === 'deactivated');
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
@@ -161,14 +197,42 @@ export function Cockpit() {
                   fail(err);
                 }
               }}
+              onAckAll={async () => {
+                try {
+                  await hq.ackAllAlerts();
+                } catch (err) {
+                  fail(err);
+                }
+              }}
+              now={now}
             />
           }
           onSearch={() => setSearchOpen(true)}
+          onKpi={(k) => {
+            if (k === 'agents') {
+              setView('office');
+              setSelection(null);
+            } else if (k === 'tasks' || k === 'success') {
+              setMissionsTab(k === 'tasks' ? 'open' : 'done');
+              setView('missions');
+            } else if (k === 'incidents') {
+              setMissionsTab('incidents');
+              setView('missions');
+            } else if (k === 'cost') {
+              setSettingsSection('budgets');
+              setView('settings');
+            } else if (k === 'approvals' || k === 'tools') {
+              setView('office');
+              setSelection(null);
+            }
+          }}
         />
         <nav className="rail" aria-label="Contrôles de la carte">
+          <span className="rail-title">Carte</span>
           <button
             onClick={() => scene.current?.home()}
             title="Recentrer (double-clic)"
+            data-tip="Recentrer (double-clic)"
             aria-label="Recentrer"
           >
             ⌂
@@ -176,6 +240,7 @@ export function Cockpit() {
           <button
             onClick={() => scene.current?.zoomBy(1.2)}
             title="Zoom avant"
+            data-tip="Zoom avant"
             aria-label="Zoom avant"
           >
             +
@@ -183,6 +248,7 @@ export function Cockpit() {
           <button
             onClick={() => scene.current?.zoomBy(1 / 1.2)}
             title="Zoom arrière"
+            data-tip="Zoom arrière"
             aria-label="Zoom arrière"
           >
             −
@@ -190,6 +256,7 @@ export function Cockpit() {
           <button
             onClick={() => setSearchOpen(true)}
             title="Rechercher (Ctrl/Cmd+K)"
+            data-tip="Rechercher (Ctrl/Cmd+K)"
             aria-label="Rechercher"
           >
             ⌕
@@ -197,6 +264,7 @@ export function Cockpit() {
           <button
             onClick={() => setLinks((l) => !l)}
             title="Liens agent → outil"
+            data-tip="Liens agent → outil"
             aria-label="Afficher les liens agent vers outil"
             aria-pressed={links}
             className={links ? 'on' : ''}
@@ -208,7 +276,8 @@ export function Cockpit() {
             onClick={() =>
               replay.active ? replay.stop() : hq.world && void replay.start(hq.world)
             }
-            title="Replay de l'historique"
+            title="Historique (replay)"
+            data-tip="Historique (replay)"
             aria-label="Replay"
             aria-pressed={replay.active}
             className={replay.active ? 'on' : ''}
@@ -216,39 +285,6 @@ export function Cockpit() {
             data-testid="toggle-replay"
           >
             ⏮
-          </button>
-          <button
-            onClick={() => setSelection(null)}
-            title="Équipe (liste)"
-            aria-label="Afficher l’équipe"
-          >
-            ☰
-          </button>
-          <button
-            onClick={() => setOrgOpen(true)}
-            title="Organigramme (qui rend compte à qui)"
-            aria-label="Organigramme"
-            disabled={!world}
-            data-testid="open-orgchart"
-          >
-            ⑂
-          </button>
-          {world?.org.mode === 'live' && (
-            <button
-              onClick={() => setConnectorsOpen(true)}
-              title="Connecteurs (vos outils réels)"
-              aria-label="Connecteurs"
-              data-testid="open-connectors"
-            >
-              ⇄
-            </button>
-          )}
-          <button
-            onClick={() => setSettingsOpen(true)}
-            title="Connexion au backend"
-            aria-label="Connexion au backend"
-          >
-            ⚙
           </button>
         </nav>
         <main className="world-pane">
@@ -282,7 +318,26 @@ export function Cockpit() {
               <span className="muted"> Détail : {error}</span>
             </div>
           )}
-          {world && (
+          <div className="view-bar">
+            <nav className="view-tabs" aria-label="Navigation">
+              {VIEWS.map(([k, label, icon, testId]) => (
+                <button
+                  key={k}
+                  className={view === k ? 'on' : ''}
+                  aria-current={view === k ? 'page' : undefined}
+                  onClick={() => setView(k)}
+                  disabled={!world}
+                  data-testid={testId}
+                >
+                  <span aria-hidden>{icon}</span> {label}
+                  {k === 'missions' && world && metricsFor(world, now).incidents > 0 && (
+                    <span className="count danger">{metricsFor(world, now).incidents}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+          </div>
+          {world && view === 'office' && (
             <div
               className="filter-bar"
               role="toolbar"
@@ -311,7 +366,61 @@ export function Cockpit() {
             onSelect={select}
             onReady={(s) => (scene.current = s)}
           />
-          {world && selection?.kind === 'agent' && (
+          {world && view === 'office' && !replay.active && (
+            <div className="office-overlays">
+              <WelcomeBanner
+                world={world}
+                onMissions={() => {
+                  setMissionsTab('done');
+                  setView('missions');
+                }}
+                onDeliverables={() => setView('deliverables')}
+                onApprovals={() => setSelection(null)}
+              />
+              <Onboarding
+                world={world}
+                canCreate={controls.caps.createAgent}
+                onCreateAgent={() => setAgentFormOpen(true)}
+                onMission={() => setMissionFor('')}
+                onDeliverables={() => setView('deliverables')}
+              />
+            </div>
+          )}
+          {world && view === 'org' && (
+            <OrgChart
+              asPage
+              world={world}
+              canEdit={(controls.caps.manageHierarchy ?? false) && !replay.active}
+              onClose={() => setView('office')}
+              onSelect={(sel) => {
+                select(sel);
+                setView('office');
+              }}
+            />
+          )}
+          {world && view === 'missions' && (
+            <MissionsPage
+              world={world}
+              now={now}
+              tab={missionsTab}
+              onTab={setMissionsTab}
+              onSelect={select}
+              onNewMission={() => setMissionFor('')}
+              toast={toast}
+            />
+          )}
+          {world && view === 'deliverables' && <DeliverablesPage world={world} onSelect={select} />}
+          {world && view === 'settings' && (
+            <SettingsPage
+              world={world}
+              section={settingsSection}
+              onSection={setSettingsSection}
+              onClose={() => setView('office')}
+              onBackend={() => setSettingsOpen(true)}
+              toast={toast}
+            />
+          )}
+          {world && view === 'office' && selection?.kind === 'agent' && (
             <AgentPopover
               key={selection.id}
               world={world}
@@ -369,11 +478,23 @@ export function Cockpit() {
                 <header className="panel-head">
                   <h2>Équipe</h2>
                   <span className="muted">
-                    {world?.agents.length ?? 0} agents · cliquez pour inspecter
+                    {activeAgents.length} actif(s)
+                    {formerAgents.length > 0 && (
+                      <>
+                        {' · '}
+                        <button
+                          className="linklike"
+                          onClick={() => setShowFormer((v) => !v)}
+                          data-testid="team-show-former"
+                        >
+                          {showFormer ? 'masquer les anciens' : `anciens (${formerAgents.length})`}
+                        </button>
+                      </>
+                    )}
                   </span>
                   <button
                     className="btn small-btn"
-                    onClick={() => setOrgOpen(true)}
+                    onClick={() => setView('org')}
                     disabled={!world}
                     data-testid="team-orgchart"
                   >
@@ -399,9 +520,9 @@ export function Cockpit() {
                 )}
                 {world && (
                   <TeamRows
-                    agents={
-                      dept ? world.agents.filter((a) => a.departmentId === dept) : world.agents
-                    }
+                    agents={(showFormer ? world.agents : activeAgents).filter(
+                      (a) => !dept || a.departmentId === dept,
+                    )}
                     world={world}
                     onSelect={select}
                   />
@@ -411,26 +532,12 @@ export function Cockpit() {
           </div>
           <ToolWall world={world} now={now} onSelect={select} dept={dept} />
         </aside>
-        <Timeline world={world} onSelect={select} dept={dept} />
+        <ActivityFeed world={world} onSelect={select} dept={dept} />
+        {isMobile && <MobileView world={world} onDecide={onDecide} onSelect={select} />}
         {searchOpen && world && (
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}
         {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
-        {orgOpen && world && (
-          <OrgChart
-            world={world}
-            canEdit={(controls.caps.manageHierarchy ?? false) && !replay.active}
-            onClose={() => setOrgOpen(false)}
-            onSelect={select}
-          />
-        )}
-        {connectorsOpen && (
-          <ConnectorsPanel
-            canManage={controls.caps.manageConnectors ?? false}
-            onClose={() => setConnectorsOpen(false)}
-            onDone={(text, tone) => toast({ text, tone })}
-          />
-        )}
         {agentFormOpen && world && (
           <AgentForm
             world={world}

@@ -33,7 +33,12 @@ export function Topbar({
   onSearch,
   orgSwitcher,
   onMission,
+  onKpi,
 }: {
+  /** Clic sur un indicateur : ouvre la liste correspondante. */
+  onKpi?: (
+    k: 'agents' | 'tasks' | 'tools' | 'approvals' | 'cost' | 'incidents' | 'success',
+  ) => void;
   world: WorldSnapshot | null;
   connection: ConnectionState;
   metrics: MetricsSummary | null;
@@ -51,7 +56,7 @@ export function Topbar({
   const { caps, readOnly } = useControls();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const m = world ? computeMetrics(world) : null;
+  const m = world ? computeMetrics(world, Date.now()) : null;
   const run = async (kind: TaskKind): Promise<void> => {
     setBusy(true);
     try {
@@ -93,23 +98,28 @@ export function Topbar({
           label="Agents actifs"
           value={m?.activeAgents}
           sub={m ? `${m.busyAgents} occupés` : ''}
+          onClick={() => onKpi?.('agents')}
+          testId="kpi-agents"
         />
         <Kpi
-          label="Tâches en cours"
+          label="Missions"
           value={m ? m.tasksRunning + m.tasksQueued : undefined}
           sub={m ? `${m.tasksRunning} actives · ${m.tasksQueued} en file` : ''}
+          onClick={() => onKpi?.('tasks')}
           testId="kpi-tasks"
         />
         <Kpi
           label="Outils actifs"
           value={m?.activeInvocations}
           sub={m ? `${m.activeToolIds.length} outil(s)` : ''}
+          onClick={() => onKpi?.('tools')}
           testId="kpi-tools"
         />
         <Kpi
-          label="Approbations"
+          label="Validations"
           value={m?.pendingApprovals}
-          sub={m ? `en attente · ${m.activeMeetings} réunion(s)` : ''}
+          sub={m ? 'en attente' : ''}
+          onClick={() => onKpi?.('approvals')}
           tone={m && m.pendingApprovals > 0 ? 'warning' : undefined}
           testId="kpi-approvals"
         />
@@ -123,13 +133,15 @@ export function Topbar({
                 : `${m.costEstimated ? 'estimé' : 'mesuré'} · ${m.llmCalls} appel(s)`
               : ''
           }
+          onClick={() => onKpi?.('cost')}
           testId="kpi-cost"
         />
         <Kpi
           label="Incidents"
           value={m?.incidents}
-          sub="bloqués / échecs"
+          sub="24 h · bloqués / échecs"
           tone={m && m.incidents > 0 ? 'danger' : undefined}
+          onClick={() => onKpi?.('incidents')}
           testId="kpi-incidents"
         />
         <div className="kpi kpi-window" data-testid="kpi-success">
@@ -240,19 +252,27 @@ function Kpi({
   sub,
   tone,
   testId,
+  onClick,
 }: {
   label: string;
   value: number | string | undefined;
   sub: string;
   tone?: string;
   testId?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className={`kpi ${tone ? `tone-${tone}` : ''}`} data-testid={testId}>
+    <button
+      type="button"
+      className={`kpi kpi-btn ${tone ? `tone-${tone}` : ''}`}
+      data-testid={testId}
+      onClick={onClick}
+      title={`${label} — ${sub} (cliquer pour voir le détail)`}
+    >
       <span className="kpi-value">{value ?? '—'}</span>
       <span className="kpi-label">{label}</span>
       <span className="kpi-sub">{sub}</span>
-    </div>
+    </button>
   );
 }
 

@@ -261,3 +261,35 @@ ADR-055 — **Suppression d'agent = suppression logique, décidée par un humain
 `agent.deleted` : l'agent quitte le QG, les listes et l'organigramme ; tâches, invocations et journal
 restent consultables (audit). Une mission en cours est arrêtée (révisé le 2026-11-17) ; tâches ouvertes annulées ;
 subordonnés rattachés à son manager ; droits retirés ; ses recrutements en attente rejetés.
+
+ADR-056 — **Versions d'agent et niveaux de modèle.** Objectif, consignes et modèle se modifient en créant
+une NOUVELLE version (`agent.version.updated`) : les runs en cours gardent la leur, l'historique reste.
+Niveaux Qualité (Opus 5.5) / Équilibré (Sonnet 5.5) / Économique (Haiku 5.5), coût estimé affiché à partir
+de la grille tarifaire versionnée. Les règles de plateforme restent toujours en tête des consignes.
+
+ADR-057 — **Budgets éditables et remis à zéro chaque mois.** Plafond modifiable par un admin
+(`budget.updated`, raison `limit_changed`) ; l'horloge du worker remet la consommation à zéro le 1er du
+mois UTC (raison `new_period`) — correctif : aucune remise à zéro n'existait.
+
+ADR-058 — **Missions récurrentes déclenchées par le worker.** Table `schedules` (quotidienne /
+hebdomadaire / mensuelle, fuseau IANA, heure locale gérant les changements d'heure). Chaque exécution est
+une mission normale avec un plafond de coût propre (`tasks.cost_cap_micros`), idempotente par échéance ;
+agent indisponible = occurrence sautée et tracée ; jamais de rattrapage en rafale.
+
+ADR-059 — **Attentes humaines et délégation hors délai de run.** Le temps passé à attendre une validation
+ou des missions déléguées (`team.wait`, attente durable dans le workflow, 4 h max) ne compte plus dans
+`maxDurationMs` — correctif : une validation donnée après 5 min faisait échouer la mission.
+
+ADR-060 — **Mémoire du pôle et suite de mission.** Les missions live reçoivent, en données balisées, les
+dernières missions terminées et documents de leur pôle. « Demander une suite » crée une mission liée
+(`tasks.follow_up_of`) avec le résultat précédent.
+
+ADR-061 — **Notifications via ntfy.** Téléphone (application ntfy) et email facultatif ; adresse et jeton
+chiffrés AES-256-GCM, anti-SSRF, 60 / heure / org, uniquement pour les organisations live ; envoi après la
+diffusion temps réel, jamais bloquant.
+
+ADR-062 — **Cockpit v2.** Navigation à onglets (Bureau / Organigramme / Missions / Livrables / Réglages),
+indicateurs cliquables, incidents et alertes limités aux 24 h, équipe sans les anciens agents, fiche
+flottante = identité / panneau droit = travail et gestion, fil d'activité groupé par mission, bulles
+d'activité et halo de blocage sur la carte (textes à échelle inverse du zoom), bandeau « depuis ta dernière
+visite », premier démarrage guidé, thème sombre, vue téléphone (validations + activité).

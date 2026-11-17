@@ -99,7 +99,7 @@ test('Live — bascule vers l’org LIVE, création d’agent, mission bloquée 
   await expect(page.getByTestId('timeline')).toContainText('Abandon de la mission (e2e)');
 
   // Suppression de l'agent (admin) : il quitte le QG et la liste ; l'historique reste.
-  await page.getByRole('button', { name: 'Afficher l’équipe' }).click();
+  await page.keyboard.press('Escape'); // retour à la liste de l'équipe
   await page.getByTestId('team-list').getByText('Camille').click();
   await expect(page.getByTestId('inspector-title')).toHaveText('Camille');
   await page.getByTestId('agent-delete').click();

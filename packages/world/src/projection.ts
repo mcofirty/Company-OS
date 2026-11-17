@@ -575,7 +575,13 @@ export interface Metrics {
   incidents: number;
 }
 
-export function computeMetrics(w: WorldSnapshot): Metrics {
+/**
+ * Indicateurs du bandeau. `incidents` = problèmes RÉCENTS (24 h) : tâches bloquées ou échouées
+ * et actions d'outil en échec ; les anciens incidents restent consultables dans « Missions ».
+ */
+export function computeMetrics(w: WorldSnapshot, now: number = Date.now()): Metrics {
+  const DAY = 86_400_000;
+  const recent = (iso: string | null | undefined): boolean => !!iso && now - Date.parse(iso) < DAY;
   const active = w.invocations.filter(isActiveInv);
   return {
     activeAgents: w.agents.filter((a) => a.status === 'active').length,
@@ -592,8 +598,11 @@ export function computeMetrics(w: WorldSnapshot): Metrics {
     costEstimated: w.costs.estimated,
     systemPaused: w.system.paused,
     incidents:
-      w.tasks.filter((t) => t.status === 'blocked' || t.status === 'failed').length +
-      w.invocations.filter((i) => i.status === 'failed').length,
+      w.tasks.filter(
+        (t) =>
+          (t.status === 'failed' && recent(t.endedAt)) ||
+          (t.status === 'blocked' && recent(t.startedAt ?? t.createdAt)),
+      ).length + w.invocations.filter((i) => i.status === 'failed' && recent(i.endedAt)).length,
   };
 }
 

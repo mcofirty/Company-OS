@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { time } from '../../lib/format';
 import { Empty, Section } from '../common';
 
-interface DocumentView {
+export interface DocumentView {
   id: string;
   title: string;
   agentId: string;
@@ -13,11 +13,46 @@ interface DocumentView {
   createdAt: string;
   size: number;
 }
+export type FullDocument = DocumentView & { content: string };
+
+/** Téléchargement en .md (contenu lu à la demande, jamais mis en cache). */
+export async function downloadDocument(d: Pick<DocumentView, 'id' | 'title'>): Promise<void> {
+  const full = (await api<FullDocument>(`/v1/documents/${d.id}`)).data;
+  const url = URL.createObjectURL(
+    new Blob([full.content], { type: 'text/markdown;charset=utf-8' }),
+  );
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${d.title.replace(/[^\p{L}\p{N} _-]+/gu, '').slice(0, 80) || 'document'}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Lecture d'un document (texte brut, échappé par React). */
+export function DocViewer({ doc, onClose }: { doc: FullDocument; onClose: () => void }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={doc.title}>
+      <div className="modal modal-wide doc-viewer" data-testid="doc-viewer">
+        <h2>{doc.title}</h2>
+        <p className="muted small">{time(doc.createdAt)}</p>
+        <pre>{doc.content}</pre>
+        <div className="actions row">
+          <button className="btn primary" onClick={() => void downloadDocument(doc)}>
+            Télécharger (.md)
+          </button>
+          <button className="btn ghost" onClick={onClose}>
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /** Documents RÉELS produits par les agents pour une tâche (bibliothèque), lisibles et téléchargeables. */
 export function TaskDocuments({ taskId, version }: { taskId: string; version: unknown }) {
   const [docs, setDocs] = useState<DocumentView[] | null>(null);
-  const [open, setOpen] = useState<(DocumentView & { content: string }) | null>(null);
+  const [open, setOpen] = useState<FullDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -29,28 +64,6 @@ export function TaskDocuments({ taskId, version }: { taskId: string; version: un
     };
   }, [taskId, version]);
   if (!docs || docs.length === 0) return null;
-
-  const load = async (id: string): Promise<(DocumentView & { content: string }) | null> => {
-    try {
-      return (await api<DocumentView & { content: string }>(`/v1/documents/${id}`)).data;
-    } catch {
-      setError('Document indisponible');
-      return null;
-    }
-  };
-  const download = async (d: DocumentView): Promise<void> => {
-    const full = await load(d.id);
-    if (!full) return;
-    const url = URL.createObjectURL(
-      new Blob([full.content], { type: 'text/markdown;charset=utf-8' }),
-    );
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${d.title.replace(/[^\p{L}\p{N} _-]+/gu, '').slice(0, 80) || 'document'}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <Section title={`Documents produits (${docs.length})`}>
       {docs.map((d) => (
@@ -66,33 +79,22 @@ export function TaskDocuments({ taskId, version }: { taskId: string; version: un
             <button
               className="btn small-btn"
               data-testid="doc-open"
-              onClick={() => void load(d.id).then((full) => full && setOpen(full))}
+              onClick={() =>
+                void api<FullDocument>(`/v1/documents/${d.id}`)
+                  .then((r) => setOpen(r.data))
+                  .catch(() => setError('Document indisponible'))
+              }
             >
               Lire
             </button>
-            <button className="btn small-btn" onClick={() => void download(d)}>
+            <button className="btn small-btn" onClick={() => void downloadDocument(d)}>
               Télécharger
             </button>
           </span>
         </div>
       ))}
       {error && <Empty>{error}</Empty>}
-      {open && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={open.title}>
-          <div className="modal modal-wide doc-viewer" data-testid="doc-viewer">
-            <h2>{open.title}</h2>
-            <pre>{open.content}</pre>
-            <div className="actions row">
-              <button className="btn primary" onClick={() => void download(open)}>
-                Télécharger (.md)
-              </button>
-              <button className="btn ghost" onClick={() => setOpen(null)}>
-                Fermer
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {open && <DocViewer doc={open} onClose={() => setOpen(null)} />}
     </Section>
   );
 }

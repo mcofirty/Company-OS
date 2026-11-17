@@ -254,6 +254,21 @@ export function useHq() {
     if (w) commit({ ...w, alerts: w.alerts.map((a) => (a.id === alertId ? data : a)) });
   }, []);
 
+  const ackAllAlerts = useCallback(async (): Promise<void> => {
+    const { data } = await api<{ ackedAt: string }>('/v1/alerts/ack-all', {
+      method: 'POST',
+      body: '{}',
+    });
+    const w = worldRef.current;
+    if (w)
+      commit({
+        ...w,
+        alerts: w.alerts.map((a) =>
+          a.ackedAt ? a : { ...a, ackedAt: data.ackedAt, ackedBy: 'moi' },
+        ),
+      });
+  }, []);
+
   const cancelTask = useCallback(async (taskId: string, reason: string): Promise<void> => {
     await api(`/v1/tasks/${taskId}/cancel`, {
       method: 'POST',
@@ -327,6 +342,7 @@ export function useHq() {
     setSystemPaused,
     decideApproval,
     ackAlert,
+    ackAllAlerts,
     agentLifecycle,
     createMission,
     createAgent,
