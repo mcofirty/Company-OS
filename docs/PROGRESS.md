@@ -3,6 +3,30 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-26 (21) — Exploitation autonome, agents organisés, affichage vivant
+
+### Réalisé
+- Serveur : agent hôte (cron) — mises à jour automatiques depuis GitHub avec sauvegarde, sauvegardes et
+  restauration depuis Réglages › Serveur (ADR-067). S'active à la prochaine exécution de `update.sh`.
+- Téléphone : rapport du matin (heure / fuseau, un envoi par jour) ; boutons « Valider / Refuser » dans
+  les notifications de validation (liens signés HMAC, une demande, une décision, jusqu'à l'échéance).
+- Fiabilité : reprise automatique des erreurs techniques (2 essais, 1 puis 5 min, sans notification),
+  workflow qui ne laisse plus une mission « en cours » après l'échec d'une activité (ADR-068).
+- Agents (ADR-069) : objectifs de pôle avec barre d'avancement, contrôle qualité par un second agent,
+  retours de l'humain retenus pour la suite, tableau des coûts (agent, pôle, niveau, économie Auto),
+  missions en chaîne avec validation humaine finale.
+- Affichage : personnage 3D partagé (portrait de fiche), tenues aux couleurs du pôle, expressions selon
+  l'état réel ; logos d'applis sur les écrans ; personnalisation (néon, logo, style de zone, déplacer /
+  échanger des pôles) ; mode présentation ; vue téléphone repensée.
+- Migrations : daily_report, auto_retry, agent_ops, branding.
+
+### Tests (exécutés le 2026-11-26)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 199/199 (dont ops, notifications, auto-retry,
+  agent-ops). `pnpm e2e` : voir commit.
+
+### Prochaine tâche
+- Retour utilisateur en production ; vérifier l'activation de l'agent hôte sur le VPS.
+
 ## Session 2026-11-22 (20) — Fiches enrichies et optimisation automatique du modèle
 
 ### Réalisé
