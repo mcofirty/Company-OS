@@ -34,6 +34,7 @@ import { TaskDocuments } from './Documents';
 import type { AgentProfile } from './AgentCard';
 import { AgentManage, AgentWork, type AgentRemote } from './AgentWork';
 import { GrantPicker, toggleGrant } from '../cockpit/LiveForms';
+import { DepartmentDialog } from '../cockpit/OrgDialogs';
 
 interface Props {
   world: WorldSnapshot;
@@ -719,6 +720,8 @@ function InvocationInspector({ world, id, now, onSelect }: Props & { id: string 
 }
 
 function DepartmentInspector({ world, id, now, onSelect }: Props & { id: string }) {
+  const { caps } = useControls();
+  const [editing, setEditing] = useState(false);
   const dept = world.departments.find((d) => d.id === id);
   if (!dept) return <Empty>Département introuvable.</Empty>;
   const members = world.agents.filter((a) => a.departmentId === id);
@@ -739,6 +742,25 @@ function DepartmentInspector({ world, id, now, onSelect }: Props & { id: string 
           </p>
         </div>
       </header>
+      {caps.manageDepartments && (
+        <div className="insp-actions">
+          <button
+            className="btn small-btn"
+            onClick={() => setEditing(true)}
+            data-testid="department-edit"
+          >
+            Renommer / couleur
+          </button>
+        </div>
+      )}
+      {editing && (
+        <DepartmentDialog
+          world={world}
+          edit={{ id: dept.id, name: dept.name, color: dept.color }}
+          onClose={() => setEditing(false)}
+          toast={() => undefined}
+        />
+      )}
       <Section title="Équipe">
         <TeamRows agents={members} world={world} onSelect={onSelect} />
       </Section>

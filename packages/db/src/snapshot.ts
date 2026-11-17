@@ -112,14 +112,17 @@ export async function loadSnapshot(db: Db, orgId: string): Promise<WorldSnapshot
         lastSeq: Number(org.lastSeq),
         serverTime: new Date().toISOString(),
         worldMap: { id: HQ_MAP.id, version: HQ_MAP.version },
-        departments: departments.map((d) => ({
-          id: d.id,
-          roomId: d.roomId,
-          name: d.name,
-          color: d.color,
-          capacity: d.capacity,
-          managerAgentId: d.managerAgentId,
-        })),
+        // Ordre identique au réducteur client (pôles créés à la volée).
+        departments: [...departments]
+          .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+          .map((d) => ({
+            id: d.id,
+            roomId: d.roomId,
+            name: d.name,
+            color: d.color,
+            capacity: d.capacity,
+            managerAgentId: d.managerAgentId,
+          })),
         agents: agents.map(agentView),
         // Seulement les outils qui existent pour ce mode : une org live ne voit aucun outil fictif.
         tools: sortTools(

@@ -380,5 +380,7 @@ export interface Me {
     editBudget?: boolean;
     manageSchedules?: boolean;
     manageNotifications?: boolean;
+    manageDepartments?: boolean;
+    conveneMeeting?: boolean;
   };
 }

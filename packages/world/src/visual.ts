@@ -11,6 +11,43 @@ export interface VisualIntent {
   mode: VisualMode;
   /** Animation à jouer une fois arrivé. */
   pose: 'idle' | 'work' | 'tool';
+  /** Vie de bureau cosmétique d'un agent inoccupé (jamais pendant une mission). */
+  life?: LifeActivity;
+}
+
+export type LifeActivity = 'coffee' | 'chat' | 'read' | 'stretch' | 'plants';
+/** Créneau de vie de bureau : chaque agent inoccupé tire une activité par créneau. */
+export const LIFE_SLOT_MS = 75_000;
+/** Durée active d'une activité dans son créneau (le reste du temps : à son poste). */
+export const LIFE_ACTIVE_MS = 32_000;
+
+const hash = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+};
+
+/**
+ * Vie de bureau déterministe (même résultat pour tous les écrans) : seulement pour un agent
+ * ACTIF et réellement inoccupé. Dès qu'une mission arrive, l'agent repart à son poste : la
+ * productivité n'est jamais affectée, ce n'est qu'une projection visuelle.
+ */
+export function idleLife(agent: AgentView, now: number): LifeActivity | null {
+  if (agent.status !== 'active' || agent.activity !== 'idle' || agent.currentTaskId) return null;
+  const h = hash(agent.id);
+  const t = now + (h % LIFE_SLOT_MS);
+  const slot = Math.floor(t / LIFE_SLOT_MS);
+  if (t % LIFE_SLOT_MS >= LIFE_ACTIVE_MS) return null;
+  const roll = hash(`${agent.id}:${slot}`) % 12;
+  if (roll < 2) return 'coffee';
+  if (roll < 4) return 'chat';
+  if (roll < 6) return 'read';
+  if (roll < 7) return 'stretch';
+  if (roll < 8) return 'plants';
+  return null;
 }
 
 /**
@@ -53,6 +90,17 @@ export function visualIntent(
       const spot = spots[agentIndex % spots.length];
       if (spot) return { agentId: agent.id, anchor: spot, mode: 'break', pose: 'idle' };
     }
+  }
+  if (!busy) {
+    const life = idleLife(agent, now);
+    if (life === 'coffee' || life === 'chat') {
+      const spots = anchorsOfKind(map, 'cafe');
+      // Les agents qui discutent partagent la même zone du café (places voisines).
+      const spot =
+        spots[(life === 'chat' ? agentIndex : agentIndex * 3 + 1) % Math.max(1, spots.length)];
+      if (spot) return { agentId: agent.id, anchor: spot, mode: 'break', pose: 'idle', life };
+    }
+    if (life) return { agentId: agent.id, anchor: desk, mode: 'desk', pose: 'idle', life };
   }
   const pose =
     agent.activity === 'using_tool' ? 'tool' : agent.activity === 'working' ? 'work' : 'idle';

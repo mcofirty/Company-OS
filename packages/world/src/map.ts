@@ -87,7 +87,7 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#E7C16A',
     kind: 'department',
     rect: { x0: 11, y0: 1, x1: 22, y1: 7 },
-    desks: 2,
+    desks: 6,
   },
   {
     id: 'finance',
@@ -95,7 +95,7 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#76C69A',
     kind: 'department',
     rect: { x0: 25, y0: 1, x1: 34, y1: 7 },
-    desks: 3,
+    desks: 6,
   },
   {
     id: 'sales',
@@ -103,7 +103,7 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#EA966C',
     kind: 'department',
     rect: { x0: 1, y0: 10, x1: 10, y1: 16 },
-    desks: 4,
+    desks: 6,
   },
   {
     id: 'meeting',
@@ -118,7 +118,7 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#9C84DE',
     kind: 'department',
     rect: { x0: 25, y0: 10, x1: 34, y1: 16 },
-    desks: 3,
+    desks: 6,
   },
   {
     id: 'entry',
@@ -133,7 +133,7 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#E8A5C0',
     kind: 'department',
     rect: { x0: 9, y0: 19, x1: 18, y1: 24 },
-    desks: 3,
+    desks: 6,
   },
   {
     id: 'operations',
@@ -141,9 +141,37 @@ const ROOM_SPECS: RoomSpec[] = [
     color: '#88BADC',
     kind: 'department',
     rect: { x0: 21, y0: 19, x1: 34, y1: 24 },
-    desks: 3,
+    desks: 6,
+  },
+  // ---------- Aile d'extension : locaux libres attribués aux nouveaux pôles ----------
+  {
+    id: 'annex-1',
+    label: 'Espace libre',
+    color: '#CFC6DA',
+    kind: 'department',
+    rect: { x0: 1, y0: 27, x1: 11, y1: 33 },
+    desks: 6,
+  },
+  {
+    id: 'annex-2',
+    label: 'Espace libre',
+    color: '#CFC6DA',
+    kind: 'department',
+    rect: { x0: 13, y0: 27, x1: 23, y1: 33 },
+    desks: 6,
+  },
+  {
+    id: 'annex-3',
+    label: 'Espace libre',
+    color: '#CFC6DA',
+    kind: 'department',
+    rect: { x0: 25, y0: 27, x1: 34, y1: 33 },
+    desks: 6,
   },
 ];
+
+/** Locaux de l'aile d'extension (nouveaux pôles), dans l'ordre d'attribution. */
+export const ANNEX_ROOM_IDS = ['annex-1', 'annex-2', 'annex-3'] as const;
 
 const key = (t: Tile): string => `${t.x},${t.y}`;
 const inRect = (t: Tile, r: Rect): boolean =>
@@ -152,7 +180,7 @@ const pad = (n: number): string => String(n).padStart(2, '0');
 
 export function buildHqMap(): WorldMap {
   const cols = 36;
-  const rows = 26;
+  const rows = 35;
   const rooms: Room[] = [];
   const furniture: Furniture[] = [];
   const anchors: Record<string, Anchor> = {};
@@ -290,6 +318,8 @@ export function buildHqMap(): WorldMap {
     { x: 11, y: 17 },
     { x: 35, y: 17 },
     { x: 23, y: 0 },
+    { x: 0, y: 26 },
+    { x: 35, y: 26 },
   ]) {
     furniture.push({ kind: 'plant', ...t, roomId: null });
   }
@@ -320,7 +350,7 @@ export function buildHqMap(): WorldMap {
 
   return {
     id: 'hq-v1',
-    version: 1,
+    version: 2,
     cols,
     rows,
     tileWidth: 64,

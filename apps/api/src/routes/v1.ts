@@ -58,6 +58,10 @@ import {
   retryTask,
   getDocument,
   listDocuments,
+  conveneMeeting,
+  createDepartment,
+  endMeeting,
+  updateDepartment,
 } from '@company-os/db';
 import { principalOf, requireRole } from '../auth';
 
@@ -112,6 +116,8 @@ export function registerV1(
           editBudget: admin,
           manageSchedules: admin && live,
           manageNotifications: admin && live,
+          manageDepartments: admin,
+          conveneMeeting: operator,
         },
       },
       meta,
@@ -340,6 +346,82 @@ export function registerV1(
     const body = UpdateBudgetRequestSchema.parse(req.body);
     const r = await updateBudgetLimit(db, { orgId: p.orgId, actorId: p.userId, ...body });
     return { data: { ...body, ...r }, meta };
+  });
+
+  /** Nouveau pôle (extension du QG) : décision de l'administrateur. */
+  const DeptBody = z
+    .object({
+      name: z.string().trim().min(2).max(40),
+      color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    })
+    .strict();
+  app.post('/v1/departments', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const body = DeptBody.parse(req.body);
+    const r = await createDepartment(db, { orgId: p.orgId, actorId: p.userId, ...body });
+    return reply.status(201).send({ data: r, meta });
+  });
+  app.post('/v1/departments/:id', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'admin');
+    const { id } = z.object({ id: z.string().min(1).max(80) }).parse(req.params);
+    const body = DeptBody.parse(req.body);
+    await updateDepartment(db, { orgId: p.orgId, actorId: p.userId, departmentId: id, ...body });
+    return { data: { departmentId: id }, meta };
+  });
+
+  /** Réunion convoquée par un humain : les agents disponibles rejoignent la salle. */
+  app.post('/v1/meetings', async (req, reply) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    const body = z
+      .object({
+        topic: z.string().trim().min(3).max(160),
+        agenda: z.string().trim().max(2000).default(''),
+        participantIds: z.array(SlugIdSchema).min(2).max(8),
+        facilitatorId: SlugIdSchema.optional(),
+        durationMin: z.number().int().min(1).max(240).default(15),
+        minutes: z.boolean().default(false),
+      })
+      .strict()
+      .parse(req.body);
+    const r = await conveneMeeting(db, {
+      orgId: p.orgId,
+      actorId: p.userId,
+      topic: body.topic,
+      agenda: body.agenda,
+      participantIds: body.participantIds,
+      ...(body.facilitatorId ? { facilitatorId: body.facilitatorId } : {}),
+      durationMin: body.durationMin,
+      minutes: body.minutes,
+    });
+    return reply.status(201).send({ data: r, meta });
+  });
+  app.post('/v1/meetings/:id/end', async (req) => {
+    const p = principalOf(req);
+    requireRole(p, 'operator');
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z
+      .object({
+        notes: z.string().trim().max(2000).default(''),
+        decisions: z
+          .array(
+            z.object({ decision: z.string().trim().min(2).max(200), ownerAgentId: SlugIdSchema }),
+          )
+          .max(10)
+          .default([]),
+      })
+      .strict()
+      .parse(req.body ?? {});
+    const r = await endMeeting(db, {
+      orgId: p.orgId,
+      meetingId: id,
+      actor: { kind: 'user', id: p.userId },
+      notes: body.notes,
+      decisions: body.decisions,
+    });
+    return { data: { meetingId: id, ...r }, meta };
   });
 
   /** Fiche d'un agent (compétences, tâches habituelles) : administrateur seulement. */

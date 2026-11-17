@@ -66,11 +66,14 @@ export function ActivityFeed({
     const tasks = new Map(world.tasks.map((t) => [t.id, t]));
     const byCorr = new Map<string, Row & { kind: 'mission' }>();
     const out: Row[] = [];
+    const withTask = new Set(world.timeline.filter((e) => taskOf(e)).map((e) => e.correlationId));
     for (const e of world.timeline) {
       if (HIDDEN.has(e.type)) continue;
       const a = agentOf(e);
       if (deptAgents && (!a || !deptAgents.has(a))) continue;
-      if (TASK_TYPES.test(e.type)) {
+      // Réunion convoquée par l'humain (sans mission) : ligne simple, pas un groupe « mission ».
+      const standaloneMeeting = e.type.startsWith('meeting.') && !withTask.has(e.correlationId);
+      if (TASK_TYPES.test(e.type) && !standaloneMeeting) {
         let g = byCorr.get(e.correlationId);
         if (!g) {
           g = { kind: 'mission', key: e.correlationId, task: null, events: [] };

@@ -17,14 +17,15 @@ interface Props {
   now: number;
   onSelect: (s: Selection | null) => void;
   onReady: (scene: HqScene) => void;
+  onEmptyRoom?: (roomId: string) => void;
 }
 
 /** Monde Phaser initialisé côté client uniquement et détruit proprement au démontage. */
-export function WorldViewport({ world, selection, now, onSelect, onReady }: Props) {
+export function WorldViewport({ world, selection, now, onSelect, onReady, onEmptyRoom }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const scene = useRef<HqScene | null>(null);
-  const cb = useRef({ onSelect, onReady });
-  cb.current = { onSelect, onReady };
+  const cb = useRef({ onSelect, onReady, onEmptyRoom });
+  cb.current = { onSelect, onReady, onEmptyRoom };
 
   useEffect(() => {
     let game: Game | null = null;
@@ -33,7 +34,10 @@ export function WorldViewport({ world, selection, now, onSelect, onReady }: Prop
       const Phaser = await import('phaser');
       const { HqScene } = await import('../../world/HqScene');
       if (disposed || !host.current) return;
-      const s = new HqScene({ onSelect: (sel) => cb.current.onSelect(sel) });
+      const s = new HqScene({
+        onSelect: (sel) => cb.current.onSelect(sel),
+        onEmptyRoom: (r) => cb.current.onEmptyRoom?.(r),
+      });
       scene.current = s;
       if (process.env.NODE_ENV !== 'production') window.__hqScene = s;
       game = new Phaser.Game({

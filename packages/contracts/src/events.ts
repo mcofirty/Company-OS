@@ -47,6 +47,7 @@ export const ALL_EVENT_TYPES = [
   'agent.version.updated',
   'budget.updated',
   'schedule.updated',
+  'department.updated',
 ] as const;
 export type AnyEventType = (typeof ALL_EVENT_TYPES)[number];
 
@@ -219,6 +220,8 @@ export const Payloads = {
     participantAgentIds: z.array(SlugIdSchema).min(2).max(8),
     /** Siège réservé par participant (aucun chevauchement). */
     seats: z.record(z.string(), z.string().max(64)),
+    /** Réunion convoquée par un humain : fin prévue (clôture automatique). */
+    endsAt: z.iso.datetime().nullable().default(null),
   }),
   'meeting.completed': z.object({
     meetingId: Uuid,
@@ -318,6 +321,15 @@ export const Payloads = {
     nextRunAt: z.iso.datetime().nullable(),
     taskId: Uuid.nullable(),
   }),
+  /** Pôle créé (local de l'aile d'extension) ou modifié (nom, couleur) par un administrateur. */
+  'department.updated': z.object({
+    departmentId: z.string().min(1).max(64),
+    roomId: z.string().min(1).max(64),
+    name: z.string().min(1).max(40),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    capacity: z.number().int().min(0).max(50),
+    change: z.enum(['created', 'updated']),
+  }),
 } as const;
 
 export type ImplementedEventType = keyof typeof Payloads;
@@ -377,6 +389,7 @@ export const DomainEventSchema = z.discriminatedUnion('type', [
   variant('agent.version.updated'),
   variant('budget.updated'),
   variant('schedule.updated'),
+  variant('department.updated'),
 ]);
 export type DomainEvent = z.infer<typeof DomainEventSchema>;
 export type DomainEventType = DomainEvent['type'];

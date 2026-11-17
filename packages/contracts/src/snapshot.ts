@@ -134,6 +134,8 @@ export const MeetingViewSchema = z.object({
   seats: z.record(z.string(), z.string()),
   startedAt: z.iso.datetime().nullable(),
   endedAt: z.iso.datetime().nullable(),
+  /** Fin prévue (réunion convoquée par un humain). */
+  endsAt: z.iso.datetime().nullable().optional(),
   summary: z.string().nullable(),
   decisions: z.array(z.object({ decision: z.string(), ownerAgentId: z.string() })),
   taskIdsCreated: z.array(z.string()),

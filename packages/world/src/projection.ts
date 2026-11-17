@@ -192,6 +192,7 @@ export function applyEvent(
         seats: p.seats,
         startedAt: at,
         endedAt: null,
+        endsAt: p.endsAt,
         summary: null,
         decisions: [],
         taskIdsCreated: [],
@@ -378,6 +379,26 @@ export function applyEvent(
     case 'agent.grants.updated':
     case 'agent.profile.updated':
       break;
+    case 'department.updated': {
+      const p = e.payload;
+      const d = {
+        id: p.departmentId,
+        roomId: p.roomId,
+        name: p.name,
+        color: p.color,
+        capacity: p.capacity,
+      };
+      const exists = w.departments.some((x) => x.id === p.departmentId);
+      w = {
+        ...w,
+        departments: exists
+          ? w.departments.map((x) => (x.id === p.departmentId ? { ...x, ...d } : x))
+          : [...w.departments, { ...d, managerAgentId: null }].sort((a, b) =>
+              a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+            ),
+      };
+      break;
+    }
     case 'schedule.updated':
       break; // audit : les planifications sont lues par l'API
     case 'agent.version.updated':

@@ -27,6 +27,7 @@ import { computeMetrics as metricsFor } from '@company-os/world';
 import { AgentForm, MissionForm } from './cockpit/LiveForms';
 import { AgentPopover } from './cockpit/AgentPopover';
 import { OrgChart } from './cockpit/OrgChart';
+import { ConveneMeetingDialog, DepartmentDialog } from './cockpit/OrgDialogs';
 import { ApprovalsInbox } from './panels/Governance';
 import { Inspector, TeamRows } from './panels/Inspector';
 import { ToolWall } from './panels/ToolWall';
@@ -73,6 +74,8 @@ export function Cockpit() {
   const [links, setLinks] = useState(false);
   const [metricsWindow, setMetricsWindow] = useState<MetricsWindow>('24h');
   const [agentFormOpen, setAgentFormOpen] = useState(false);
+  const [deptDialog, setDeptDialog] = useState(false);
+  const [conveneOpen, setConveneOpen] = useState(false);
   /** Vue principale : bureau (QG) ou une page. Le QG reste monté (Phaser) sous les pages. */
   const [view, setView] = useState<View>('office');
   const [missionsTab, setMissionsTab] = useState<MissionsTab>('open');
@@ -370,19 +373,36 @@ export function Cockpit() {
               aria-label="Filtrer par département"
               data-testid="filter-bar"
             >
-              <button className={dept === null ? 'on' : ''} onClick={() => setDept(null)}>
-                Tous
-              </button>
-              {world.departments.map((d) => (
-                <button
-                  key={d.id}
-                  className={dept === d.id ? 'on' : ''}
-                  onClick={() => setDept(dept === d.id ? null : d.id)}
-                  data-testid={`filter-${d.id}`}
-                >
-                  <span className="dot" style={{ background: d.color }} /> {d.name}
+              <div className="chips">
+                <button className={dept === null ? 'on' : ''} onClick={() => setDept(null)}>
+                  Tous
                 </button>
-              ))}
+                {world.departments.map((d) => (
+                  <button
+                    key={d.id}
+                    className={dept === d.id ? 'on' : ''}
+                    onClick={() => setDept(dept === d.id ? null : d.id)}
+                    data-testid={`filter-${d.id}`}
+                  >
+                    <span className="dot" style={{ background: d.color }} /> {d.name}
+                  </button>
+                ))}
+              </div>
+              {controls.caps.manageDepartments && !replay.active && (
+                <button onClick={() => setDeptDialog(true)} data-testid="new-department">
+                  ＋ Pôle
+                </button>
+              )}
+              {controls.caps.conveneMeeting && !replay.active && (
+                <button
+                  className="accent"
+                  onClick={() => setConveneOpen(true)}
+                  data-testid="convene-meeting"
+                  title="Convoquer une réunion avec les agents de votre choix"
+                >
+                  ◎ Réunion
+                </button>
+              )}
             </div>
           )}
           <WorldViewport
@@ -390,6 +410,7 @@ export function Cockpit() {
             selection={selection}
             now={now}
             onSelect={select}
+            onEmptyRoom={() => controls.caps.manageDepartments && setDeptDialog(true)}
             onReady={(s) => (scene.current = s)}
           />
           {world && view === 'office' && !replay.active && (
@@ -564,6 +585,21 @@ export function Cockpit() {
           <SearchPalette world={world} onSelect={select} onClose={() => setSearchOpen(false)} />
         )}
         {settingsOpen && <BackendSettings onClose={() => setSettingsOpen(false)} />}
+        {deptDialog && world && (
+          <DepartmentDialog world={world} onClose={() => setDeptDialog(false)} toast={toast} />
+        )}
+        {conveneOpen && world && (
+          <ConveneMeetingDialog
+            world={world}
+            toast={toast}
+            onClose={() => setConveneOpen(false)}
+            onStarted={(id) => {
+              setConveneOpen(false);
+              setView('office');
+              select({ kind: 'meeting', id });
+            }}
+          />
+        )}
         {agentFormOpen && world && (
           <AgentForm
             world={world}

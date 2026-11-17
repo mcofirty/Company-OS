@@ -2,6 +2,7 @@ import { TaskKindSchema, type TaskKind } from '@company-os/contracts';
 import {
   createTask,
   listRunningTasks,
+  endDueMeetings,
   rollBudgetPeriods,
   runDueSchedules,
   startNextTask,
@@ -222,6 +223,8 @@ export function startClock(
       if (r.triggered + r.skipped > 0) opts.log('schedules', r);
       const rolled = await rollBudgetPeriods(db, new Date());
       if (rolled > 0) opts.log('budgets new period', { rolled });
+      const ended = await endDueMeetings(db, new Date());
+      if (ended > 0) opts.log('meetings ended', { ended });
     } catch (err) {
       opts.log('clock error', { error: err instanceof Error ? err.message : String(err) });
     } finally {

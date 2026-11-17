@@ -205,7 +205,7 @@ describe('S05 — recrutement : RH propose, admin approuve, apparition', () => {
   });
 
   it('plus de poste libre : le nouvel agent attend à l’accueil', async () => {
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 5; i++) {
       await (
         await start('propose_hire')
       ).run;
@@ -224,7 +224,13 @@ describe('S05 — recrutement : RH propose, admin approuve, apparition', () => {
       where: { createdBy: 'user:dev-admin' },
       orderBy: { createdAt: 'asc' },
     });
-    expect(hires.map((h) => h.deskAnchor)).toEqual(['operations-desk-03', 'entry-wait-01']);
+    expect(hires.map((h) => h.deskAnchor)).toEqual([
+      'operations-desk-03',
+      'operations-desk-04',
+      'operations-desk-05',
+      'operations-desk-06',
+      'entry-wait-01',
+    ]);
   });
 });
 

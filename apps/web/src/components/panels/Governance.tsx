@@ -7,6 +7,7 @@ import { useControls } from '../../lib/controls';
 import { duration, TASK_STATUS_LABEL, time } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { Badge, Empty, Section } from '../common';
+import { EndMeetingForm } from '../cockpit/OrgDialogs';
 
 export type DecideFn = (
   approvalId: string,
@@ -230,6 +231,7 @@ export function MeetingInspector({
   id: string;
   onSelect: (s: Selection) => void;
 }) {
+  const { caps } = useControls();
   const local = world.meetings.find((m) => m.id === id);
   const [detail, setDetail] = useState<MeetingDetail | null>(null);
   useEffect(() => {
@@ -244,6 +246,7 @@ export function MeetingInspector({
   const m = local ?? detail?.meeting;
   if (!m) return <Empty>Chargement de la réunion…</Empty>;
   const name = (aid: string): string => world.agents.find((a) => a.id === aid)?.name ?? aid;
+  const endsAt = 'endsAt' in m && m.endsAt ? Date.parse(m.endsAt) : null;
   return (
     <>
       <header className="insp-head">
@@ -261,7 +264,21 @@ export function MeetingInspector({
         <Badge tone={m.status === 'in_progress' ? 'accent' : 'success'}>
           {m.status === 'in_progress' ? 'EN COURS' : 'TERMINÉE'}
         </Badge>
+        {endsAt && m.status === 'in_progress' && (
+          <Badge tone="neutral">
+            fin prévue{' '}
+            {new Date(endsAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </Badge>
+        )}
       </div>
+      {m.status === 'in_progress' && endsAt && caps.conveneMeeting && (
+        <Section title="Clôturer">
+          <EndMeetingForm
+            meetingId={m.id}
+            participants={m.participantAgentIds.map((p) => ({ id: p, name: name(p) }))}
+          />
+        </Section>
+      )}
       <Section title="Participants (sièges réservés)">
         <ul className="mini-log">
           {m.participantAgentIds.map((p) => (

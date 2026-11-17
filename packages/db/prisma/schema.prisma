@@ -377,6 +377,11 @@ model Meeting {
   summary          String?
   decisions        Json                 @default("[]")
   taskIdsCreated   String[]             @map("task_ids_created")
+  /// Réunion convoquée par un humain : ordre du jour, fin prévue, compte rendu IA souhaité.
+  agenda           String?
+  endsAt           DateTime?            @map("ends_at") @db.Timestamptz(3)
+  convenedBy       String?              @map("convened_by")
+  minutesWanted    Boolean              @default(false) @map("minutes_wanted")
   participants     MeetingParticipant[]
 
   @@index([orgId, status])

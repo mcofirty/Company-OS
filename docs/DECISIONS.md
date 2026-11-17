@@ -300,3 +300,10 @@ jetons chiffrés et renouvelés), (2) des passerelles d'automatisation (Zapier, 
 secrète est chiffrée, qui ouvrent Gmail, WhatsApp, LinkedIn, Slack, Google… Les logos viennent de
 simple-icons (CC0) ; les marques sans icône libre ont une pastille à leurs couleurs. Les politiques
 (lecture / validation / désactivé) et l'audit s'appliquent à chaque outil, quelle que soit l'origine.
+
+ADR-064 — **Extension et vie de bureau.** Le plan reste statique (projection pure) : une aile de 3 locaux
+libres accueille les nouveaux pôles (décision admin, événement `department.updated`) ; au-delà, refus
+explicite plutôt que génération dynamique de carte. Les réunions convoquées par un humain réutilisent la
+salle et les sièges existants, n'interrompent jamais un agent en mission et se ferment seules à l'heure
+prévue. La « vie de bureau » est une fonction pure du temps et de l'id de l'agent, active seulement quand
+l'agent est actif et sans mission : aucun état métier, aucun impact sur la file des tâches.

@@ -24,3 +24,4 @@ export * from './services/admin';
 export * from './services/schedules';
 export * from './services/memory';
 export * from './services/notifications';
+export * from './services/org';

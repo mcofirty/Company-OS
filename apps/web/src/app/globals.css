@@ -2096,6 +2096,7 @@ kbd {
 }
 .world-pane .filter-bar {
   top: 54px;
+  z-index: 7; /* au-dessus des bandeaux d'accueil : les actions restent cliquables */
 }
 .world-pane .pause-banner {
   top: 92px;
@@ -3136,4 +3137,111 @@ kbd {
 .via-list {
   display: grid;
   gap: 6px;
+}
+
+/* ---------- Pôles et réunions convoquées ---------- */
+.world-pane .filter-bar {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.filter-bar .chips {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  flex: 0 1 auto; /* largeur du contenu : la carte reste glissable à côté */
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+.filter-bar .chips button {
+  flex-shrink: 0;
+}
+.filter-bar > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.filter-bar .chips + button {
+  margin-left: auto;
+}
+.filter-bar button.accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 600;
+}
+.color-pick {
+  display: flex;
+  gap: 6px;
+  border: 0;
+  padding: 0;
+  margin: 8px 0;
+}
+.color-pick legend {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.color-pick button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.color-pick button.on {
+  border-color: var(--ink);
+  box-shadow: 0 0 0 2px white inset;
+}
+.meeting-dialog {
+  max-width: 620px;
+}
+.meeting-dialog .participants {
+  max-height: 260px;
+  overflow: auto;
+}
+.pick-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 6px;
+}
+.pick-group .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.check.disabled {
+  opacity: 0.5;
+}
+.row.gap {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.row.gap .grow {
+  flex: 1;
+}
+.insp-actions {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.end-meeting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.end-meeting label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+}
+.end-meeting textarea,
+.end-meeting input,
+.end-meeting select {
+  width: 100%;
+  box-sizing: border-box;
 }

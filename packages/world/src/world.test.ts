@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DomainEvent, NewEvent, WorldSnapshot } from '@company-os/contracts';
+import type { AgentView, DomainEvent, NewEvent, WorldSnapshot } from '@company-os/contracts';
 import {
   anchorsOfKind,
   applyEvent,
@@ -10,6 +10,8 @@ import {
   HQ_MAP,
   visualIntent,
   BREAK_MS,
+  idleLife,
+  LIFE_SLOT_MS,
 } from './index';
 
 const ORG = '00000000-0000-4000-8000-0000000000aa';
@@ -246,7 +248,7 @@ describe('carte hq-v1', () => {
     expect(kinds).toContain('cafe');
     expect(kinds).toContain('entry');
     expect(HQ_MAP.cols).toBe(36);
-    expect(HQ_MAP.rows).toBe(26);
+    expect(HQ_MAP.rows).toBe(35); // aile d'extension (nouveaux pôles)
   });
   it('assez de postes pour 12 agents et de places au café', () => {
     expect(anchorsOfKind(HQ_MAP, 'desk').length).toBeGreaterThanOrEqual(12);
@@ -327,5 +329,47 @@ describe('projection visuelle', () => {
     expect(visualIntent(idle, 0, end + 1000)?.mode).toBe('break');
     expect(visualIntent(idle, 0, end + BREAK_MS + 1)?.mode).toBe('desk');
     expect(departmentPresence(done.agents, 'sales', end + 1000)).toEqual({ atDesk: 0, total: 1 });
+  });
+});
+
+describe('vie de bureau (cosmétique)', () => {
+  const base = {
+    id: 'a-life-1',
+    status: 'active',
+    activity: 'idle',
+    currentTaskId: null,
+    deskAnchor: 'sales-desk-01',
+    lastTaskEndedAt: null,
+  } as unknown as AgentView;
+  it('est déterministe et jamais pendant une mission', () => {
+    const seen = new Set<string>();
+    for (let t = 0; t < 40 * LIFE_SLOT_MS; t += 5_000) {
+      expect(idleLife(base, t)).toBe(idleLife(base, t));
+      seen.add(String(idleLife(base, t)));
+      for (const activity of [
+        'working',
+        'using_tool',
+        'queued',
+        'blocked',
+        'waiting_approval',
+        'in_meeting',
+      ] as const) {
+        const busy = { ...base, activity } as AgentView;
+        expect(idleLife(busy, t)).toBeNull();
+        const v = visualIntent(busy, 0, t);
+        if (activity !== 'in_meeting') expect(v?.mode).toBe('desk');
+      }
+      expect(idleLife({ ...base, currentTaskId: 't1' } as AgentView, t)).toBeNull();
+      expect(idleLife({ ...base, status: 'paused' } as AgentView, t)).toBeNull();
+    }
+    expect(seen.size).toBeGreaterThan(2);
+  });
+  it('envoie au café pour une pause ou une discussion', () => {
+    for (let t = 0; t < 40 * LIFE_SLOT_MS; t += 5_000) {
+      const life = idleLife(base, t);
+      const v = visualIntent(base, 0, t)!;
+      if (life === 'coffee' || life === 'chat') expect(v.anchor.kind).toBe('cafe');
+      else expect(v.anchor.id).toBe('sales-desk-01');
+    }
   });
 });

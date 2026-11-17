@@ -3,6 +3,31 @@
 ## Convention de mise à jour
 Pour chaque changement : horodatage UTC, commit (si disponible), tâches terminées, commandes et résultats exacts, écarts connus, prochaine action.
 
+## Session 2026-11-20 (18) — Nouveaux pôles, réunions convoquées, vie de bureau
+
+### Réalisé
+- Plan du QG v2 : aile d'extension (3 locaux libres « Espace libre », 6 postes chacun), 6 postes par pôle.
+- Nouveaux pôles (admin) : `POST /v1/departments` (premier local libre), renommer / recolorer
+  (`POST /v1/departments/:id`) ; événement `department.updated` ; boutons « ＋ Pôle », clic sur un local
+  libre, « Renommer / couleur » dans la fiche du pôle ; étiquettes de salle = nom du pôle.
+- Réunions convoquées (opérateur+) : `POST /v1/meetings` (sujet, ordre du jour, 2-8 participants,
+  animateur, durée, compte rendu IA facultatif) ; les agents en mission ne sont jamais interrompus (signalés
+  absents) ; `POST /v1/meetings/:id/end` (notes, décision) ; clôture automatique à l'heure prévue par
+  l'horloge du worker ; en live, mission « Compte rendu — … » pour l'animateur si demandé.
+- Vie de bureau cosmétique (ADR-064) : agent actif sans mission → café, discussion, lecture, étirements,
+  plantes ; déterministe ; retour immédiat au poste dès qu'une mission arrive.
+- Correctifs UX : actions de la barre des pôles cliquables au-dessus du bandeau d'accueil, rangée de
+  pôles défilante ; réunion convoquée affichée comme ligne simple dans le fil d'activité.
+- Migration `20261120090000_meetings_convened`.
+
+### Tests (exécutés le 2026-11-20)
+- `pnpm lint && pnpm typecheck` : OK. `pnpm test` : 170/170 (dont `apps/api/src/org-growth.test.ts`,
+  vie de bureau dans `packages/world`). `pnpm e2e` : 26/26 (dont `tests/e2e/growth.spec.ts`).
+  `apps/web` : `pnpm build` OK.
+
+### Prochaine tâche
+- Retour utilisateur sur le rendu en production.
+
 ## Session 2026-11-19 (17) — Barre d'applications et catalogue (OAuth, passerelles)
 
 ### Réalisé

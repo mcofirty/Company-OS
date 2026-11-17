@@ -98,6 +98,7 @@ export function meetingView(
     seats: Object.fromEntries(ordered.map((p) => [p.agentId, p.seatAnchor])),
     startedAt: iso(m.startedAt),
     endedAt: iso(m.endedAt),
+    endsAt: iso(m.endsAt),
     summary: m.summary,
     decisions: (m.decisions ?? []) as MeetingView['decisions'],
     taskIdsCreated: m.taskIdsCreated,

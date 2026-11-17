@@ -264,6 +264,15 @@ export function describe(
         tone: 'neutral',
         icon: '$',
       };
+    case 'department.updated':
+      return {
+        text:
+          e.payload.change === 'created'
+            ? `Nouveau pôle « ${e.payload.name} » · ${e.payload.capacity} postes`
+            : `Pôle « ${e.payload.name} » modifié`,
+        tone: 'success',
+        icon: '🏢',
+      };
     case 'agent.deleted':
       return {
         text: `Agent ${e.payload.agentId} supprimé · ${e.payload.reason}`,

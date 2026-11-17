@@ -106,6 +106,7 @@ export async function startMeeting(
         taskId: input.taskId,
         participantAgentIds: available,
         seats,
+        endsAt: null,
       },
     });
     const row = await tx.meeting.findUniqueOrThrow({

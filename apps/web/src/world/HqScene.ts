@@ -52,6 +52,8 @@ export type Selection =
 
 export interface HqSceneCallbacks {
   onSelect: (sel: Selection | null) => void;
+  /** Clic sur un local libre de l'aile d'extension. */
+  onEmptyRoom?: (roomId: string) => void;
 }
 
 const TW = HQ_MAP.tileWidth;
@@ -281,7 +283,8 @@ export class HqScene extends Phaser.Scene {
         if (this.dragMoved < 6) {
           // Département qui occupe cette pièce dans l'organisation affichée (démo ou live).
           const dept = this.lastWorld?.departments.find((d) => d.roomId === room.id);
-          this.cb.onSelect({ kind: 'department', id: dept?.id ?? room.id });
+          if (dept) this.cb.onSelect({ kind: 'department', id: dept.id });
+          else this.cb.onEmptyRoom?.(room.id);
         }
       });
     }
@@ -449,11 +452,16 @@ export class HqScene extends Phaser.Scene {
     // Badges de département « X/Y au poste »
     for (const room of HQ_MAP.rooms) {
       if (room.kind !== 'department') continue;
-      const deptId = world.departments.find((d) => d.roomId === room.id)?.id ?? room.id;
-      const { atDesk, total } = departmentPresence(world.agents, deptId, now, seats);
+      const dept = world.departments.find((d) => d.roomId === room.id);
       const l = this.labels.get(room.id);
-      const txt = `${room.label}  ·  ${atDesk}/${total} au poste`;
-      if (l && l.text.text !== txt) {
+      let txt = 'Espace libre — extension possible';
+      if (dept) {
+        const { atDesk, total } = departmentPresence(world.agents, dept.id, now, seats);
+        txt = `${dept.name}  ·  ${atDesk}/${total} au poste`;
+      }
+      const col = dept ? hex(dept.color) : (l?.color ?? 0);
+      if (l && (l.text.text !== txt || l.color !== col)) {
+        l.color = col;
         l.text.setText(txt);
         this.paintLabel(room.id);
       }
@@ -645,6 +653,17 @@ export class HqScene extends Phaser.Scene {
     } else if ((a.activity === 'working' || a.currentTaskId) && title) {
       label = `${pictogram(title)} ${shortWords(title, 3)}`;
       color = 0x3b7dd8;
+    } else if (av.intent?.life) {
+      // Vie de bureau cosmétique (agent sans mission) : couleurs douces, jamais d'alerte.
+      const LIFE: Record<string, [string, number]> = {
+        coffee: ['☕ Pause café', 0x83c6c1],
+        chat: ['💬 Discute', 0x9b8fd6],
+        read: ['📖 Lit la veille', 0x8fb7a0],
+        stretch: ['🙆 S’étire', 0xb7a38f],
+        plants: ['🪴 Arrose les plantes', 0x7fb07f],
+      };
+      const l = LIFE[av.intent.life];
+      if (l) [label, color] = l;
     } else if (av.intent?.mode === 'break') {
       label = '☕ Pause';
       color = 0x83c6c1;
