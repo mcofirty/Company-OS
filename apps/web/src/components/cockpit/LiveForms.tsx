@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CreateAgentRequest, WorldSnapshot } from '@company-os/contracts';
 import { api, ApiFailure } from '../../lib/api';
 import { ModelTierSelect, TIER_CHOICE_LABEL, type Tier } from './ModelTierSelect';
+import { AppIcon } from './AppIcon';
+import { actionLabel, isReadAction, TOOL_PURPOSE } from '../../lib/rights';
 
 export interface MissionInput {
   title: string;
@@ -13,11 +15,6 @@ export interface MissionInput {
   qualityCheck?: boolean;
 }
 
-const RISK_LABEL: Record<string, string> = {
-  read: 'lecture',
-  internal_write: 'écriture interne',
-  external_write: 'action externe · validation humaine à chaque fois',
-};
 const AVATARS = Array.from({ length: 8 }, (_, i) => `avatar-${String(i + 1).padStart(2, '0')}`);
 const errorText = (err: unknown): string =>
   err instanceof ApiFailure ? `${err.code} · ${err.message}` : 'Erreur inattendue';
@@ -49,37 +46,182 @@ export function GrantPicker({
   grants: Record<string, string[]>;
   onToggle: (toolId: string, action: string) => void;
 }) {
-  const offer = useMemo(
-    () =>
+  const [q, setQ] = useState('');
+  const offer = useMemo(() => {
+    const seen = new Set<string>();
+    return (
       world.tools
-        .filter((t) => t.id !== 'platform')
-        .map((t) => ({ ...t, actions: t.actions.filter((a) => a.risk !== 'high_impact') }))
-        .filter((t) => t.actions.length > 0),
-    [world.tools],
-  );
+        .filter((t) => {
+          if (t.id === 'platform' || seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        })
+        .map((t) => ({
+          ...t,
+          actions: t.actions
+            .filter((a) => a.risk !== 'high_impact')
+            .map((a) => ({ ...a, fr: actionLabel(a), read: isReadAction(a) })),
+        }))
+        .filter((t) => t.actions.length > 0)
+        // Outils intégrés d'abord, puis les applications connectées.
+        .sort((x, y) => Number(x.category === 'connector') - Number(y.category === 'connector'))
+    );
+  }, [world.tools]);
+  const total = offer.reduce((n, t) => n + t.actions.length, 0);
+  const needle = q.trim().toLowerCase();
+  const has = (toolId: string, action: string): boolean =>
+    grants[toolId]?.includes(action) ?? false;
+  /** Coche (ou décoche) un ensemble d'actions en une fois. */
+  const setAll = (toolId: string, actions: string[], on: boolean): void => {
+    for (const a of actions) if (has(toolId, a) !== on) onToggle(toolId, a);
+  };
   return (
-    <fieldset className="grant-picker">
-      <legend>Outils autorisés</legend>
+    <fieldset className="grants">
+      <legend>Droits de l’agent</legend>
+      <ul className="grants-legend" aria-label="Légende">
+        <li>
+          <span className="grant-badge read">Consulter</span> lit sans rien changer
+        </li>
+        <li>
+          <span className="grant-badge write">Modifier</span> change quelque chose dans le QG
+        </li>
+        <li>
+          <span className="grant-badge ext">Action réelle</span> agit hors du QG : ta validation à
+          chaque fois
+        </li>
+      </ul>
+      {total > 15 && (
+        <input
+          className="grants-search"
+          type="search"
+          placeholder="Chercher un droit (ex. fichier, ticket, email)…"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          aria-label="Chercher un droit"
+        />
+      )}
       {offer.length === 0 && <p className="muted small">Aucun outil disponible.</p>}
-      {offer.map((t) => (
-        <div key={t.id} className="grant-tool">
-          <strong>
-            {t.name}
-            {t.category === 'connector' && <span className="muted small"> · connecteur</span>}
-          </strong>
-          {t.actions.map((a) => (
-            <label key={a.action} className="check">
-              <input
-                type="checkbox"
-                checked={grants[t.id]?.includes(a.action) ?? false}
-                onChange={() => onToggle(t.id, a.action)}
-                data-testid={`grant-${t.id}-${a.action}`}
-              />
-              {a.label} <span className="muted">· {RISK_LABEL[a.risk] ?? a.risk}</span>
-            </label>
-          ))}
-        </div>
-      ))}
+      {offer.map((t) => {
+        const shown = t.actions.filter(
+          (a) =>
+            !needle ||
+            a.fr.toLowerCase().includes(needle) ||
+            a.action.toLowerCase().includes(needle) ||
+            t.name.toLowerCase().includes(needle),
+        );
+        if (shown.length === 0) return null;
+        const checked = t.actions.filter((a) => has(t.id, a.action)).length;
+        const connector = t.category === 'connector';
+        const reads = shown.filter((a) => a.read);
+        const writes = shown.filter((a) => !a.read);
+        const row = (a: (typeof shown)[number]) => (
+          <label key={a.action} className="grant-row">
+            <input
+              type="checkbox"
+              checked={has(t.id, a.action)}
+              onChange={() => onToggle(t.id, a.action)}
+              data-testid={`grant-${t.id}-${a.action}`}
+            />
+            <span className="grant-text">
+              <span>{a.fr}</span>
+              {connector && <code className="grant-tech">{a.action}</code>}
+            </span>
+            <span
+              className={`grant-badge ${a.read ? 'read' : a.risk === 'external_write' ? 'ext' : 'write'}`}
+              title={
+                a.risk === 'external_write'
+                  ? 'Chaque utilisation attend ta validation dans « À valider ».'
+                  : undefined
+              }
+            >
+              {a.read
+                ? a.risk === 'external_write'
+                  ? 'Consulter · validation'
+                  : 'Consulter'
+                : a.risk === 'external_write'
+                  ? 'Action réelle'
+                  : 'Modifier'}
+            </span>
+          </label>
+        );
+        return (
+          <details
+            key={t.id}
+            className="grant-group"
+            open={!connector || checked > 0 || !!needle}
+            data-testid={`grant-group-${t.id}`}
+          >
+            <summary>
+              <AppIcon app={t.app ?? t.id} name={t.name} color={t.color} size={26} />
+              <span className="grant-title">
+                <strong>{t.name}</strong>
+                <small>
+                  {connector ? 'Application connectée' : 'Outil du QG'} · {checked}/
+                  {t.actions.length} droit(s)
+                </small>
+              </span>
+            </summary>
+            <p className="grant-purpose">
+              {TOOL_PURPOSE[t.id] ??
+                (connector
+                  ? `Actions sur ton compte ${t.name}. Les actions réelles attendent ta validation à chaque fois.`
+                  : '')}
+            </p>
+            <div className="grant-quick">
+              {reads.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    setAll(
+                      t.id,
+                      reads.map((a) => a.action),
+                      true,
+                    )
+                  }
+                >
+                  Cocher « Consulter »
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() =>
+                  setAll(
+                    t.id,
+                    shown.map((a) => a.action),
+                    true,
+                  )
+                }
+              >
+                Tout cocher
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setAll(
+                    t.id,
+                    shown.map((a) => a.action),
+                    false,
+                  )
+                }
+              >
+                Tout décocher
+              </button>
+            </div>
+            {reads.length > 0 && (
+              <div className="grant-sub">
+                <h5>Consulter</h5>
+                {reads.map(row)}
+              </div>
+            )}
+            {writes.length > 0 && (
+              <div className="grant-sub">
+                <h5>Agir</h5>
+                {writes.map(row)}
+              </div>
+            )}
+          </details>
+        );
+      })}
     </fieldset>
   );
 }

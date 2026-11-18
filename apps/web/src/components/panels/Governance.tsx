@@ -8,6 +8,7 @@ import { duration, TASK_STATUS_LABEL, time } from '../../lib/format';
 import type { Selection } from '../../world/HqScene';
 import { Badge, Empty, Section } from '../common';
 import { EndMeetingForm } from '../cockpit/OrgDialogs';
+import { actionLabel, translateActionName } from '../../lib/rights';
 
 export type DecideFn = (
   approvalId: string,
@@ -80,7 +81,8 @@ function summaryOf(a: ApprovalView, world: WorldSnapshot): string {
   if (a.kind === 'agent_hire')
     return `${String(a.safePreview['name'] ?? '?')} · ${String(a.safePreview['title'] ?? '')}`;
   const tool = world.tools.find((t) => t.id === a.toolId);
-  return `${tool?.name ?? a.toolId} · ${a.action}`;
+  const act = tool?.actions.find((x) => x.action === a.action);
+  return `${tool?.name ?? a.toolId} · ${act ? actionLabel(act) : translateActionName(a.action ?? '')}`;
 }
 
 export function ApprovalInspector({

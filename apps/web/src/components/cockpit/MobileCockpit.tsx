@@ -10,6 +10,7 @@ import type { Selection } from '../../world/types';
 import type { DocumentView, FullDocument } from '../panels/Documents';
 import { AgentPortrait } from '../panels/Portrait2D';
 import { ActivityFeed } from './ActivityFeed';
+import { translateActionName } from '../../lib/rights';
 
 export type MobilePage = 'org' | 'missions' | 'deliverables' | 'settings';
 type Tab = 'home' | 'approvals' | 'team' | 'missions' | 'more';
@@ -187,7 +188,9 @@ export function MobileCockpit({
           <span className="m-face">{face(a, 40)}</span>
           <span className="m-main">
             <strong>
-              {ap.kind === 'agent_hire' ? 'Recrutement' : `${ap.toolId ?? ''} · ${ap.action ?? ''}`}
+              {ap.kind === 'agent_hire'
+                ? 'Recrutement'
+                : `${world?.tools.find((t) => t.id === ap.toolId)?.name ?? ap.toolId ?? ''} · ${translateActionName(ap.action ?? '')}`}
             </strong>
             <small>
               {a?.name ?? ap.agentId} · expire {time(ap.deadlineAt)}
