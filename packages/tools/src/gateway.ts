@@ -87,7 +87,14 @@ export type InvokeResult =
       output: unknown;
       lastEventId: string;
     }
-  | { status: 'failed'; invocation: InvocationView; errorCode: string; lastEventId: string }
+  | {
+      status: 'failed';
+      invocation: InvocationView;
+      errorCode: string;
+      /** Explication métier (outils internes : jamais de contenu externe ni de secret). */
+      errorMessage?: string;
+      lastEventId: string;
+    }
   | { status: 'rejected'; invocation: InvocationView; reasonCode: string; lastEventId: string }
   | {
       status: 'waiting_approval';
@@ -393,6 +400,8 @@ export class ToolGateway {
           status: 'failed',
           invocation: failed.invocation,
           errorCode: te.code,
+          // Seules les explications des outils de la plateforme sont relayées (pas les connecteurs).
+          ...(isConnector ? {} : { errorMessage: te.message.slice(0, 300) }),
           lastEventId: failed.eventId,
         };
       }

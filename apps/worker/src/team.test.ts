@@ -96,6 +96,8 @@ describe('Équipe d’un manager (live)', () => {
       justification: 'Charge de relances',
     });
     expect(escal).toMatchObject({ status: 'failed', errorCode: 'POLICY_DENIED' });
+    // L'explication est relayée à l'agent pour qu'il corrige sa demande.
+    expect(escal.status === 'failed' && escal.errorMessage).toMatch(/ne possède pas/);
     const proposed = await call(runId, mgr, 'recruit', {
       name: 'Hugo',
       title: 'Commercial',

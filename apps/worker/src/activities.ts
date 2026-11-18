@@ -342,7 +342,9 @@ export function createActivities(deps: ActivityDeps) {
       }
       if (r.status === 'failed') {
         return {
-          content: `Erreur outil code=${r.errorCode} après nouvelle tentative.`,
+          content: r.errorMessage
+            ? `Refus de l'outil code=${r.errorCode} : ${r.errorMessage}. Corrige ta demande en conséquence (par ex. ne demande que des outils que tu possèdes) puis réessaie si c'est pertinent.`
+            : `Erreur outil code=${r.errorCode} après nouvelle tentative.`,
           isError: true,
           lastEventId: r.lastEventId,
         };
